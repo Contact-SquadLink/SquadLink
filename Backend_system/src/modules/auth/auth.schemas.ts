@@ -20,7 +20,19 @@ export const registerSchema = z
     password: z
       .string()
       .min(8)
-      .max(128)
+      .max(128),
+
+    firstName: z
+      .string()
+      .trim()
+      .max(100)
+      .optional(),
+
+    lastName: z
+      .string()
+      .trim()
+      .max(100)
+      .optional()
   })
   .refine(
     (data) => Boolean(data.email || data.phoneNumber),

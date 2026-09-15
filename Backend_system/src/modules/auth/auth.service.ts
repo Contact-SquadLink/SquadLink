@@ -17,6 +17,8 @@ export interface SafeUser {
   id: string;
   email: string | null;
   phoneNumber: string | null;
+  firstName: string | null;
+  lastName: string | null;
   role: string;
   isActive: boolean;
   emailVerifiedAt: Date | null;
@@ -35,6 +37,8 @@ function toSafeUser(user: UserRecord): SafeUser {
     id: user.id,
     email: user.email,
     phoneNumber: user.phoneNumber,
+    firstName: user.firstName,
+    lastName: user.lastName,
     role: user.role,
     isActive: user.isActive,
     emailVerifiedAt: user.emailVerifiedAt,

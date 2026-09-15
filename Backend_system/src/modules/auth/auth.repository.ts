@@ -7,6 +7,8 @@ export interface UserRecord {
   id: string;
   email: string | null;
   phoneNumber: string | null;
+  firstName: string | null;
+  lastName: string | null;
   passwordHash: string;
   role: string;
   isActive: boolean;
@@ -20,6 +22,8 @@ interface UserRow {
   id: string;
   email: string | null;
   phone_number: string | null;
+  first_name: string | null;
+  last_name: string | null;
   password_hash: string;
   role: string;
   is_active: boolean;
@@ -34,6 +38,8 @@ function mapUser(row: UserRow): UserRecord {
     id: row.id,
     email: row.email,
     phoneNumber: row.phone_number,
+    firstName: row.first_name,
+    lastName: row.last_name,
     passwordHash: row.password_hash,
     role: row.role,
     isActive: row.is_active,
@@ -53,6 +59,8 @@ export async function findUserByEmail(
         id,
         email,
         phone_number,
+        first_name,
+        last_name,
         password_hash,
         role,
         is_active,
@@ -81,6 +89,8 @@ export async function findUserByPhoneNumber(
         id,
         email,
         phone_number,
+        first_name,
+        last_name,
         password_hash,
         role,
         is_active,
@@ -109,6 +119,8 @@ export async function findUserById(
         id,
         email,
         phone_number,
+        first_name,
+        last_name,
         password_hash,
         role,
         is_active,
@@ -140,13 +152,17 @@ export async function createUser(
       INSERT INTO public.users (
         email,
         phone_number,
+        first_name,
+        last_name,
         password_hash
       )
-      VALUES ($1, $2, $3)
+      VALUES ($1, $2, $3, $4, $5)
       RETURNING
         id,
         email,
         phone_number,
+        first_name,
+        last_name,
         password_hash,
         role,
         is_active,
@@ -158,6 +174,8 @@ export async function createUser(
     [
       input.email ?? null,
       input.phoneNumber ?? null,
+      input.firstName ?? null,
+      input.lastName ?? null,
       passwordHash
     ]
   );
