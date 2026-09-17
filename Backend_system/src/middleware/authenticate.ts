@@ -10,6 +10,10 @@ import { findUserById } from "../modules/auth/auth.repository";
 
 export interface AuthenticatedUser {
   id: string;
+  email: string | null;
+  phoneNumber: string | null;
+  firstName: string | null;
+  lastName: string | null;
   role: string;
 }
 
@@ -111,6 +115,10 @@ export async function authenticate(
 
   request.user = {
     id: user.id,
+    email: user.email,
+    phoneNumber: user.phoneNumber,
+    firstName: user.firstName,
+    lastName: user.lastName,
     role: user.role
   };
 }

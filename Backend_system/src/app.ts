@@ -26,7 +26,12 @@ export async function buildApp() {
   await app.register(helmet);
 
   await app.register(cors, {
-    origin: env.CORS_ORIGIN
+    origin: env.CORS_ORIGIN,
+    // @fastify/cors defaults to GET,HEAD,POST only. The cart API uses
+    // PUT/DELETE (update item, remove item, clear cart), so those methods must
+    // be allowed or browser preflights from the frontend origin will be
+    // rejected. Transport configuration only — no API contract changes.
+    methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']
   });
 
   await app.register(rateLimit, {
