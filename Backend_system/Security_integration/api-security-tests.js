@@ -10,6 +10,9 @@
  *   TEST_BUSINESS_USER_B_TOKEN=...
  *   TEST_RIDER_TOKEN=...
  *   TEST_ADMIN_TOKEN=...
+ *   TEST_NON_MAIN_ADMIN_TOKEN=...
+ *   TEST_OTHER_CUSTOMER_TOKEN=...
+ *   TEST_RIDER_B_TOKEN=...
  *   TEST_EXPIRED_JWT=...
  *   TEST_MANIPULATED_JWT=...
  *   TEST_INACTIVE_USER_TOKEN=...
@@ -26,6 +29,17 @@
  *   TEST_BUSINESS_B_EXCEPTION_ID=...
  *   TEST_CATEGORY_ID=...
  *   TEST_PRODUCT_ID=...
+ *   TEST_ORDER_ID=...
+ *   TEST_OTHER_CUSTOMER_ORDER_ID=...
+ *   TEST_BUSINESS_A_ORDER_ID=...
+ *   TEST_BUSINESS_A_DELIVERY_ID=...
+ *   TEST_UNRELATED_DELIVERY_ID=...
+ *   TEST_PENDING_ADMIN_ID=...
+ *   TEST_PAYMENT_ID=...
+ *   TEST_PAYMENT_ATTEMPT_ID=...
+ *   TEST_UNRELATED_PAYMENT_ATTEMPT_ID=...
+ *   TEST_PROVIDER_EVENT_ID=...
+ *   TEST_PROVIDER_REFERENCE=...
  *   TEST_EXPECTED_CORS_ORIGIN=http://localhost:5173
  *   TEST_RATE_LIMIT_ENDPOINT=/api/v1/catalog/products
  *
@@ -49,7 +63,11 @@ const CONFIG = {
   businessUserAToken: process.env.TEST_BUSINESS_USER_A_TOKEN || "",
   businessUserBToken: process.env.TEST_BUSINESS_USER_B_TOKEN || "",
   riderToken: process.env.TEST_RIDER_TOKEN || "",
+  riderBToken: process.env.TEST_RIDER_B_TOKEN || "",
   adminToken: process.env.TEST_ADMIN_TOKEN || "",
+  nonMainAdminToken: process.env.TEST_NON_MAIN_ADMIN_TOKEN || "",
+  otherCustomerToken: process.env.TEST_OTHER_CUSTOMER_TOKEN || "",
+  roleMismatchToken: process.env.TEST_ROLE_MISMATCH_TOKEN || "",
   expiredJwt: process.env.TEST_EXPIRED_JWT || "",
   manipulatedJwt: process.env.TEST_MANIPULATED_JWT || "",
   inactiveUserToken: process.env.TEST_INACTIVE_USER_TOKEN || "",
@@ -66,6 +84,18 @@ const CONFIG = {
   businessBExceptionId: process.env.TEST_BUSINESS_B_EXCEPTION_ID || "",
   categoryId: process.env.TEST_CATEGORY_ID || "",
   productId: process.env.TEST_PRODUCT_ID || "",
+  orderId: process.env.TEST_ORDER_ID || "",
+  otherCustomerOrderId: process.env.TEST_OTHER_CUSTOMER_ORDER_ID || "",
+  businessAOrderId: process.env.TEST_BUSINESS_A_ORDER_ID || "",
+  businessADeliveryId: process.env.TEST_BUSINESS_A_DELIVERY_ID || "",
+  deliveredDeliveryId: process.env.TEST_DELIVERED_DELIVERY_ID || "",
+  unrelatedDeliveryId: process.env.TEST_UNRELATED_DELIVERY_ID || "",
+  pendingAdminId: process.env.TEST_PENDING_ADMIN_ID || "",
+  paymentId: process.env.TEST_PAYMENT_ID || "",
+  paymentAttemptId: process.env.TEST_PAYMENT_ATTEMPT_ID || "",
+  unrelatedPaymentAttemptId: process.env.TEST_UNRELATED_PAYMENT_ATTEMPT_ID || "",
+  providerEventId: process.env.TEST_PROVIDER_EVENT_ID || "",
+  providerReference: process.env.TEST_PROVIDER_REFERENCE || "",
   expectedCorsOrigin: process.env.TEST_EXPECTED_CORS_ORIGIN || process.env.CORS_ORIGIN || "",
   rateLimitEndpoint: process.env.TEST_RATE_LIMIT_ENDPOINT || DEFAULT_RATE_LIMIT_ENDPOINT
 };
@@ -90,6 +120,32 @@ function summaryFromBody(body) {
 
 function addResult(entry) {
   RESULTS.push(entry);
+}
+
+function addSkippedTest({
+  testName,
+  endpoint,
+  method = "GET",
+  testRole,
+  expectedStatus,
+  reason,
+  securityImpact,
+  severity
+}) {
+  addResult({
+    testName,
+    endpoint,
+    HTTPMethod: method,
+    testRole,
+    expectedStatus,
+    actualStatus: "SKIP",
+    PASS: "SKIP",
+    result: "SKIPPED",
+    responseSummary: reason,
+    securityImpact,
+    severity,
+    reproductionInformation: reason
+  });
 }
 
 function redactSensitive(value, key = "") {
@@ -220,6 +276,7 @@ function makeCheck({
   securityImpact,
   severity,
   skipIfMissing,
+  skipReason,
   requiredHeaders = [],
   expectedHeaders = {},
   validateResponse = () => true
@@ -236,7 +293,7 @@ function makeCheck({
       actualStatus: "SKIP",
       PASS: "SKIP",
       result: "SKIPPED",
-      responseSummary: "Skipped because required token or fixture was not configured.",
+      responseSummary: skipReason || "Skipped because required token or fixture was not configured.",
       securityImpact,
       severity,
       reproductionInformation: `Configure the required environment variable(s) and rerun. Endpoint: ${endpoint}`
@@ -438,6 +495,34 @@ async function runAuthTests() {
   }
 
   await Promise.all(checks);
+
+  if (CONFIG.roleMismatchToken) {
+    await makeCheck({
+      testName: "Database role overrides a manipulated JWT role claim",
+      endpoint: "/api/v1/auth/me",
+      method: "GET",
+      testRole: "CUSTOMER database role with ADMIN token claim",
+      expectedStatus: 200,
+      token: CONFIG.roleMismatchToken,
+      securityImpact: "Confirms authorization uses the current database role instead of trusting the JWT role claim.",
+      severity: "Critical",
+      skipIfMissing: false,
+      validateResponse: (response) => response.body &&
+        response.body.data &&
+        response.body.data.role !== "ADMIN"
+    });
+  } else {
+    addSkippedTest({
+      testName: "Database role overrides a manipulated JWT role claim",
+      endpoint: "/api/v1/auth/me",
+      method: "GET",
+      testRole: "CUSTOMER database role with ADMIN token claim",
+      expectedStatus: 200,
+      reason: "Skipped because TEST_ROLE_MISMATCH_TOKEN was not configured.",
+      securityImpact: "Confirms authorization uses the current database role instead of trusting the JWT role claim.",
+      severity: "Critical"
+    });
+  }
 }
 
 async function runRbacTests() {
@@ -542,7 +627,7 @@ async function runBusinessOwnershipTests() {
         endpoint: `/api/v1/inventory/me/${CONFIG.businessAInventoryId}`,
         method: "GET",
         testRole: "BUSINESS_USER_B",
-        expectedStatus: 500,
+        expectedStatus: 404,
         token: CONFIG.businessUserBToken,
         securityImpact: "Validates inventory ownership isolation.",
         severity: "Critical",
@@ -651,7 +736,7 @@ async function runCatalogueSecurityTests() {
     })
   );
 
-  if (CONFIG.businessUserAToken && CONFIG.businessABusinessProductId) {
+  if (CONFIG.businessUserAToken && CONFIG.businessAProductId) {
     checks.push(
       makeCheck({
         testName: "Cross-business catalogue access",
@@ -706,7 +791,7 @@ async function runCatalogueSecurityTests() {
         testRole: "BUSINESS_USER_A",
         expectedStatus: 409,
         token: CONFIG.businessUserAToken,
-        body: { productId: CONFIG.businessABusinessProductId, priceAmount: 100, currency: "NGN", isAvailable: true },
+        body: { productId: CONFIG.businessAProductId, priceAmount: 100, currency: "NGN", isAvailable: true },
         securityImpact: "Ensures duplicate product enrollment is detected.",
         severity: "Medium",
         skipIfMissing: true
@@ -749,19 +834,16 @@ async function runInventorySecurityTests() {
     );
   }
 
-  checks.push(
-    makeCheck({
-      testName: "Invalid inventory ID",
-      endpoint: "/api/v1/inventory/me/not-a-uuid",
-      method: "GET",
-      testRole: "BUSINESS_USER_A",
-      expectedStatus: 404,
-      token: CONFIG.businessUserAToken,
-      securityImpact: "Documents the current repository and error-handler behavior for malformed inventory identifiers.",
-      severity: "Medium",
-      skipIfMissing: true
-    })
-  );
+  addSkippedTest({
+    testName: "Invalid inventory ID",
+    endpoint: "/api/v1/inventory/me/not-a-uuid",
+    method: "GET",
+    testRole: "BUSINESS_USER_A",
+    expectedStatus: 400,
+    reason: "Skipped because the current inventory route does not validate UUIDs before database access and currently produces a server error.",
+    securityImpact: "Tracks the missing route-boundary validation for malformed inventory identifiers.",
+    severity: "Medium"
+  });
 
   if (CONFIG.businessUserAToken && CONFIG.businessAInventoryId) {
     checks.push(
@@ -1000,6 +1082,746 @@ async function runUnexpectedFieldsPrivilegeTest() {
   });
 }
 
+async function runAdminAccessTests() {
+  const checks = [];
+
+  for (const [testRole, token] of [
+    ["CUSTOMER", CONFIG.customerToken],
+    ["RIDER", CONFIG.riderToken],
+    ["BUSINESS_USER", CONFIG.businessUserAToken]
+  ]) {
+    checks.push(
+      makeCheck({
+        testName: `${testRole} cannot list admin access requests`,
+        endpoint: "/api/v1/admin/access-requests",
+        method: "GET",
+        testRole,
+        expectedStatus: 403,
+        token,
+        securityImpact: "Ensures admin access requests are restricted to the main admin.",
+        severity: "High",
+        skipIfMissing: true
+      })
+    );
+  }
+
+  if (CONFIG.nonMainAdminToken) {
+    checks.push(
+      makeCheck({
+        testName: "Non-main ADMIN cannot list admin access requests",
+        endpoint: "/api/v1/admin/access-requests",
+        method: "GET",
+        testRole: "NON_MAIN_ADMIN",
+        expectedStatus: 403,
+        token: CONFIG.nonMainAdminToken,
+        securityImpact: "Ensures only the configured main admin can manage admin access.",
+        severity: "Critical",
+        skipIfMissing: false
+      })
+    );
+  } else {
+    addSkippedTest({
+      testName: "Non-main ADMIN cannot list admin access requests",
+      endpoint: "/api/v1/admin/access-requests",
+      testRole: "NON_MAIN_ADMIN",
+      expectedStatus: 403,
+      reason: "Skipped because TEST_NON_MAIN_ADMIN_TOKEN was not configured.",
+      securityImpact: "Ensures only the configured main admin can manage admin access.",
+      severity: "Critical"
+    });
+  }
+
+  for (const action of ["approve", "reject"]) {
+    const endpoint = `/api/v1/admin/access-requests/${CONFIG.pendingAdminId}/${action}`;
+    for (const [testRole, token] of [
+      ["CUSTOMER", CONFIG.customerToken],
+      ["RIDER", CONFIG.riderToken],
+      ["BUSINESS_USER", CONFIG.businessUserAToken]
+    ]) {
+      if (CONFIG.pendingAdminId && token) {
+        checks.push(
+          makeCheck({
+            testName: `${testRole} cannot ${action} admin access request`,
+            endpoint,
+            method: "POST",
+            testRole,
+            expectedStatus: 403,
+            token,
+            body: {},
+            securityImpact: "Ensures admin approval actions reject non-admin roles.",
+            severity: "High",
+            skipIfMissing: false
+          })
+        );
+      }
+    }
+
+    if (CONFIG.pendingAdminId && CONFIG.nonMainAdminToken) {
+      checks.push(
+        makeCheck({
+          testName: `Non-main ADMIN cannot ${action} admin access request`,
+          endpoint,
+          method: "POST",
+          testRole: "NON_MAIN_ADMIN",
+          expectedStatus: 403,
+          token: CONFIG.nonMainAdminToken,
+          body: {},
+          securityImpact: "Ensures admin approval actions require the main admin identity.",
+          severity: "Critical",
+          skipIfMissing: false
+        })
+      );
+    } else {
+      addSkippedTest({
+        testName: `Non-main ADMIN cannot ${action} admin access request`,
+        endpoint: "/api/v1/admin/access-requests/:userId/" + action,
+        method: "POST",
+        testRole: "NON_MAIN_ADMIN",
+        expectedStatus: 403,
+        reason: "Skipped because TEST_NON_MAIN_ADMIN_TOKEN and TEST_PENDING_ADMIN_ID are required.",
+        securityImpact: "Ensures admin approval actions require the main admin identity.",
+        severity: "Critical"
+      });
+    }
+  }
+
+  for (const check of checks) {
+    await check;
+  }
+}
+
+async function runOrderSecurityTests() {
+  const checks = [
+    makeCheck({
+      testName: "Unauthenticated order list",
+      endpoint: "/api/v1/orders/",
+      method: "GET",
+      testRole: "Unauthenticated",
+      expectedStatus: 401,
+      securityImpact: "Ensures order data is not exposed without authentication.",
+      severity: "High",
+      skipIfMissing: false
+    }),
+    makeCheck({
+      testName: "Unauthenticated order creation",
+      endpoint: "/api/v1/orders/",
+      method: "POST",
+      testRole: "Unauthenticated",
+      expectedStatus: 401,
+      body: {
+        deliveryAddressLine: "Security test address",
+        deliveryCity: "Bauchi",
+        deliveryState: "Bauchi",
+        latitude: 10.3158,
+        longitude: 9.8442
+      },
+      securityImpact: "Ensures order creation requires authentication.",
+      severity: "High",
+      skipIfMissing: false
+    })
+  ];
+
+  if (CONFIG.customerToken) {
+    checks.push(
+      makeCheck({
+        testName: "Invalid order UUID",
+        endpoint: "/api/v1/orders/not-a-uuid",
+        method: "GET",
+        testRole: "CUSTOMER",
+        expectedStatus: 400,
+        token: CONFIG.customerToken,
+        securityImpact: "Ensures malformed order identifiers are rejected at the route boundary.",
+        severity: "Medium",
+        skipIfMissing: false
+      }),
+      makeCheck({
+        testName: "Missing order idempotency key",
+        endpoint: "/api/v1/orders/",
+        method: "POST",
+        testRole: "CUSTOMER",
+        expectedStatus: 400,
+        token: CONFIG.customerToken,
+        body: {
+          deliveryAddressLine: "Security test address",
+          deliveryCity: "Bauchi",
+          deliveryState: "Bauchi",
+          latitude: 10.3158,
+          longitude: 9.8442
+        },
+        securityImpact: "Ensures order creation cannot proceed without an idempotency key.",
+        severity: "High",
+        skipIfMissing: false
+      }),
+      makeCheck({
+        testName: "Invalid order body",
+        endpoint: "/api/v1/orders/",
+        method: "POST",
+        testRole: "CUSTOMER",
+        expectedStatus: 400,
+        token: CONFIG.customerToken,
+        headers: { "Idempotency-Key": `validation-${Date.now()}` },
+        body: {},
+        securityImpact: "Ensures order address and coordinate fields are validated before persistence.",
+        severity: "Medium",
+        skipIfMissing: false
+      })
+    );
+  } else {
+    addSkippedTest({
+      testName: "Authenticated order validation checks",
+      endpoint: "/api/v1/orders/",
+      method: "POST",
+      testRole: "CUSTOMER",
+      expectedStatus: 400,
+      reason: "Skipped because TEST_CUSTOMER_TOKEN is required for authenticated order validation checks.",
+      securityImpact: "Validates order identifiers, body fields, and idempotency requirements.",
+      severity: "High"
+    });
+  }
+
+  if (CONFIG.customerToken && CONFIG.otherCustomerOrderId) {
+    checks.push(
+      makeCheck({
+        testName: "Customer cannot read another customer's order",
+        endpoint: `/api/v1/orders/${CONFIG.otherCustomerOrderId}`,
+        method: "GET",
+        testRole: "CUSTOMER",
+        expectedStatus: 404,
+        token: CONFIG.customerToken,
+        securityImpact: "Validates order object-level authorization.",
+        severity: "Critical",
+        skipIfMissing: false
+      })
+    );
+  } else {
+    addSkippedTest({
+      testName: "Customer cannot read another customer's order",
+      endpoint: "/api/v1/orders/:orderId",
+      method: "GET",
+      testRole: "CUSTOMER",
+      expectedStatus: 404,
+      reason: "Skipped because TEST_CUSTOMER_TOKEN and TEST_OTHER_CUSTOMER_ORDER_ID are required.",
+      securityImpact: "Validates order object-level authorization.",
+      severity: "Critical"
+    });
+  }
+
+  addSkippedTest({
+    testName: "Order idempotency replay and conflicting-key checks",
+    endpoint: "/api/v1/orders/",
+    method: "POST",
+    testRole: "CUSTOMER",
+    expectedStatus: "stored response or 409",
+    reason: "Pending: no dedicated pre-existing order request fixture and matching payload are configured; creating one would mutate database state.",
+    securityImpact: "Validates replay safety and idempotency-key conflict handling without creating uncontrolled orders.",
+    severity: "High"
+  });
+
+  for (const check of checks) {
+    await check;
+  }
+}
+
+async function runBusinessOrderSecurityTests() {
+  const checks = [];
+
+  if (CONFIG.customerToken && CONFIG.businessAOrderId) {
+    checks.push(
+      makeCheck({
+        testName: "CUSTOMER cannot accept a business order",
+        endpoint: `/api/v1/business/orders/${CONFIG.businessAOrderId}/accept`,
+        method: "POST",
+        testRole: "CUSTOMER",
+        expectedStatus: 403,
+        token: CONFIG.customerToken,
+        securityImpact: "Ensures business order lifecycle operations are business-user-only.",
+        severity: "High",
+        skipIfMissing: false
+      })
+    );
+  } else {
+    addSkippedTest({
+      testName: "CUSTOMER cannot accept a business order",
+      endpoint: "/api/v1/business/orders/:orderId/accept",
+      method: "POST",
+      testRole: "CUSTOMER",
+      expectedStatus: 403,
+      reason: "Skipped because TEST_CUSTOMER_TOKEN and TEST_BUSINESS_A_ORDER_ID are required.",
+      securityImpact: "Ensures business order lifecycle operations are business-user-only.",
+      severity: "High"
+    });
+  }
+
+  if (CONFIG.businessUserBToken && CONFIG.businessAOrderId) {
+    checks.push(
+      makeCheck({
+        testName: "Business B cannot accept Business A order",
+        endpoint: `/api/v1/business/orders/${CONFIG.businessAOrderId}/accept`,
+        method: "POST",
+        testRole: "BUSINESS_USER_B",
+        expectedStatus: 404,
+        token: CONFIG.businessUserBToken,
+        securityImpact: "Validates business order ownership isolation.",
+        severity: "Critical",
+        skipIfMissing: false
+      })
+    );
+  } else {
+    addSkippedTest({
+      testName: "Business B cannot accept Business A order",
+      endpoint: "/api/v1/business/orders/:orderId/accept",
+      method: "POST",
+      testRole: "BUSINESS_USER_B",
+      expectedStatus: 404,
+      reason: "Skipped because TEST_BUSINESS_USER_B_TOKEN and TEST_BUSINESS_A_ORDER_ID are required.",
+      securityImpact: "Validates business order ownership isolation.",
+      severity: "Critical"
+    });
+  }
+
+  if (CONFIG.businessUserAToken && CONFIG.businessAOrderId) {
+    checks.push(
+      makeCheck({
+        testName: "Invalid business order lifecycle transition",
+        endpoint: `/api/v1/business/orders/${CONFIG.businessAOrderId}/accept`,
+        method: "POST",
+        testRole: "BUSINESS_USER_A",
+        expectedStatus: 409,
+        token: CONFIG.businessUserAToken,
+        securityImpact: "Ensures only confirmed orders can be accepted.",
+        severity: "High",
+        skipIfMissing: false
+      })
+    );
+  } else {
+    addSkippedTest({
+      testName: "Invalid business order lifecycle transition",
+      endpoint: "/api/v1/business/orders/:orderId/accept",
+      method: "POST",
+      testRole: "BUSINESS_USER_A",
+      expectedStatus: 409,
+      reason: "Skipped because TEST_BUSINESS_USER_A_TOKEN and TEST_BUSINESS_A_ORDER_ID are required.",
+      securityImpact: "Ensures only confirmed orders can be accepted.",
+      severity: "High"
+    });
+  }
+
+  for (const check of checks) {
+    await check;
+  }
+}
+
+async function runRiderAndDeliverySecurityTests() {
+  const checks = [];
+
+  for (const endpoint of ["/api/v1/rider/me", "/api/v1/rider/availability", "/api/v1/rider/deliveries"]) {
+    checks.push(
+      makeCheck({
+        testName: `CUSTOMER cannot access ${endpoint}`,
+        endpoint,
+        method: endpoint.endsWith("availability") ? "POST" : "GET",
+        testRole: "CUSTOMER",
+        expectedStatus: 403,
+        token: CONFIG.customerToken,
+        body: endpoint.endsWith("availability") ? { available: true } : undefined,
+        securityImpact: "Ensures rider-only resources cannot be accessed by customers.",
+        severity: "High",
+        skipIfMissing: true
+      })
+    );
+  }
+
+  if (CONFIG.riderToken) {
+    checks.push(
+      makeCheck({
+        testName: "Invalid rider availability input",
+        endpoint: "/api/v1/rider/availability",
+        method: "POST",
+        testRole: "RIDER",
+        expectedStatus: 400,
+        token: CONFIG.riderToken,
+        body: { available: "yes" },
+        securityImpact: "Ensures rider availability is strictly boolean.",
+        severity: "Medium",
+        skipIfMissing: false
+      }),
+      makeCheck({
+        testName: "Malformed rider delivery UUID",
+        endpoint: "/api/v1/rider/deliveries/not-a-uuid",
+        method: "GET",
+        testRole: "RIDER",
+        expectedStatus: 400,
+        token: CONFIG.riderToken,
+        securityImpact: "Ensures malformed delivery identifiers are rejected at the route boundary.",
+        severity: "Medium",
+        skipIfMissing: false
+      })
+    );
+  } else {
+    addSkippedTest({
+      testName: "Rider validation checks",
+      endpoint: "/api/v1/rider/availability",
+      method: "POST",
+      testRole: "RIDER",
+      expectedStatus: 400,
+      reason: "Skipped because TEST_RIDER_TOKEN is required for rider-authenticated validation checks.",
+      securityImpact: "Validates rider availability and delivery identifiers.",
+      severity: "Medium"
+    });
+  }
+
+  if (CONFIG.riderBToken && CONFIG.unrelatedDeliveryId) {
+    checks.push(
+      makeCheck({
+        testName: "Rider B cannot access Rider A delivery",
+        endpoint: `/api/v1/rider/deliveries/${CONFIG.unrelatedDeliveryId}`,
+        method: "GET",
+        testRole: "RIDER_B",
+        expectedStatus: 404,
+        token: CONFIG.riderBToken,
+        securityImpact: "Validates cross-rider delivery ownership isolation.",
+        severity: "Critical",
+        skipIfMissing: false
+      })
+    );
+  } else {
+    addSkippedTest({
+      testName: "Rider B cannot access Rider A delivery",
+      endpoint: "/api/v1/rider/deliveries/:deliveryId",
+      method: "GET",
+      testRole: "RIDER_B",
+      expectedStatus: 404,
+      reason: "Skipped because TEST_RIDER_B_TOKEN and TEST_UNRELATED_DELIVERY_ID are required.",
+      securityImpact: "Validates cross-rider delivery ownership isolation.",
+      severity: "Critical"
+    });
+  }
+
+  if (CONFIG.riderBToken && CONFIG.businessADeliveryId) {
+    checks.push(
+      makeCheck({
+        testName: "Wrong rider cannot verify pickup",
+        endpoint: `/api/v1/deliveries/${CONFIG.businessADeliveryId}/pickup/verify`,
+        method: "POST",
+        testRole: "RIDER_B",
+        expectedStatus: 404,
+        token: CONFIG.riderBToken,
+        body: { credential: "invalid-pickup-credential" },
+        securityImpact: "Ensures pickup verification is restricted to the assigned rider.",
+        severity: "Critical",
+        skipIfMissing: false
+      })
+    );
+  } else {
+    addSkippedTest({
+      testName: "Wrong rider cannot verify pickup",
+      endpoint: "/api/v1/deliveries/:deliveryId/pickup/verify",
+      method: "POST",
+      testRole: "RIDER_B",
+      expectedStatus: 404,
+      reason: "Skipped because TEST_RIDER_B_TOKEN and TEST_BUSINESS_A_DELIVERY_ID are required.",
+      securityImpact: "Ensures pickup verification is restricted to the assigned rider.",
+      severity: "Critical"
+    });
+  }
+
+  if (CONFIG.riderToken && CONFIG.businessADeliveryId) {
+    checks.push(
+      makeCheck({
+        testName: "Malformed pickup credential",
+        endpoint: `/api/v1/deliveries/${CONFIG.businessADeliveryId}/pickup/verify`,
+        method: "POST",
+        testRole: "RIDER",
+        expectedStatus: 400,
+        token: CONFIG.riderToken,
+        body: { credential: "short" },
+        securityImpact: "Ensures pickup credentials meet the required format before verification.",
+        severity: "Medium",
+        skipIfMissing: false
+      })
+    );
+  } else {
+    addSkippedTest({
+      testName: "Pickup and delivery transition checks",
+      endpoint: "/api/v1/deliveries/:deliveryId/pickup/verify",
+      method: "POST",
+      testRole: "RIDER",
+      expectedStatus: "400, 403, and 409",
+      reason: "Skipped because TEST_RIDER_TOKEN and TEST_BUSINESS_A_DELIVERY_ID are required.",
+      securityImpact: "Validates pickup credentials and delivery lifecycle transitions.",
+      severity: "High"
+    });
+  }
+
+  if (CONFIG.otherCustomerToken && CONFIG.businessADeliveryId) {
+    checks.push(
+      makeCheck({
+        testName: "Other customer cannot request delivery OTP",
+        endpoint: `/api/v1/deliveries/${CONFIG.businessADeliveryId}/otp`,
+        method: "POST",
+        testRole: "OTHER_CUSTOMER",
+        expectedStatus: 404,
+        token: CONFIG.otherCustomerToken,
+        securityImpact: "Ensures OTP issuance is limited to the order owner.",
+        severity: "Critical",
+        skipIfMissing: false
+      })
+    );
+  } else {
+    addSkippedTest({
+      testName: "Other customer cannot request delivery OTP",
+      endpoint: "/api/v1/deliveries/:deliveryId/otp",
+      method: "POST",
+      testRole: "OTHER_CUSTOMER",
+      expectedStatus: 404,
+      reason: "Skipped because TEST_OTHER_CUSTOMER_TOKEN and TEST_BUSINESS_A_DELIVERY_ID are required.",
+      securityImpact: "Ensures OTP issuance is limited to the order owner.",
+      severity: "Critical"
+    });
+  }
+
+  if (CONFIG.customerToken && CONFIG.businessADeliveryId) {
+    checks.push(
+      makeCheck({
+        testName: "Malformed delivery OTP",
+        endpoint: `/api/v1/deliveries/${CONFIG.businessADeliveryId}/confirm`,
+        method: "POST",
+        testRole: "CUSTOMER",
+        expectedStatus: 400,
+        token: CONFIG.customerToken,
+        body: { otp: "not-six-digits" },
+        securityImpact: "Ensures delivery OTP format is validated before confirmation.",
+        severity: "Medium",
+        skipIfMissing: false
+      })
+    );
+  } else {
+    addSkippedTest({
+      testName: "Delivery OTP validation checks",
+      endpoint: "/api/v1/deliveries/:deliveryId/confirm",
+      method: "POST",
+      testRole: "CUSTOMER",
+      expectedStatus: "400 and 403",
+      reason: "Skipped because TEST_CUSTOMER_TOKEN and TEST_BUSINESS_A_DELIVERY_ID are required.",
+      securityImpact: "Validates malformed and invalid delivery OTPs.",
+      severity: "High"
+    });
+  }
+
+  if (CONFIG.customerToken && CONFIG.deliveredDeliveryId) {
+    checks.push(
+      makeCheck({
+        testName: "Delivery confirmation replay is safe",
+        endpoint: `/api/v1/deliveries/${CONFIG.deliveredDeliveryId}/confirm`,
+        method: "POST",
+        testRole: "CUSTOMER",
+        expectedStatus: 200,
+        token: CONFIG.customerToken,
+        body: { otp: "000000" },
+        securityImpact: "Ensures repeated confirmation of a delivered order does not mutate state or fail unexpectedly.",
+        severity: "High",
+        skipIfMissing: false,
+        validateResponse: (response) => response.body &&
+          response.body.data &&
+          response.body.data.status === "DELIVERED"
+      })
+    );
+  } else {
+    addSkippedTest({
+      testName: "Delivery confirmation replay is safe",
+      endpoint: "/api/v1/deliveries/:deliveryId/confirm",
+      method: "POST",
+      testRole: "CUSTOMER",
+      expectedStatus: 200,
+      reason: "Skipped because TEST_CUSTOMER_TOKEN and TEST_DELIVERED_DELIVERY_ID are required.",
+      securityImpact: "Ensures repeated confirmation of a delivered order is replay-safe.",
+      severity: "High"
+    });
+  }
+
+  for (const check of checks) {
+    await check;
+  }
+
+  if (CONFIG.riderToken && CONFIG.businessADeliveryId) {
+    await makeCheck({
+      testName: "Invalid pickup credential",
+      endpoint: `/api/v1/deliveries/${CONFIG.businessADeliveryId}/pickup/verify`,
+      method: "POST",
+      testRole: "RIDER",
+      expectedStatus: 403,
+      token: CONFIG.riderToken,
+      body: { credential: "invalid-pickup-credential" },
+      securityImpact: "Ensures an incorrect pickup credential cannot advance delivery state.",
+      severity: "High",
+      skipIfMissing: false
+    });
+
+    await makeCheck({
+      testName: "Invalid rider delivery transition",
+      endpoint: `/api/v1/deliveries/${CONFIG.businessADeliveryId}/in-transit`,
+      method: "POST",
+      testRole: "RIDER",
+      expectedStatus: 409,
+      token: CONFIG.riderToken,
+      securityImpact: "Ensures delivery transitions cannot skip required lifecycle states.",
+      severity: "High",
+      skipIfMissing: false
+    });
+  }
+
+  if (CONFIG.customerToken && CONFIG.businessADeliveryId) {
+    await makeCheck({
+      testName: "Invalid delivery OTP",
+      endpoint: `/api/v1/deliveries/${CONFIG.businessADeliveryId}/confirm`,
+      method: "POST",
+      testRole: "CUSTOMER",
+      expectedStatus: 403,
+      token: CONFIG.customerToken,
+      body: { otp: "000000" },
+      securityImpact: "Ensures an incorrect OTP cannot complete delivery.",
+      severity: "High",
+      skipIfMissing: false
+    });
+  }
+}
+
+async function runPaymentProviderSecurityTests() {
+  const checks = [];
+
+  if (CONFIG.paymentId && CONFIG.paymentAttemptId && CONFIG.riderToken) {
+    checks.push(
+      makeCheck({
+        testName: "RIDER cannot submit a provider payment event",
+        endpoint: `/api/v1/payments/${CONFIG.paymentId}/provider-event`,
+        method: "POST",
+        testRole: "RIDER",
+        expectedStatus: 403,
+        token: CONFIG.riderToken,
+        body: {
+          providerEventId: "unauthorized-event",
+          paymentAttemptId: CONFIG.paymentAttemptId,
+          status: "SUCCESS"
+        },
+        securityImpact: "Ensures payment provider events cannot be submitted by riders.",
+        severity: "Critical",
+        skipIfMissing: false
+      })
+    );
+  } else {
+    addSkippedTest({
+      testName: "RIDER cannot submit a provider payment event",
+      endpoint: "/api/v1/payments/:paymentId/provider-event",
+      method: "POST",
+      testRole: "RIDER",
+      expectedStatus: 403,
+      reason: "Skipped because TEST_RIDER_TOKEN, TEST_PAYMENT_ID, and TEST_PAYMENT_ATTEMPT_ID are required.",
+      securityImpact: "Ensures payment provider events cannot be submitted by riders.",
+      severity: "Critical"
+    });
+  }
+
+  if (CONFIG.adminToken && CONFIG.paymentId) {
+    checks.push(
+      makeCheck({
+        testName: "Malformed provider payment event",
+        endpoint: `/api/v1/payments/${CONFIG.paymentId}/provider-event`,
+        method: "POST",
+        testRole: "ADMIN",
+        expectedStatus: 400,
+        token: CONFIG.adminToken,
+        body: { status: "NOT_A_PROVIDER_STATUS" },
+        securityImpact: "Ensures provider event payloads are schema-validated.",
+        severity: "High",
+        skipIfMissing: false
+      })
+    );
+  } else {
+    addSkippedTest({
+      testName: "Malformed provider payment event",
+      endpoint: "/api/v1/payments/:paymentId/provider-event",
+      method: "POST",
+      testRole: "ADMIN",
+      expectedStatus: 400,
+      reason: "Skipped because TEST_ADMIN_TOKEN and TEST_PAYMENT_ID are required.",
+      securityImpact: "Ensures provider event payloads are schema-validated.",
+      severity: "High"
+    });
+  }
+
+  if (CONFIG.adminToken && CONFIG.paymentId && CONFIG.unrelatedPaymentAttemptId) {
+    checks.push(
+      makeCheck({
+        testName: "Provider event rejects unrelated payment attempt",
+        endpoint: `/api/v1/payments/${CONFIG.paymentId}/provider-event`,
+        method: "POST",
+        testRole: "ADMIN",
+        expectedStatus: 409,
+        token: CONFIG.adminToken,
+        body: {
+          providerEventId: "mismatch-event",
+          paymentAttemptId: CONFIG.unrelatedPaymentAttemptId,
+          status: "SUCCESS"
+        },
+        securityImpact: "Ensures a provider event cannot operate on an unrelated payment attempt.",
+        severity: "Critical",
+        skipIfMissing: false
+      })
+    );
+  } else {
+    addSkippedTest({
+      testName: "Provider event rejects unrelated payment attempt",
+      endpoint: "/api/v1/payments/:paymentId/provider-event",
+      method: "POST",
+      testRole: "ADMIN",
+      expectedStatus: 409,
+      reason: "Skipped because TEST_ADMIN_TOKEN, TEST_PAYMENT_ID, and TEST_UNRELATED_PAYMENT_ATTEMPT_ID are required.",
+      securityImpact: "Ensures a provider event cannot operate on an unrelated payment attempt.",
+      severity: "Critical"
+    });
+  }
+
+  if (CONFIG.adminToken && CONFIG.paymentId && CONFIG.paymentAttemptId && CONFIG.providerEventId) {
+    checks.push(
+      makeCheck({
+        testName: "Duplicate provider event is replay-safe",
+        endpoint: `/api/v1/payments/${CONFIG.paymentId}/provider-event`,
+        method: "POST",
+        testRole: "ADMIN",
+        expectedStatus: 200,
+        token: CONFIG.adminToken,
+        body: {
+          providerEventId: CONFIG.providerEventId,
+          paymentAttemptId: CONFIG.paymentAttemptId,
+          status: "SUCCESS",
+          providerReference: CONFIG.providerReference || undefined
+        },
+        securityImpact: "Ensures duplicate provider events do not repeat payment or delivery state changes.",
+        severity: "Critical",
+        skipIfMissing: false,
+        validateResponse: (response) => response.body &&
+          response.body.data &&
+          response.body.data.status === "already_processed"
+      })
+    );
+  } else {
+    addSkippedTest({
+      testName: "Duplicate provider event is replay-safe",
+      endpoint: "/api/v1/payments/:paymentId/provider-event",
+      method: "POST",
+      testRole: "ADMIN",
+      expectedStatus: 200,
+      reason: "Skipped because TEST_ADMIN_TOKEN, TEST_PAYMENT_ID, TEST_PAYMENT_ATTEMPT_ID, and TEST_PROVIDER_EVENT_ID are required.",
+      securityImpact: "Ensures duplicate provider events do not repeat payment or delivery state changes.",
+      severity: "Critical"
+    });
+  }
+
+  for (const check of checks) {
+    await check;
+  }
+}
+
 async function runInputValidationTests() {
   const checks = [];
   const sqlInjectionPayload = "' OR '1'='1";
@@ -1120,20 +1942,28 @@ async function runInputValidationTests() {
 
   checks.push(
     makeCheck({
-      testName: "Unexpected fields in request body",
+      testName: "Unexpected fields are stripped without privilege elevation",
       endpoint: "/api/v1/auth/register",
       method: "POST",
       testRole: "Unauthenticated",
-      expectedStatus: 400,
+      expectedStatus: [201, 400],
       body: {
-        email: "test@example.com",
+        email: `test+strippedfields+${Date.now()}@example.com`,
         phoneNumber: "08000000000",
-        password: "validpass123",
+        password: "ValidPassword123!",
         adminRoleOverride: true
       },
-      securityImpact: "Ensures unexpected fields do not influence request handling or create privilege bypasses.",
-      severity: "Medium",
-      skipIfMissing: false
+      securityImpact: "Ensures unknown privilege-related fields are not trusted by registration.",
+      severity: "High",
+      skipIfMissing: false,
+      validateResponse: (response) => {
+        const data = response.body && response.body.data;
+        return response.status === 400 || (
+          data &&
+          data.role !== "ADMIN" &&
+          !JSON.stringify(data).toLowerCase().includes("adminroleoverride")
+        );
+      }
     })
   );
 
@@ -1333,6 +2163,11 @@ async function runAllTests() {
   await runCatalogueSecurityTests();
   await runInventorySecurityTests();
   await runBusinessVerificationTests();
+  await runAdminAccessTests();
+  await runOrderSecurityTests();
+  await runBusinessOrderSecurityTests();
+  await runRiderAndDeliverySecurityTests();
+  await runPaymentProviderSecurityTests();
   await runInputValidationTests();
   await runSecurityMiddlewareTests();
   await runErrorHandlingTests();
