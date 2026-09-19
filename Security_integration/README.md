@@ -40,7 +40,7 @@ Current tests include:
 * Invalid OTPs
 * Malformed requests
 
-These tests currently provide standalone security verification. Real API testing will be performed when the backend endpoints are available.
+These modules provide static security-test preparation and standalone scenario logic. They do not verify the live backend API. Live API execution remains blocked while PostgreSQL is unavailable.
 
 ### 2. Failure-Path Testing
 
@@ -75,7 +75,7 @@ Current functionality includes:
 * Tracking notification delivery status
 * Preparing for future email, SMS, and push notification integration
 
-The current implementation prioritizes the in-app notification MVP.
+The current implementation is an in-app notification MVP. External email, SMS, and push delivery are not yet integrated or live-tested.
 
 ### 4. API Security Test Plan
 
@@ -101,7 +101,7 @@ It covers:
 * Notification security
 * Dependency and configuration review
 
-**Current status:** Prepared and awaiting backend API integration.
+**Current status:** Static/security test preparation completed. `api-security-tests.js` syntax has been verified. Live API execution is blocked because PostgreSQL is not currently available; no live API tests are claimed as passed.
 
 ### 5. Security Checklist
 
@@ -134,7 +134,7 @@ The environment configuration template contains example settings for:
 * Password hashing
 * Future notification API integration
 
-Real secrets must never be committed to GitHub.
+Real secrets must never be committed to GitHub. The security module's `.env.example` is a separate test/integration template; backend runtime configuration is defined by the backend project.
 
 The `.gitignore` configuration excludes `.env` files and `node_modules`.
 
@@ -175,7 +175,7 @@ Examples include:
 * Unexpected or malformed input
 * Invalid quantities and IDs
 
-Standalone security and failure-path tests have been implemented and functionally verified.
+Standalone security and failure-path scenarios have been implemented and reviewed. They have not been reported as live API results.
 
 ## Backend API Integration
 
@@ -213,9 +213,9 @@ The project is designed to reduce common security risks by:
 
 ## Project Status
 
-**Status:** In Progress
+**Status:** Static/security test preparation completed; live API testing blocked
 
-Completed security work includes:
+Prepared security work includes:
 
 * Authentication security testing
 * Authorization and access-control testing
@@ -227,7 +227,7 @@ Completed security work includes:
 * Secrets protection
 * Git/GitHub integration
 
-Remaining work depends mainly on backend API availability and includes:
+Remaining work depends mainly on backend API and PostgreSQL availability and includes:
 
 * Real API security testing
 * Backend authorization verification
@@ -237,6 +237,13 @@ Remaining work depends mainly on backend API availability and includes:
 * Dependency/vulnerability review
 * Deployment and integration testing
 * Final security review
+
+Current testing status:
+
+* Static/security test preparation completed
+* `api-security-tests.js` syntax verified
+* Live API execution blocked because PostgreSQL is not currently available
+* No live API test results are marked as passed
 
 ## Future Improvements
 

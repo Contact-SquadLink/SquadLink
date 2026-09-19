@@ -13,8 +13,10 @@
 ## 2. Authorization & Access Control
 
 * [x] Customer endpoints restricted from riders
+* [x] Rider endpoints restricted from customers
 * [x] Admin functionality protected against unauthorized access
-* [x] Cross-tenant boundaries verified (e.g., users cannot access other customers' orders)
+* [x] Cross-business access scenarios prepared
+* [ ] Cross-tenant boundaries verified (e.g., users cannot access other customers' orders)
 * [ ] Users can only access resources they are authorized to use
 * [x] Role-based access control scenarios tested
 * [ ] Privileged operations require appropriate authorization
@@ -51,9 +53,13 @@
 
 * [x] Orders cannot be completed before pickup
 * [x] Invalid OTPs cannot complete delivery
+* [x] Invalid pickup codes are rejected (scenario prepared)
+* [x] Item-unavailable handling is covered (scenario prepared)
+* [x] Rider-decline handling is covered (scenario prepared)
 * [ ] Riders cannot modify unauthorized orders
 * [ ] Customers cannot access other customers' orders
-* [x] Rider timeout handling is tested
+* [x] Rider timeout handling is covered (scenario prepared)
+* [x] Failed-delivery handling is covered (scenario prepared)
 * [ ] Order status transitions are validated
 
 ## 7. Notification Security
@@ -84,10 +90,10 @@
 
 ## 10. Security Testing & Review
 
-* [x] Failure-path tests completed
-* [x] Authentication tests completed
-* [x] Authorization tests completed
-* [x] Input validation tests completed
+* [x] Failure-path scenarios prepared
+* [x] Authentication scenarios prepared
+* [x] Authorization scenarios prepared
+* [x] Input validation scenarios prepared
 * [x] Sensitive configuration reviewed
 * [ ] Dependencies reviewed for known vulnerabilities
 * [ ] Security checklist reviewed before deployment
@@ -98,4 +104,4 @@
 
 **Last Review:** 9 September 2026
 
-**Notes:** Security checks marked as completed have been tested or reviewed in the current security and integration modules. Backend-dependent checks remain unchecked until the backend is available and integrated.
+**Notes:** Checked items indicate documented or implemented test preparation, not live API passes. `api-security-tests.js` syntax has been verified. Live API execution is blocked because PostgreSQL is not currently available, so no live API tests are marked as passed.

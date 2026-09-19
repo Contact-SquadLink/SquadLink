@@ -87,7 +87,7 @@ The API should reject invalid or unexpected input before processing it.
 
 ## 5. JWT & Session Security
 
-When authentication is implemented, verify:
+For the current backend JWT authentication, verify:
 
 - [ ] Protected endpoints require authentication.
 - [ ] Invalid tokens are rejected.
@@ -358,10 +358,14 @@ Before deployment, all applicable tests must be reviewed.
 
 ## Security Test Status
 
-**Current Status:** Prepared — Awaiting Backend API Integration
+**Current Status:** Static/security test preparation completed.
+
+**Syntax Status:** `api-security-tests.js` syntax verified.
+
+**Live API Status:** BLOCKED — PostgreSQL is not currently available. The API test suite has not been executed, and no live API tests are marked as passed.
 
 **Role:** Security & Integration Engineer — Member 3
 
 **Project:** Delivery System
 
-**Note:** Tests marked as pending will be executed against the real backend API once the backend endpoints are available. Standalone authentication, authorization, input-validation, and failure-path tests have already been implemented separately in this security module.
+**Note:** Tests marked as pending will be executed against the real backend API once PostgreSQL and the backend endpoints are available. Standalone authentication, authorization, input-validation, failure-path, and notification scenarios are prepared in this security module; their presence is not evidence of live API success.
