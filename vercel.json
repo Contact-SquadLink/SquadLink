@@ -4,7 +4,8 @@
       "root": "Web_platform/project/"
     },
     "backend": {
-      "root": "Backend_system/"
+      "root": "Backend_system/",
+      "entrypoint": "src/server.ts"
     }
   },
   "rewrites": [
