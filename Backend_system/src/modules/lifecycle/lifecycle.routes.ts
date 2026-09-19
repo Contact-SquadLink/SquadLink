@@ -14,10 +14,15 @@ import {
 import {
   acceptBusinessOrder,
   confirmDelivery,
+  getRiderDelivery,
+  getRiderProfile,
   issueDeliveryOtp,
   listBusinessOrders,
+  listRiderDeliveries,
   markBusinessReady,
   processProviderPayment,
+  registerRider,
+  setRiderAvailability,
   updateRiderDeliveryStatus,
   verifyPickup
 } from "./lifecycle.service";
@@ -64,6 +69,83 @@ export async function lifecycleRoutes(app: FastifyInstance): Promise<void> {
       const input = providerPaymentSchema.parse(request.body);
       return successResponse(
         await processProviderPayment(request.user.id, paymentId, input),
+        request.id
+      );
+    }
+  );
+
+  app.post(
+    "/rider/register",
+    { preHandler: [authenticate, authorize("CUSTOMER")] },
+    async (request, reply) => {
+      const input = request.body as {
+        vehicleType?: string;
+        vehicleRegistration?: string;
+        phoneNumber?: string;
+        firstName?: string;
+        lastName?: string;
+      };
+
+      const rider = await registerRider(request.user.id, {
+        vehicleType: input.vehicleType ?? "MOTORCYCLE",
+        vehicleRegistration: input.vehicleRegistration ?? undefined,
+        phoneNumber: input.phoneNumber ?? undefined,
+        firstName: input.firstName ?? undefined,
+        lastName: input.lastName ?? undefined,
+      });
+
+      return reply.status(201).send(successResponse(rider, request.id));
+    }
+  );
+
+  app.get(
+    "/rider/me",
+    { preHandler: [authenticate, authorize("RIDER")] },
+    async (request) => successResponse(
+      await getRiderProfile(request.user.id),
+      request.id
+    )
+  );
+
+  app.post(
+    "/rider/availability",
+    { preHandler: [authenticate, authorize("RIDER")] },
+    async (request) => {
+      const { available } = (request.body ?? {}) as { available?: boolean };
+      if (typeof available !== "boolean") {
+        return {
+          success: false,
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "available must be a boolean."
+          },
+          requestId: request.id
+        };
+      }
+
+      return successResponse(
+        await setRiderAvailability(request.user.id, available),
+        request.id
+      );
+    }
+  );
+
+  app.get(
+    "/rider/deliveries",
+    { preHandler: [authenticate, authorize("RIDER")] },
+    async (request) => successResponse(
+      await listRiderDeliveries(request.user.id),
+      request.id
+    )
+  );
+
+  app.get(
+    "/rider/deliveries/:deliveryId",
+    { preHandler: [authenticate, authorize("RIDER")] },
+    async (request) => {
+      const { deliveryId } = deliveryIdParamsSchema.parse(request.params);
+      return successResponse(
+        await getRiderDelivery(request.user.id, deliveryId),
         request.id
       );
     }

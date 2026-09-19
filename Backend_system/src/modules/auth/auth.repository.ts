@@ -12,6 +12,9 @@ export interface UserRecord {
   passwordHash: string;
   role: string;
   isActive: boolean;
+  adminApproved: boolean;
+  approvedBy: string | null;
+  approvedAt: Date | null;
   emailVerifiedAt: Date | null;
   phoneVerifiedAt: Date | null;
   createdAt: Date;
@@ -27,6 +30,9 @@ interface UserRow {
   password_hash: string;
   role: string;
   is_active: boolean;
+  admin_approved: boolean;
+  approved_by: string | null;
+  approved_at: Date | null;
   email_verified_at: Date | null;
   phone_verified_at: Date | null;
   created_at: Date;
@@ -43,6 +49,9 @@ function mapUser(row: UserRow): UserRecord {
     passwordHash: row.password_hash,
     role: row.role,
     isActive: row.is_active,
+    adminApproved: row.admin_approved,
+    approvedBy: row.approved_by,
+    approvedAt: row.approved_at,
     emailVerifiedAt: row.email_verified_at,
     phoneVerifiedAt: row.phone_verified_at,
     createdAt: row.created_at,
@@ -64,6 +73,9 @@ export async function findUserByEmail(
         password_hash,
         role,
         is_active,
+        admin_approved,
+        approved_by,
+        approved_at,
         email_verified_at,
         phone_verified_at,
         created_at,
@@ -94,6 +106,9 @@ export async function findUserByPhoneNumber(
         password_hash,
         role,
         is_active,
+        admin_approved,
+        approved_by,
+        approved_at,
         email_verified_at,
         phone_verified_at,
         created_at,
@@ -124,6 +139,9 @@ export async function findUserById(
         password_hash,
         role,
         is_active,
+        admin_approved,
+        approved_by,
+        approved_at,
         email_verified_at,
         phone_verified_at,
         created_at,
@@ -166,6 +184,9 @@ export async function createUser(
         password_hash,
         role,
         is_active,
+        admin_approved,
+        approved_by,
+        approved_at,
         email_verified_at,
         phone_verified_at,
         created_at,

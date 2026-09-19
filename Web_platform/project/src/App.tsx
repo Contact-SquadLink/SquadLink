@@ -31,6 +31,7 @@ import { ProfilePage } from '@/pages/ProfilePage';
 import { BusinessDashboard } from '@/pages/business/BusinessDashboard';
 import { BusinessOrdersPage, BusinessOrderDetailPage } from '@/pages/business/BusinessOrders';
 import { BusinessCatalogPage } from '@/pages/business/BusinessCatalog';
+import { BusinessRegisterPage } from '@/pages/business/BusinessRegisterPage';
 
 // Rider pages
 import { RiderDashboard } from '@/pages/rider/RiderDashboard';
@@ -40,6 +41,7 @@ import { RiderDeliveryDetailPage } from '@/pages/rider/RiderDeliveryDetail';
 import { AdminDashboard } from '@/pages/admin/AdminDashboard';
 import { AdminBusinessesPage, AdminBusinessDetailPage } from '@/pages/admin/AdminBusinesses';
 import { AdminOperationsPage } from '@/pages/admin/AdminOperations';
+import { AdminAccessPage } from '@/pages/admin/AdminAccessPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -70,6 +72,14 @@ export default function App() {
               {/* Auth pages — no public header/footer */}
               <Route path="/login" element={<LoginPage />} />
               <Route path="/register" element={<RegisterPage />} />
+              <Route
+                path="/business/register"
+                element={
+                  <ProtectedRoute allowedRoles={['CUSTOMER', 'BUSINESS_USER', 'ADMIN']}>
+                    <BusinessRegisterPage />
+                  </ProtectedRoute>
+                }
+              />
               <Route path="/unauthorized" element={<UnauthorizedPage />} />
 
               {/* Public pages — with header and footer */}
@@ -179,6 +189,14 @@ export default function App() {
                   element={
                     <ProtectedRoute allowedRoles={['ADMIN']}>
                       <AdminOperationsPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin/access"
+                  element={
+                    <ProtectedRoute allowedRoles={['ADMIN']}>
+                      <AdminAccessPage />
                     </ProtectedRoute>
                   }
                 />

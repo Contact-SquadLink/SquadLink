@@ -4,11 +4,44 @@ import { authenticate } from "../../middleware/authenticate";
 import { authorize } from "../../middleware/authorize";
 import { successResponse } from "../../utils/api-response";
 import { placeOrderSchema } from "./order.schemas";
-import { placeOrder } from "./order.service";
+import { getOrderForUser, listOrdersForUser, placeOrder } from "./order.service";
 
 export async function orderRoutes(
   app: FastifyInstance
 ): Promise<void> {
+  app.get(
+    "/",
+    {
+      preHandler: [
+        authenticate,
+        authorize("CUSTOMER", "BUSINESS_USER")
+      ]
+    },
+    async (request) => {
+      return successResponse(
+        await listOrdersForUser(request.user.id),
+        request.id
+      );
+    }
+  );
+
+  app.get(
+    "/:orderId",
+    {
+      preHandler: [
+        authenticate,
+        authorize("CUSTOMER", "BUSINESS_USER")
+      ]
+    },
+    async (request) => {
+      const { orderId } = request.params as { orderId: string };
+      return successResponse(
+        await getOrderForUser(request.user.id, orderId),
+        request.id
+      );
+    }
+  );
+
   app.post(
     "/",
     {

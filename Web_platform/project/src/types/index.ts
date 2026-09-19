@@ -97,6 +97,46 @@ export interface Order {
   updatedAt?: string;
 }
 
+export interface BusinessOrderSummary {
+  orderId: string;
+  status: string;
+  fulfillmentStatus?: string;
+  createdAt: string;
+}
+
+export interface OrderCreationResult {
+  orderId: string;
+  status: string;
+  fulfillment?: {
+    fulfillmentId: string;
+    businessId: string;
+    businessName: string;
+    distanceMeters: number;
+    searchRadiusMeters: number;
+    status: string;
+  };
+  payment?: {
+    paymentId: string;
+    paymentAttemptId: string;
+    status: string;
+    amount: number;
+    charged: boolean;
+  };
+  pricing?: {
+    currency: string;
+    subtotalAmount: number;
+    deliveryFeeAmount: number;
+    totalAmount: number;
+  };
+  items: Array<{
+    productId: string;
+    productName: string;
+    quantity: number;
+    unitPriceAmount: number;
+    subtotalAmount: number;
+  }>;
+}
+
 export type DeliveryStatus =
   | 'SEARCHING_RIDER'
   | 'ASSIGNED'
@@ -127,6 +167,54 @@ export interface Business {
   email?: string;
   isVerified: boolean;
   verificationStatus?: string;
+}
+
+export type VerificationStatus = 'PENDING' | 'VERIFIED' | 'REJECTED' | 'SUSPENDED';
+
+export type AdminAccessRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+
+export interface AdminAccessRequest {
+  id: string;
+  requestedUserId: string | null;
+  requestedUserEmail: string | null;
+  requestedUserName: string | null;
+  requestedByUserId: string | null;
+  requestedByName: string | null;
+  status: AdminAccessRequestStatus;
+  notes: string | null;
+  reviewedByUserId: string | null;
+  reviewedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BusinessVerificationRecord {
+  id: string;
+  businessId: string;
+  businessName: string;
+  businessEmail: string | null;
+  businessPhoneNumber: string | null;
+  city: string;
+  state: string;
+  businessIsActive: boolean;
+  businessIsVerified: boolean;
+  verificationRequired: boolean;
+  status: VerificationStatus;
+  verifiedBy: string | null;
+  verificationNotes: string | null;
+  verifiedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BusinessVerificationHistoryRecord {
+  id: string;
+  businessId: string;
+  previousStatus: VerificationStatus | null;
+  newStatus: VerificationStatus;
+  reason: string | null;
+  changedBy: string | null;
+  createdAt: string;
 }
 
 export interface Rider {

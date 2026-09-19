@@ -1,70 +1,70 @@
-import { useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import {
-  ArrowLeft,
-  Clock,
-  CheckCircle2,
-  Package,
-  Store,
-  Bike,
-  Home as HomeIcon,
-  XCircle,
-  ShieldCheck,
-  KeyRound,
-} from 'lucide-react';
-import { formatPrice, formatDate, cn } from '@/utils/format';
+import { Link, useParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { ArrowLeft, Package, CheckCircle2, Truck, Store, MapPin } from 'lucide-react';
 import { EmptyState } from '@/components/ui/States';
-import { Badge } from '@/components/ui/Badge';
-import { demoOrders } from '@/utils/demo-data';
-import type { Order, OrderStatus } from '@/types';
+import { formatDate, formatPrice } from '@/utils/format';
+import { ordersApi } from '@/api/orders';
+import type { Order } from '@/types';
 
-const orderSteps: { status: OrderStatus; label: string; icon: typeof Clock }[] = [
-  { status: 'PENDING', label: 'Order Placed', icon: Clock },
-  { status: 'CONFIRMED', label: 'Confirmed', icon: CheckCircle2 },
-  { status: 'PREPARING', label: 'Preparing', icon: Package },
-  { status: 'READY_FOR_PICKUP', label: 'Ready for Pickup', icon: Store },
-  { status: 'OUT_FOR_DELIVERY', label: 'Out for Delivery', icon: Bike },
-  { status: 'DELIVERED', label: 'Delivered', icon: HomeIcon },
-];
-
-function getStepIndex(status: OrderStatus): number {
-  const idx = orderSteps.findIndex((s) => s.status === status);
-  return idx >= 0 ? idx : 0;
-}
+const orderStages: Record<string, string[]> = {
+  PENDING: ['Order created'],
+  CONFIRMED: ['Order created', 'Business confirmed'],
+  PREPARING: ['Order created', 'Business confirmed', 'Preparing'],
+  READY_FOR_PICKUP: ['Order created', 'Business confirmed', 'Preparing', 'Ready for pickup'],
+  OUT_FOR_DELIVERY: ['Order created', 'Business confirmed', 'Preparing', 'Ready for pickup', 'Out for delivery'],
+  DELIVERED: ['Order created', 'Business confirmed', 'Preparing', 'Ready for pickup', 'Out for delivery', 'Delivered'],
+};
 
 export function OrderDetailPage() {
   const { orderId } = useParams<{ orderId: string }>();
-  const [otp, setOtp] = useState('');
-  const [otpError, setOtpError] = useState<string | null>(null);
-  const [otpSuccess, setOtpSuccess] = useState(false);
-  const [order, setOrder] = useState<Order | undefined>(
-    demoOrders.find((o) => o.id === orderId)
-  );
 
-  if (!order) {
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['customer-order', orderId],
+    queryFn: () => ordersApi.getById(orderId as string),
+    enabled: Boolean(orderId),
+  });
+
+  const order = (data?.data ?? null) as Order | null;
+
+  if (isLoading) {
     return (
-      <div className="mx-auto max-w-3xl px-4 py-8">
+      <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8 py-8">
+        <Link to="/orders" className="inline-flex items-center gap-2 text-sm font-semibold text-gray-600 hover:text-primary-700 transition-colors mb-6">
+          <ArrowLeft className="h-4 w-4" />
+          Back to Orders
+        </Link>
+        <p className="text-sm text-gray-600">Loading order details…</p>
+      </div>
+    );
+  }
+
+  if (error || !order) {
+    return (
+      <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8 py-8">
+        <Link
+          to="/orders"
+          className="inline-flex items-center gap-2 text-sm font-semibold text-gray-600 hover:text-primary-700 transition-colors mb-6"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to Orders
+        </Link>
+
         <EmptyState
           icon={<Package className="h-7 w-7" />}
           title="Order not found"
-          description="This order could not be found."
+          description={
+            orderId
+              ? `The order ${orderId} could not be found in your account.`
+              : 'This order is not available.'
+          }
         />
       </div>
     );
   }
 
-  const currentStep = getStepIndex(order.status);
-  const isCancelled = order.status === 'CANCELLED';
-
-  const handleOtpSubmit = () => {
-    if (otp.length < 4) {
-      setOtpError('OTP must be at least 4 digits.');
-      return;
-    }
-    setOtpError(null);
-    setOtpSuccess(true);
-    setOrder({ ...order, status: 'DELIVERED' });
-  };
+  const stageList = orderStages[order.status] ?? ['Order created'];
+  const currentStageIndex = Math.max(stageList.length - 1, 0);
+  const progress = ((currentStageIndex + 1) / Math.max(stageList.length, 1)) * 100;
 
   return (
     <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8 py-8">
@@ -76,155 +76,86 @@ export function OrderDetailPage() {
         Back to Orders
       </Link>
 
-      {/* Order header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
-        <div>
-          <h1 className="font-display text-2xl font-bold text-gray-900">
-            Order #{order.id.slice(-6).toUpperCase()}
-          </h1>
-          <p className="mt-1 text-sm text-gray-500">Placed {formatDate(order.createdAt)}</p>
-        </div>
-        <Badge variant={isCancelled ? 'error' : 'success'}>
-          {order.status.replace(/_/g, ' ')}
-        </Badge>
-      </div>
-
-      {/* Order timeline */}
-      {!isCancelled ? (
-        <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm mb-6">
-          <h2 className="font-display text-lg font-bold text-gray-900 mb-6">Delivery Progress</h2>
-          <div className="space-y-0">
-            {orderSteps.map((step, idx) => {
-              const Icon = step.icon;
-              const isComplete = idx < currentStep;
-              const isCurrent = idx === currentStep;
-              const isUpcoming = idx > currentStep;
-
-              return (
-                <div key={step.status} className="flex items-start gap-4">
-                  <div className="flex flex-col items-center">
-                    <div
-                      className={cn(
-                        'flex h-10 w-10 items-center justify-center rounded-full border-2 transition-all',
-                        isComplete && 'bg-success-500 border-success-500 text-white',
-                        isCurrent && 'bg-primary-600 border-primary-600 text-white animate-pulse',
-                        isUpcoming && 'bg-white border-gray-200 text-gray-300'
-                      )}
-                    >
-                      <Icon className="h-5 w-5" />
-                    </div>
-                    {idx < orderSteps.length - 1 && (
-                      <div className={cn('w-0.5 h-12', isComplete ? 'bg-success-400' : 'bg-gray-200')} />
-                    )}
-                  </div>
-                  <div className="pt-2">
-                    <p className={cn(
-                      'text-sm font-semibold',
-                      isComplete && 'text-gray-900',
-                      isCurrent && 'text-primary-700',
-                      isUpcoming && 'text-gray-400'
-                    )}>
-                      {step.label}
-                    </p>
-                    {isCurrent && <p className="text-xs text-primary-600 mt-0.5">In progress...</p>}
-                    {isComplete && <p className="text-xs text-success-600 mt-0.5">Completed</p>}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      ) : (
-        <div className="rounded-2xl border border-error-200 bg-error-50 p-6 mb-6">
-          <div className="flex items-center gap-3">
-            <XCircle className="h-6 w-6 text-error-600" />
-            <div>
-              <h2 className="font-display text-lg font-bold text-error-900">Order Cancelled</h2>
-              <p className="text-sm text-error-700">This order was cancelled. Please contact support if you have questions.</p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* OTP section */}
-      {order.status === 'OUT_FOR_DELIVERY' && !otpSuccess && (
-        <div className="rounded-2xl border border-primary-200 bg-primary-50 p-6 mb-6">
-          <div className="flex items-center gap-3 mb-4">
-            <KeyRound className="h-6 w-6 text-primary-600" />
-            <div>
-              <h2 className="font-display text-lg font-bold text-primary-900">Delivery Confirmation</h2>
-              <p className="text-sm text-primary-700">Enter the OTP provided by your rider to confirm delivery.</p>
-            </div>
-          </div>
-          <div className="flex gap-3">
-            <input
-              type="text"
-              value={otp}
-              onChange={(e) => setOtp(e.target.value)}
-              placeholder="Enter OTP"
-              maxLength={6}
-              className="h-12 flex-1 rounded-xl border border-primary-200 bg-white px-4 text-lg font-bold tracking-widest text-center text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500"
-            />
-            <button
-              onClick={handleOtpSubmit}
-              disabled={otp.length < 4}
-              className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-primary-600 px-6 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              <ShieldCheck className="h-4 w-4" />
-              Confirm
-            </button>
-          </div>
-          {otpError && <p className="mt-3 text-sm text-error-700">{otpError}</p>}
-          <p className="mt-3 text-xs text-primary-600">
-            For this demo, any 4+ digit code will confirm the delivery.
-          </p>
-        </div>
-      )}
-
-      {otpSuccess && (
-        <div className="rounded-2xl border border-success-200 bg-success-50 p-6 mb-6">
-          <div className="flex items-center gap-3">
-            <CheckCircle2 className="h-6 w-6 text-success-600" />
-            <p className="text-sm font-bold text-success-800">Delivery confirmed successfully!</p>
-          </div>
-        </div>
-      )}
-
-      {/* Order items */}
-      <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm mb-6">
-        <h2 className="font-display text-lg font-bold text-gray-900 mb-4">Items</h2>
-        <div className="space-y-3">
-          {order.items.map((item) => (
-            <div key={item.productId} className="flex items-center justify-between py-3 border-b border-gray-50 last:border-0">
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-gray-900">{item.name}</p>
-                <p className="text-xs text-gray-500">{item.quantity} x {formatPrice(item.price)}</p>
-              </div>
-              <span className="text-sm font-bold text-gray-900">{formatPrice(item.subtotal)}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Summary */}
       <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-        <h2 className="font-display text-lg font-bold text-gray-900 mb-4">Payment Summary</h2>
-        <div className="space-y-3 text-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-gray-600">Subtotal</span>
-            <span className="font-semibold text-gray-900">{formatPrice(order.subtotal)}</span>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-xs font-medium uppercase tracking-[0.12em] text-gray-500">Order #{order.id.slice(-8)}</p>
+            <h1 className="mt-2 font-display text-2xl font-bold text-gray-900">Order Tracking</h1>
           </div>
-          <div className="flex items-center justify-between">
-            <span className="text-gray-600">Delivery fee</span>
-            <span className="text-gray-700">{formatPrice(order.deliveryFee)}</span>
+          <span className="rounded-full bg-primary-50 px-3 py-1.5 text-xs font-semibold text-primary-700">
+            {order.status.replace(/_/g, ' ')}
+          </span>
+        </div>
+
+        <div className="mt-6">
+          <div className="mb-2 flex items-center justify-between text-xs font-medium text-gray-500">
+            <span>Progress</span>
+            <span>{Math.round(progress)}%</span>
           </div>
-          <div className="flex items-center justify-between">
-            <span className="text-gray-600">VAT</span>
-            <span className="text-gray-700">{formatPrice(order.vat)}</span>
+          <div className="h-2.5 rounded-full bg-gray-100">
+            <div className="h-2.5 rounded-full bg-primary-600 transition-all" style={{ width: `${progress}%` }} />
           </div>
-          <div className="border-t border-gray-100 pt-3 flex items-center justify-between">
-            <span className="font-bold text-gray-900">Total</span>
-            <span className="font-display text-xl font-bold text-gray-900">{formatPrice(order.total)}</span>
+        </div>
+
+        <div className="mt-8 grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
+              <h2 className="text-sm font-semibold text-gray-900">Order lifecycle</h2>
+              <div className="mt-4 space-y-3">
+                {stageList.map((stage, index) => {
+                  const active = index <= stageList.length - 1;
+                  const Icon = index <= 3 ? Store : index <= 5 ? Truck : index === 5 ? MapPin : CheckCircle2;
+                  return (
+                    <div key={`${stage}-${index}`} className="flex items-start gap-3">
+                      <div className={active ? 'text-primary-600' : 'text-gray-300'}>
+                        <Icon className="h-4 w-4" />
+                      </div>
+                      <div className="flex-1">
+                        <p className={active ? 'text-sm font-semibold text-gray-900' : 'text-sm text-gray-400'}>
+                          {stage}
+                        </p>
+                      </div>
+                      {active && <CheckCircle2 className="h-4 w-4 text-success-500" />}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-gray-100 bg-white p-4">
+              <h2 className="text-sm font-semibold text-gray-900">Items</h2>
+              <div className="mt-3 space-y-3">
+                {order.items.map((item) => (
+                  <div key={item.productId} className="flex items-center justify-between gap-3 border-b border-gray-50 pb-2 last:border-0 last:pb-0">
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">{item.name}</p>
+                      <p className="text-xs text-gray-500">{item.quantity} x {formatPrice(item.price)}</p>
+                    </div>
+                    <span className="text-sm font-bold text-gray-900">{formatPrice(item.subtotal)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
+              <h2 className="text-sm font-semibold text-gray-900">Order summary</h2>
+              <div className="mt-3 space-y-2 text-sm text-gray-600">
+                <div className="flex items-center justify-between"><span>Subtotal</span><span>{formatPrice(order.subtotal)}</span></div>
+                <div className="flex items-center justify-between"><span>Delivery fee</span><span>{formatPrice(order.deliveryFee)}</span></div>
+                <div className="flex items-center justify-between"><span>VAT</span><span>{formatPrice(order.vat ?? 0)}</span></div>
+                <div className="border-t border-gray-200 pt-2 flex items-center justify-between font-semibold text-gray-900"><span>Total</span><span>{formatPrice(order.total)}</span></div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-primary-200 bg-primary-50 p-4">
+              <p className="text-sm font-semibold text-primary-900">Order status</p>
+              <p className="mt-2 text-sm text-primary-700">
+                Updated from the backend using the actual order lifecycle for this account.
+              </p>
+              <p className="mt-3 text-xs text-primary-600">Created {formatDate(order.createdAt)}</p>
+            </div>
           </div>
         </div>
       </div>

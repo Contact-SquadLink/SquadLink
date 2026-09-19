@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { ShoppingBag, Loader2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
@@ -7,7 +7,36 @@ export function RegisterPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const redirect = searchParams.get('redirect');
-  const { register } = useAuth();
+  const intent = searchParams.get('intent');
+  const { register, user } = useAuth();
+
+  useEffect(() => {
+    if (!user) {
+      return;
+    }
+
+    if (user.role === 'ADMIN') {
+      navigate('/admin', { replace: true });
+      return;
+    }
+
+    if (user.role === 'BUSINESS_USER') {
+      navigate('/business', { replace: true });
+      return;
+    }
+
+    if (user.role === 'RIDER') {
+      navigate('/rider', { replace: true });
+      return;
+    }
+
+    if (intent === 'business') {
+      navigate('/business/register', { replace: true });
+      return;
+    }
+
+    navigate(redirect || '/dashboard', { replace: true });
+  }, [intent, navigate, redirect, user]);
 
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -21,6 +50,11 @@ export function RegisterPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    if (intent === 'admin') {
+      setError('Admin accounts are not self-registered. Please sign in with an existing admin account.');
+      return;
+    }
 
     const cleanEmail = email.trim();
     const cleanPhone = phoneNumber.trim();
@@ -42,6 +76,16 @@ export function RegisterPage() {
 
     setIsLoading(true);
 
+    if (user) {
+      if (intent === 'business') {
+        navigate('/business/register', { replace: true });
+      } else {
+        navigate(redirect || '/dashboard', { replace: true });
+      }
+      setIsLoading(false);
+      return;
+    }
+
     try {
       await register({
         firstName: firstName.trim() || undefined,
@@ -51,9 +95,14 @@ export function RegisterPage() {
         password,
       });
 
-      navigate(redirect || '/dashboard');
-    } catch (err: any) {
-      setError(err?.message || 'Registration failed. Please check your details and try again.');
+      if (intent === 'business') {
+        navigate('/business/register');
+      } else {
+        navigate(redirect || '/dashboard');
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Registration failed. Please check your details and try again.';
+      setError(message);
     } finally {
       setIsLoading(false);
     }
@@ -83,8 +132,19 @@ export function RegisterPage() {
       <div className="flex-1 flex items-center justify-center px-4 py-12">
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
-            <h1 className="font-display text-3xl font-bold text-gray-900">Create Customer Account</h1>
-            <p className="mt-2 text-gray-600">Join SquaLink to order from local stores</p>
+            <h1 className="font-display text-3xl font-bold text-gray-900">
+              {intent === 'business' ? 'Create Business Account' : 'Create Customer Account'}
+            </h1>
+            <p className="mt-2 text-gray-600">
+              {intent === 'business'
+                ? 'Create your account credentials to begin business registration'
+                : 'Join SquaLink to order from local stores'}
+            </p>
+            {intent === 'admin' && (
+              <p className="mt-2 text-sm text-red-600">
+                Admin accounts are invited-only and cannot be created from this page.
+              </p>
+            )}
           </div>
 
           <div className="bg-white px-6 py-8 shadow-xl rounded-2xl border border-gray-100">

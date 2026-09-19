@@ -14,6 +14,262 @@ function sixDigitCode(): string {
   return String(randomInt(0, 1_000_000)).padStart(6, "0");
 }
 
+export async function ensureRiderRuntimeTables() {
+  const { db } = await import("../../db/database");
+
+  try {
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS public.rider_wallets (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        rider_id UUID NOT NULL UNIQUE,
+        current_balance_amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+        currency VARCHAR(3) NOT NULL DEFAULT 'NGN',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        CONSTRAINT fk_rider_wallets_rider
+          FOREIGN KEY (rider_id)
+          REFERENCES public.riders(id)
+          ON DELETE CASCADE
+      );
+    `);
+
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_rider_wallets_rider_id
+        ON public.rider_wallets(rider_id);
+    `);
+  } catch (error: unknown) {
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      error.code === "23505"
+    ) {
+      return;
+    }
+
+    throw error;
+  }
+}
+
+export async function registerRider(
+  userId: string,
+  input: {
+    vehicleType?: string;
+    vehicleRegistration?: string;
+    phoneNumber?: string;
+    firstName?: string;
+    lastName?: string;
+  }
+) {
+  await ensureRiderRuntimeTables();
+
+  return withTransaction(async (client) => {
+    const userResult = await client.query<{
+      id: string;
+      role: string;
+      email: string | null;
+      phone_number: string | null;
+      first_name: string | null;
+      last_name: string | null;
+    }>(
+      `SELECT id, role, email, phone_number, first_name, last_name FROM public.users WHERE id = $1 FOR UPDATE`,
+      [userId]
+    );
+
+    if (userResult.rows.length === 0) {
+      fail("User not found.", 404, "USER_NOT_FOUND");
+    }
+
+    const user = userResult.rows[0];
+    if (user.role !== "CUSTOMER") {
+      if (user.role === "RIDER") {
+        return await getRiderProfile(userId);
+      }
+      fail("Only customer accounts can register as a rider.", 403, "RIDER_REGISTRATION_ROLE_REQUIRED");
+    }
+
+    const vehicleType = (input.vehicleType ?? "MOTORCYCLE").toUpperCase();
+    const typeResult = await client.query<{ id: string }>(
+      `SELECT id FROM public.vehicle_types WHERE code = $1 AND is_active = TRUE LIMIT 1`,
+      [vehicleType]
+    );
+
+    if (typeResult.rows.length === 0) {
+      fail("The requested vehicle type is not available.", 400, "INVALID_VEHICLE_TYPE");
+    }
+
+    const riderResult = await client.query<{ id: string }>(
+      `SELECT id FROM public.riders WHERE user_id = $1`,
+      [userId]
+    );
+
+    let riderId: string;
+    if (riderResult.rows.length > 0) {
+      riderId = riderResult.rows[0].id;
+    } else {
+      const createdRider = await client.query<{ id: string }>(
+        `INSERT INTO public.riders (user_id, is_active, is_available, current_location) VALUES ($1, TRUE, FALSE, NULL) RETURNING id`,
+        [userId]
+      );
+      riderId = createdRider.rows[0].id;
+    }
+
+    const vehicleRegistration = (input.vehicleRegistration ?? "").trim();
+    if (vehicleRegistration) {
+      await client.query(
+        `INSERT INTO public.vehicles (rider_id, vehicle_type_id, registration_number, is_active)
+         VALUES ($1, $2, $3, TRUE)
+         ON CONFLICT (registration_number) DO UPDATE SET rider_id = EXCLUDED.rider_id, vehicle_type_id = EXCLUDED.vehicle_type_id, is_active = TRUE, updated_at = NOW()`,
+        [riderId, typeResult.rows[0].id, vehicleRegistration]
+      );
+    }
+
+    await client.query(
+      `UPDATE public.users SET role = 'RIDER', first_name = COALESCE($1, first_name), last_name = COALESCE($2, last_name), phone_number = COALESCE($3, phone_number), updated_at = NOW() WHERE id = $4`,
+      [input.firstName ?? null, input.lastName ?? null, input.phoneNumber ?? null, userId]
+    );
+
+    await client.query(
+      `INSERT INTO public.rider_wallets (rider_id, current_balance_amount, currency)
+       VALUES ($1, 0, 'NGN')
+       ON CONFLICT (rider_id) DO NOTHING`,
+      [riderId]
+    );
+
+    const riderProfileResult = await client.query<{
+      user_id: string;
+      email: string | null;
+      phone_number: string | null;
+      first_name: string | null;
+      last_name: string | null;
+      role: string;
+      rider_id: string | null;
+      is_active: boolean | null;
+      is_available: boolean | null;
+      current_balance_amount: string | number | null;
+      vehicle_type: string | null;
+      vehicle_registration: string | null;
+    }>(`
+      SELECT
+        u.id AS user_id,
+        u.email,
+        u.phone_number,
+        u.first_name,
+        u.last_name,
+        u.role,
+        r.id AS rider_id,
+        r.is_active,
+        r.is_available,
+        rw.current_balance_amount,
+        vt.code AS vehicle_type,
+        v.registration_number AS vehicle_registration
+      FROM public.users u
+      LEFT JOIN public.riders r ON r.user_id = u.id
+      LEFT JOIN public.rider_wallets rw ON rw.rider_id = r.id
+      LEFT JOIN public.vehicles v ON v.rider_id = r.id AND v.is_active = TRUE
+      LEFT JOIN public.vehicle_types vt ON vt.id = v.vehicle_type_id
+      WHERE u.id = $1
+      LIMIT 1
+    `, [userId]);
+
+    const row = riderProfileResult.rows[0];
+    if (!row) {
+      fail("Rider profile not found.", 404, "RIDER_NOT_FOUND");
+    }
+
+    return {
+      userId: row.user_id,
+      email: row.email,
+      phoneNumber: row.phone_number,
+      firstName: row.first_name,
+      lastName: row.last_name,
+      role: row.role,
+      riderId: row.rider_id,
+      active: row.is_active ?? false,
+      available: row.is_available ?? false,
+      currentBalance: Number(row.current_balance_amount ?? 0),
+      vehicleType: row.vehicle_type ?? null,
+      vehicleRegistration: row.vehicle_registration ?? null,
+    };
+  });
+}
+
+export async function getRiderProfile(userId: string) {
+  const { db } = await import("../../db/database");
+  const result = await db.query<{
+    user_id: string;
+    email: string | null;
+    phone_number: string | null;
+    first_name: string | null;
+    last_name: string | null;
+    role: string;
+    rider_id: string | null;
+    is_active: boolean | null;
+    is_available: boolean | null;
+    current_balance_amount: string | number | null;
+    vehicle_type: string | null;
+    vehicle_registration: string | null;
+  }>(`
+    SELECT
+      u.id AS user_id,
+      u.email,
+      u.phone_number,
+      u.first_name,
+      u.last_name,
+      u.role,
+      r.id AS rider_id,
+      r.is_active,
+      r.is_available,
+      rw.current_balance_amount,
+      vt.code AS vehicle_type,
+      v.registration_number AS vehicle_registration
+    FROM public.users u
+    LEFT JOIN public.riders r ON r.user_id = u.id
+    LEFT JOIN public.rider_wallets rw ON rw.rider_id = r.id
+    LEFT JOIN public.vehicles v ON v.rider_id = r.id AND v.is_active = TRUE
+    LEFT JOIN public.vehicle_types vt ON vt.id = v.vehicle_type_id
+    WHERE u.id = $1
+    LIMIT 1
+  `, [userId]);
+
+  if (result.rows.length === 0) {
+    fail("Rider profile not found.", 404, "RIDER_NOT_FOUND");
+  }
+
+  const row = result.rows[0];
+  return {
+    userId: row.user_id,
+    email: row.email,
+    phoneNumber: row.phone_number,
+    firstName: row.first_name,
+    lastName: row.last_name,
+    role: row.role,
+    riderId: row.rider_id,
+    active: row.is_active ?? false,
+    available: row.is_available ?? false,
+    currentBalance: Number(row.current_balance_amount ?? 0),
+    vehicleType: row.vehicle_type ?? null,
+    vehicleRegistration: row.vehicle_registration ?? null,
+  };
+}
+
+export async function setRiderAvailability(userId: string, available: boolean) {
+  const { db } = await import("../../db/database");
+  const result = await db.query<{ id: string; is_available: boolean }>(
+    `UPDATE public.riders SET is_available = $1, updated_at = NOW() WHERE user_id = $2 RETURNING id, is_available`,
+    [available, userId]
+  );
+
+  if (result.rows.length === 0) {
+    fail("Rider profile not found.", 404, "RIDER_NOT_FOUND");
+  }
+
+  return {
+    userId,
+    available: result.rows[0].is_available,
+  };
+}
+
 async function writeAudit(
   client: PoolClient,
   actorUserId: string | null,
@@ -445,6 +701,76 @@ export async function listBusinessOrders(userId: string) {
   return result.rows;
 }
 
+export async function listRiderDeliveries(userId: string) {
+  const result = await (await import("../../db/database")).db.query(
+    `
+      SELECT d.id,
+             d.status,
+             d.order_id AS "orderId",
+             d.assigned_at AS "assignedAt",
+             d.picked_up_at AS "pickedUpAt",
+             d.delivered_at AS "deliveredAt",
+             o.delivery_address_line AS "deliveryAddressLine",
+             o.delivery_city AS "deliveryCity",
+             o.delivery_state AS "deliveryState",
+             o.user_id AS "customerUserId"
+      FROM public.deliveries d
+      INNER JOIN public.riders r ON r.id = d.rider_id
+      INNER JOIN public.orders o ON o.id = d.order_id
+      WHERE r.user_id = $1
+      ORDER BY d.updated_at DESC
+    `,
+    [userId]
+  );
+
+  return result.rows.map((row) => ({
+    id: row.id,
+    orderId: row.orderId,
+    status: row.status,
+    deliveryAddress: [row.deliveryAddressLine, row.deliveryCity, row.deliveryState].filter(Boolean).join(", "),
+    assignedAt: row.assignedAt,
+    pickedUpAt: row.pickedUpAt,
+    deliveredAt: row.deliveredAt,
+  }));
+}
+
+export async function getRiderDelivery(userId: string, deliveryId: string) {
+  const result = await (await import("../../db/database")).db.query(
+    `
+      SELECT d.id,
+             d.status,
+             d.order_id AS "orderId",
+             d.assigned_at AS "assignedAt",
+             d.picked_up_at AS "pickedUpAt",
+             d.delivered_at AS "deliveredAt",
+             o.delivery_address_line AS "deliveryAddressLine",
+             o.delivery_city AS "deliveryCity",
+             o.delivery_state AS "deliveryState",
+             o.user_id AS "customerUserId"
+      FROM public.deliveries d
+      INNER JOIN public.riders r ON r.id = d.rider_id
+      INNER JOIN public.orders o ON o.id = d.order_id
+      WHERE r.user_id = $1 AND d.id = $2
+    `,
+    [userId, deliveryId]
+  );
+
+  if (result.rows.length === 0) {
+    throw new AppError("Delivery not found for this rider.", 404, "DELIVERY_NOT_FOUND");
+  }
+
+  const row = result.rows[0];
+  return {
+    id: row.id,
+    orderId: row.orderId,
+    status: row.status,
+    deliveryAddress: [row.deliveryAddressLine, row.deliveryCity, row.deliveryState].filter(Boolean).join(", "),
+    assignedAt: row.assignedAt,
+    pickedUpAt: row.pickedUpAt,
+    deliveredAt: row.deliveredAt,
+  };
+}
+
 export async function acceptBusinessOrder(userId: string, orderId: string) {
   return withTransaction(async (client) => {
     const order = await loadBusinessOrder(client, orderId, userId);
@@ -676,6 +1002,22 @@ export async function confirmDelivery(userId: string, deliveryId: string, otp: s
     await client.query(`UPDATE public.orders SET status = 'DELIVERED', updated_at = NOW() WHERE id = $1`, [delivery.order_id]);
     await commitReservations(client, delivery.order_id, userId);
     if (delivery.rider_id) {
+      const orderResult = await client.query<{ subtotal_amount: number | string }>(
+        `SELECT subtotal_amount FROM public.orders WHERE id = $1`,
+        [delivery.order_id]
+      );
+      const subtotal = Number(orderResult.rows[0]?.subtotal_amount ?? 0);
+      const payout = Math.max(250, subtotal * 0.1);
+      await client.query(
+        `INSERT INTO public.rider_wallets (rider_id, current_balance_amount, currency)
+         VALUES ($1, 0, 'NGN')
+         ON CONFLICT (rider_id) DO NOTHING`,
+        [delivery.rider_id]
+      );
+      await client.query(
+        `UPDATE public.rider_wallets SET current_balance_amount = current_balance_amount + $1, updated_at = NOW() WHERE rider_id = $2`,
+        [payout, delivery.rider_id]
+      );
       await client.query(`UPDATE public.riders SET is_available = TRUE, updated_at = NOW() WHERE id = $1`, [delivery.rider_id]);
     }
     await writeDeliveryHistory(client, deliveryId, "ARRIVED", "DELIVERED", userId, "Customer confirmed delivery with OTP.");

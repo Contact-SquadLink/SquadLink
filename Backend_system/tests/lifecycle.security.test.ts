@@ -39,6 +39,26 @@ after(async () => {
 });
 
 describe("lifecycle authorization and replay protection", () => {
+  it("reads the customer's order list and rider delivery list from the backend", async () => {
+    const customerOrders = await app.inject({
+      method: "GET",
+      url: "/api/v1/orders",
+      headers: auth(CUSTOMER_ID, "CUSTOMER")
+    });
+
+    assert.equal(customerOrders.statusCode, 200);
+    assert.ok(Array.isArray(customerOrders.json().data));
+
+    const riderDeliveries = await app.inject({
+      method: "GET",
+      url: "/api/v1/rider/deliveries",
+      headers: auth(RIDER_USER_ID, "RIDER")
+    });
+
+    assert.equal(riderDeliveries.statusCode, 200);
+    assert.ok(Array.isArray(riderDeliveries.json().data));
+  });
+
   it("rejects a customer attempting a business action", async () => {
     const response = await app.inject({
       method: "POST",

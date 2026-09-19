@@ -21,6 +21,9 @@ export interface SafeUser {
   lastName: string | null;
   role: string;
   isActive: boolean;
+  adminApproved: boolean;
+  approvedBy: string | null;
+  approvedAt: Date | null;
   emailVerifiedAt: Date | null;
   phoneVerifiedAt: Date | null;
   createdAt: Date;
@@ -41,6 +44,9 @@ function toSafeUser(user: UserRecord): SafeUser {
     lastName: user.lastName,
     role: user.role,
     isActive: user.isActive,
+    adminApproved: user.adminApproved,
+    approvedBy: user.approvedBy,
+    approvedAt: user.approvedAt,
     emailVerifiedAt: user.emailVerifiedAt,
     phoneVerifiedAt: user.phoneVerifiedAt,
     createdAt: user.createdAt,
@@ -150,6 +156,18 @@ export async function authenticateUser(
       "This account is inactive.",
       403,
       "ACCOUNT_INACTIVE"
+    );
+  }
+
+  if (
+    user.role === "ADMIN" &&
+    user.email !== "contact.squadlink@gmail.com" &&
+    !user.adminApproved
+  ) {
+    throw new AppError(
+      "This admin account is pending approval from the main Squadlink admin.",
+      403,
+      "ADMIN_ACCOUNT_PENDING_APPROVAL"
     );
   }
 

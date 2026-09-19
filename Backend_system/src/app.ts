@@ -17,11 +17,15 @@ import { checkoutRoutes } from "./modules/checkout/checkout.routes";
 import { orderRoutes } from "./modules/order/order.routes";
 import { businessVerificationRoutes} from "./modules/business-verification/business-verification.routes";
 import { lifecycleRoutes } from "./modules/lifecycle/lifecycle.routes";
+import { ensureRiderRuntimeTables } from "./modules/lifecycle/lifecycle.service";
+import { adminAccessRoutes } from "./modules/admin-access/admin-access.routes";
 
 export async function buildApp() {
   const app = Fastify({
     logger: true
   });
+
+  await ensureRiderRuntimeTables();
 
   await app.register(helmet);
 
@@ -50,6 +54,10 @@ export async function buildApp() {
 
   await app.register(businessRoutes, {
     prefix: "/api/v1/businesses"
+  });
+
+  await app.register(adminAccessRoutes, {
+    prefix: "/api/v1/admin"
   });
 
   await app.register(

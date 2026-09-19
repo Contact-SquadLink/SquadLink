@@ -50,14 +50,14 @@ export function HeroSection() {
             {/* Secondary CTAs */}
             <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3 text-sm">
               <Link
-                to="/register"
+                to="/register?intent=business"
                 className="inline-flex items-center gap-2 font-medium text-gray-600 hover:text-primary-700 transition-colors"
               >
                 <Store className="h-4 w-4 text-primary-600" />
                 Join as a Business
               </Link>
               <Link
-                to="/register"
+                to="/contact"
                 className="inline-flex items-center gap-2 font-medium text-gray-600 hover:text-primary-700 transition-colors"
               >
                 <Bike className="h-4 w-4 text-primary-600" />

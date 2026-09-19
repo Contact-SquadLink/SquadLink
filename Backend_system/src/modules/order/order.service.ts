@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 
+import { db } from "../../db/database";
 import { withTransaction } from "../../db/transaction";
 import { AppError } from "../../utils/app-error";
 import {
@@ -9,6 +10,130 @@ import {
 import type { PlaceOrderInput } from "./order.schemas";
 
 const IDEMPOTENCY_ENDPOINT = "POST /api/v1/orders";
+
+function serializeOrderRow(row: {
+  id: string;
+  status: string;
+  created_at: string;
+  subtotal_amount: number | string;
+  delivery_fee_amount: number | string;
+  total_amount: number | string;
+  items: Array<{
+    productId: string;
+    name: string;
+    quantity: number;
+    price: number;
+    subtotal: number;
+  }>;
+}) {
+  return {
+    id: row.id,
+    status: row.status,
+    createdAt: row.created_at,
+    subtotal: Number(row.subtotal_amount),
+    deliveryFee: Number(row.delivery_fee_amount),
+    vat: 0,
+    total: Number(row.total_amount),
+    items: (row.items ?? []).map((item) => ({
+      productId: item.productId,
+      name: item.name,
+      quantity: Number(item.quantity),
+      price: Number(item.price),
+      subtotal: Number(item.subtotal)
+    }))
+  };
+}
+
+export async function listOrdersForUser(userId: string) {
+  const result = await db.query<{
+    id: string;
+    status: string;
+    created_at: string;
+    subtotal_amount: number | string;
+    delivery_fee_amount: number | string;
+    total_amount: number | string;
+    items: Array<{
+      productId: string;
+      name: string;
+      quantity: number;
+      price: number;
+      subtotal: number;
+    }>;
+  }>(`
+    SELECT o.id,
+           o.status,
+           o.created_at,
+           o.subtotal_amount,
+           o.delivery_fee_amount,
+           o.total_amount,
+           COALESCE(
+             json_agg(
+               json_build_object(
+                 'productId', oi.product_id,
+                 'name', oi.product_name,
+                 'quantity', oi.quantity,
+                 'price', oi.unit_price_amount,
+                 'subtotal', oi.subtotal_amount
+               )
+             ) FILTER (WHERE oi.id IS NOT NULL),
+             '[]'::json
+           ) AS items
+    FROM public.orders o
+    LEFT JOIN public.order_items oi ON oi.order_id = o.id
+    WHERE o.user_id = $1
+    GROUP BY o.id, o.status, o.created_at, o.subtotal_amount, o.delivery_fee_amount, o.total_amount
+    ORDER BY o.created_at DESC
+  `, [userId]);
+
+  return result.rows.map(serializeOrderRow);
+}
+
+export async function getOrderForUser(userId: string, orderId: string) {
+  const result = await db.query<{
+    id: string;
+    status: string;
+    created_at: string;
+    subtotal_amount: number | string;
+    delivery_fee_amount: number | string;
+    total_amount: number | string;
+    items: Array<{
+      productId: string;
+      name: string;
+      quantity: number;
+      price: number;
+      subtotal: number;
+    }>;
+  }>(`
+    SELECT o.id,
+           o.status,
+           o.created_at,
+           o.subtotal_amount,
+           o.delivery_fee_amount,
+           o.total_amount,
+           COALESCE(
+             json_agg(
+               json_build_object(
+                 'productId', oi.product_id,
+                 'name', oi.product_name,
+                 'quantity', oi.quantity,
+                 'price', oi.unit_price_amount,
+                 'subtotal', oi.subtotal_amount
+               )
+             ) FILTER (WHERE oi.id IS NOT NULL),
+             '[]'::json
+           ) AS items
+    FROM public.orders o
+    LEFT JOIN public.order_items oi ON oi.order_id = o.id
+    WHERE o.user_id = $1 AND o.id = $2
+    GROUP BY o.id, o.status, o.created_at, o.subtotal_amount, o.delivery_fee_amount, o.total_amount
+  `, [userId, orderId]);
+
+  if (result.rows.length === 0) {
+    throw new AppError("Order not found.", 404, "ORDER_NOT_FOUND");
+  }
+
+  return serializeOrderRow(result.rows[0]);
+}
 
 function requestHash(input: PlaceOrderInput): string {
   return createHash("sha256")

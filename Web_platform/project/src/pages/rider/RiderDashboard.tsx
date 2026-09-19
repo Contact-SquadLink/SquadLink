@@ -1,10 +1,11 @@
 import { Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { Bike, Package, ArrowRight, Clock, MapPin, CheckCircle2 } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/States';
 import { formatDate } from '@/utils/format';
-import { demoDeliveries } from '@/utils/demo-data';
-import type { DeliveryStatus } from '@/types';
+import { riderApi } from '@/api/rider';
+import type { Delivery, DeliveryStatus } from '@/types';
 
 const statusVariants: Record<DeliveryStatus, 'default' | 'success' | 'warning' | 'error' | 'info' | 'neutral'> = {
   SEARCHING_RIDER: 'warning',
@@ -16,7 +17,12 @@ const statusVariants: Record<DeliveryStatus, 'default' | 'success' | 'warning' |
 };
 
 export function RiderDashboard() {
-  const deliveries = demoDeliveries;
+  const { data, isLoading } = useQuery({
+    queryKey: ['rider-deliveries'],
+    queryFn: riderApi.listDeliveries,
+  });
+
+  const deliveries = (data?.data ?? []) as Delivery[];
   const activeDeliveries = deliveries.filter((d) => d.status !== 'DELIVERED');
   const completedDeliveries = deliveries.filter((d) => d.status === 'DELIVERED');
 
@@ -25,7 +31,6 @@ export function RiderDashboard() {
       <h1 className="font-display text-2xl font-bold text-gray-900 mb-1">Rider Dashboard</h1>
       <p className="text-sm text-gray-500 mb-6">Your assigned deliveries and delivery workflow.</p>
 
-      {/* Availability banner */}
       <div className="rounded-2xl border border-primary-200 bg-primary-50 p-5 mb-6">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-600 text-white">
@@ -34,13 +39,12 @@ export function RiderDashboard() {
           <div>
             <h2 className="text-sm font-bold text-primary-900">Availability</h2>
             <p className="text-xs text-primary-700">
-              When you mark yourself available, the platform can assign deliveries to you.
+              The rider status is synchronized with the platform assignment logic.
             </p>
           </div>
         </div>
       </div>
 
-      {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-8">
         <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent-100 text-accent-700">
@@ -54,24 +58,26 @@ export function RiderDashboard() {
             <CheckCircle2 className="h-5 w-5" />
           </div>
           <p className="mt-3 font-display text-2xl font-bold text-gray-900">{completedDeliveries.length}</p>
-          <p className="text-xs text-gray-500">Completed Today</p>
+          <p className="text-xs text-gray-500">Completed</p>
         </div>
         <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm col-span-2 sm:col-span-1">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary-100 text-secondary-700">
             <Bike className="h-5 w-5" />
           </div>
-          <p className="mt-3 font-display text-2xl font-bold text-gray-900">{'\u20A6'}2,400</p>
-          <p className="text-xs text-gray-500">Earnings Today</p>
+          <p className="mt-3 font-display text-2xl font-bold text-gray-900">{deliveries.length}</p>
+          <p className="text-xs text-gray-500">Assigned Today</p>
         </div>
       </div>
 
-      {deliveries.length === 0 && (
+      {isLoading ? (
+        <p className="text-sm text-gray-600">Loading rider deliveries…</p>
+      ) : deliveries.length === 0 ? (
         <EmptyState
           icon={<Package className="h-7 w-7" />}
           title="No deliveries assigned"
           description="When deliveries are assigned to you, they will appear here."
         />
-      )}
+      ) : null}
 
       {activeDeliveries.length > 0 && (
         <div className="mb-8">

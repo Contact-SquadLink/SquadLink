@@ -120,16 +120,6 @@ export function ProductDetailPage() {
           <span className="text-gray-400 truncate max-w-40">{product.name}</span>
         </nav>
 
-        {/* Demo notice */}
-        {source === 'demo' && (
-          <div className="mb-6 flex items-start gap-3 rounded-xl border border-accent-200 bg-accent-50 p-4">
-            <Info className="h-5 w-5 text-accent-600 shrink-0 mt-0.5" />
-            <p className="text-sm text-accent-700">
-              Showing a demonstration product. When the backend catalogue is connected, real products from local businesses will appear here.
-            </p>
-          </div>
-        )}
-
         {/* Product layout */}
         <div className="grid lg:grid-cols-2 gap-8 lg:gap-12">
           {/* Image */}

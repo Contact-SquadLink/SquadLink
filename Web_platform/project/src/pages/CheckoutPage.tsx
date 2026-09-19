@@ -5,10 +5,13 @@ import {
   ArrowRight,
   Check,
   ShieldCheck,
+  CreditCard,
+  X,
 } from 'lucide-react';
 import { useCart } from '@/hooks/useCart';
+import { checkoutApi, ordersApi } from '@/api/orders';
 import { formatPrice, cn } from '@/utils/format';
-import type { Order, OrderItem } from '@/types';
+import type { CheckoutPreview, OrderItem } from '@/types';
 
 const DELIVERY_FEE = 500;
 const VAT_RATE = 0.075;
@@ -17,26 +20,47 @@ export function CheckoutPage() {
   const navigate = useNavigate();
   const { items, subtotal, clearCart } = useCart();
 
+  const [preview, setPreview] = useState<CheckoutPreview | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
   const [orderPlaced, setOrderPlaced] = useState(false);
   const [placingOrder, setPlacingOrder] = useState(false);
   const [placedOrderId, setPlacedOrderId] = useState<string | null>(null);
+  const [showSandboxPayment, setShowSandboxPayment] = useState(false);
 
-  const deliveryFee = items.length > 0 ? DELIVERY_FEE : 0;
-  const vat = Math.round(subtotal * VAT_RATE);
-  const total = subtotal + deliveryFee + vat;
+  useEffect(() => {
+    if (items.length === 0) {
+      setPreview(null);
+      return;
+    }
 
-  const handlePlaceOrder = useCallback(() => {
-    if (placingOrder) return;
-    setPlacingOrder(true);
-    setTimeout(() => {
-      const orderId = `ord-${Date.now().toString().slice(-6)}`;
-      setPlacedOrderId(orderId);
-      setOrderPlaced(true);
-      clearCart();
-      setPlacingOrder(false);
-      setTimeout(() => navigate(`/orders/${orderId}`), 1500);
-    }, 800);
-  }, [placingOrder, clearCart, navigate]);
+    let isMounted = true;
+
+    const loadPreview = async () => {
+      try {
+        const response = await checkoutApi.preview({
+          items: items.map((item) => ({
+            productId: item.productId,
+            quantity: item.quantity,
+          })),
+        });
+
+        if (isMounted) {
+          setPreview(response.data);
+          setPreviewError(null);
+        }
+      } catch (error) {
+        if (isMounted) {
+          setPreviewError(error instanceof Error ? error.message : 'Unable to preview this order.');
+        }
+      }
+    };
+
+    loadPreview();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [items]);
 
   useEffect(() => {
     if (items.length === 0 && !orderPlaced && !placingOrder) {
@@ -48,6 +72,10 @@ export function CheckoutPage() {
     return null;
   }
 
+  const deliveryFee = preview?.deliveryFee ?? (items.length > 0 ? DELIVERY_FEE : 0);
+  const vat = preview?.vat ?? Math.round(subtotal * VAT_RATE);
+  const total = preview?.total ?? subtotal + deliveryFee + vat;
+
   const orderItems: OrderItem[] = items.map((i) => ({
     productId: i.productId,
     name: i.name,
@@ -55,6 +83,39 @@ export function CheckoutPage() {
     price: i.price,
     subtotal: i.price * i.quantity,
   }));
+
+  const handlePlaceOrder = useCallback(async () => {
+    if (placingOrder || items.length === 0) return;
+
+    setPlacingOrder(true);
+    setPreviewError(null);
+
+    try {
+      const payload = {
+        items: items.map((item) => ({
+          productId: item.productId,
+          quantity: item.quantity,
+        })),
+      };
+
+      const idempotencyKey = globalThis.crypto?.randomUUID?.() ?? `order-${Date.now()}`;
+      const response = await ordersApi.create(payload, idempotencyKey);
+      const orderId = response.data.orderId;
+
+      setPlacedOrderId(orderId);
+      setOrderPlaced(true);
+      clearCart();
+
+      setTimeout(() => {
+        navigate(`/orders/${orderId}`);
+      }, 1200);
+    } catch (error) {
+      setPreviewError(error instanceof Error ? error.message : 'Unable to place this order.');
+    } finally {
+      setPlacingOrder(false);
+      setShowSandboxPayment(false);
+    }
+  }, [clearCart, items, navigate, placingOrder]);
 
   return (
     <div className="bg-gray-50 min-h-screen">
@@ -70,8 +131,13 @@ export function CheckoutPage() {
         <h1 className="font-display text-2xl font-bold text-gray-900 mb-1">Checkout</h1>
         <p className="text-sm text-gray-500 mb-8">Review your order before placing it.</p>
 
+        {previewError && (
+          <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+            {previewError}
+          </div>
+        )}
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Items */}
           <div className="lg:col-span-2 space-y-4">
             <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
               <h2 className="font-display text-lg font-bold text-gray-900 mb-4">Order Items</h2>
@@ -96,7 +162,6 @@ export function CheckoutPage() {
             </div>
           </div>
 
-          {/* Summary + Place Order */}
           <div className="lg:sticky lg:top-20 lg:self-start">
             <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
               <h2 className="font-display text-lg font-bold text-gray-900 mb-4">Summary</h2>
@@ -104,7 +169,7 @@ export function CheckoutPage() {
               <div className="space-y-3 text-sm">
                 <div className="flex items-center justify-between">
                   <span className="text-gray-600">Subtotal</span>
-                  <span className="font-semibold text-gray-900">{formatPrice(subtotal)}</span>
+                  <span className="font-semibold text-gray-900">{formatPrice(preview?.subtotal ?? subtotal)}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-gray-600">Delivery fee</span>
@@ -123,12 +188,12 @@ export function CheckoutPage() {
               </div>
 
               <button
-                onClick={handlePlaceOrder}
-                disabled={placingOrder}
+                onClick={() => setShowSandboxPayment(true)}
+                disabled={placingOrder || !!previewError}
                 className={cn(
                   'mt-6 flex w-full items-center justify-center gap-2 rounded-xl h-12 text-sm font-semibold text-white transition-colors',
-                  placingOrder
-                    ? 'bg-primary-400'
+                  placingOrder || previewError
+                    ? 'bg-primary-400 cursor-not-allowed'
                     : 'bg-primary-600 hover:bg-primary-700'
                 )}
               >
@@ -145,11 +210,48 @@ export function CheckoutPage() {
                 )}
               </button>
 
+              {showSandboxPayment && (
+                <div className="mt-4 rounded-2xl border border-primary-200 bg-primary-50 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 text-primary-800">
+                      <CreditCard className="h-4 w-4" />
+                      <span className="text-sm font-semibold">Sandbox payment</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowSandboxPayment(false)}
+                      className="text-primary-700 hover:text-primary-900"
+                      aria-label="Close sandbox payment"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <p className="mt-2 text-sm text-primary-700">
+                    The checkout is validated against the backend order and payment contract before placement. Proceeding submits the real order request.
+                  </p>
+                  <div className="mt-4 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowSandboxPayment(false)}
+                      className="flex-1 rounded-xl border border-primary-200 bg-white px-3 py-2 text-sm font-semibold text-primary-700 hover:bg-primary-100"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handlePlaceOrder}
+                      className="flex-1 rounded-xl bg-primary-600 px-3 py-2 text-sm font-semibold text-white hover:bg-primary-700"
+                    >
+                      Confirm Payment
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <div className="mt-4 flex items-start gap-2 text-xs text-gray-400">
                 <ShieldCheck className="h-4 w-4 shrink-0 mt-0.5" />
                 <p>
-                  Your order will be processed once your backend is connected.
-                  This is a demo checkout with simulated order placement.
+                  Orders are validated against the server before placement using the backend checkout preview and idempotent order creation contract.
                 </p>
               </div>
             </div>
@@ -163,6 +265,10 @@ export function CheckoutPage() {
               Order placed successfully! Redirecting to order tracking...
             </p>
           </div>
+        )}
+
+        {placedOrderId && !orderPlaced && (
+          <p className="mt-4 text-sm text-gray-500">Order ID: {placedOrderId}</p>
         )}
       </div>
     </div>

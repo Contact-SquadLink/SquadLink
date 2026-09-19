@@ -52,7 +52,7 @@ export function BusinessCTASection() {
             </div>
 
             <Link
-              to="/register"
+              to="/register?intent=business"
               className="mt-8 inline-flex h-12 items-center gap-2 rounded-xl bg-secondary-500 px-6 text-base font-semibold text-secondary-950 shadow-sm hover:bg-secondary-400 transition-colors"
             >
               Partner With SQUADLINK
@@ -127,14 +127,14 @@ export function RiderCTASection() {
             </div>
 
             <Link
-              to="/register"
+              to="/contact"
               className="mt-8 inline-flex h-12 items-center gap-2 rounded-xl bg-accent-600 px-6 text-base font-semibold text-white shadow-sm hover:bg-accent-700 transition-colors"
             >
-              Become a Rider
+              Rider onboarding managed by SQUADLINK
               <ArrowRight className="h-5 w-5" />
             </Link>
             <p className="mt-3 text-xs text-gray-400">
-              Rider onboarding follows the backend's actual authentication and registration model.
+              Rider onboarding is currently managed by SQUADLINK. Contact the team for rider onboarding details.
             </p>
           </div>
         </div>

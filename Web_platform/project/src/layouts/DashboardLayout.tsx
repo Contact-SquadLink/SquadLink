@@ -47,6 +47,7 @@ const allNavLinks: NavLink[] = [
   // Admin
   { label: 'Dashboard', path: '/admin', icon: LayoutDashboard, roles: ['ADMIN'] },
   { label: 'Businesses', path: '/admin/businesses', icon: Shield, roles: ['ADMIN'] },
+  { label: 'Access', path: '/admin/access', icon: Shield, roles: ['ADMIN'] },
 ];
 
 const roleLabels: Record<Role, string> = {

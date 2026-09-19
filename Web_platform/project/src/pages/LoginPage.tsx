@@ -66,6 +66,7 @@ export function LoginPage() {
   const redirect = searchParams.get('redirect');
   const roleParam = searchParams.get('role');
   const { login } = useAuth();
+  const isAdminRole = roleParam === 'ADMIN';
 
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
@@ -82,16 +83,43 @@ export function LoginPage() {
     setIsLoading(true);
 
     try {
-      await login(identifier, password, 'CUSTOMER');
-      navigate(redirect || '/dashboard');
-    } catch (err: any) {
-      setError(err?.message || 'Login failed. Please check your credentials.');
+      const user = await login(identifier, password);
+
+      if (redirect) {
+        navigate(redirect);
+        return;
+      }
+
+      if (roleParam === 'BUSINESS_USER') {
+        if (user.role === 'BUSINESS_USER') {
+          navigate('/business');
+        } else if (user.role === 'CUSTOMER') {
+          navigate('/business/register');
+        } else if (user.role === 'RIDER') {
+          navigate('/rider');
+        } else {
+          navigate('/business');
+        }
+        return;
+      }
+
+      if (user.role === 'BUSINESS_USER' || user.role === 'ADMIN') {
+        navigate('/business');
+      } else if (user.role === 'RIDER') {
+        navigate('/rider');
+      } else {
+        navigate('/dashboard');
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Login failed. Please check your credentials.';
+      setError(message);
     } finally {
       setIsLoading(false);
     }
   };
 
-  if (roleParam === 'CUSTOMER') {
+  if (roleParam === 'CUSTOMER' || roleParam === 'BUSINESS_USER' || roleParam === 'RIDER' || roleParam === 'ADMIN') {
+    const roleTitle = roleConfig.find((c) => c.role === roleParam)?.title || roleParam;
     return (
       <div className="min-h-screen bg-gray-50 flex flex-col">
         {/* Header */}
@@ -103,14 +131,24 @@ export function LoginPage() {
               </div>
               <span className="font-display text-xl font-bold text-gray-900">SQUA<span className="text-primary-600">LINK</span></span>
             </Link>
+            <Link
+              to="/login"
+              className="text-sm font-medium text-gray-500 hover:text-gray-900 transition-colors"
+            >
+              ← Back to role selection
+            </Link>
           </div>
         </div>
 
         <div className="flex-1 flex items-center justify-center px-4 py-12">
           <div className="w-full max-w-md">
             <div className="text-center mb-8">
-              <h1 className="font-display text-3xl font-bold text-gray-900">Customer Login</h1>
-              <p className="mt-2 text-gray-600">Sign in to your SquaLink customer account</p>
+              <h1 className="font-display text-3xl font-bold text-gray-900">{roleTitle} Login</h1>
+              <p className="mt-2 text-gray-600">
+                {isAdminRole
+                  ? 'Admin access is provisioned by the platform owner. Sign in with your assigned credentials.'
+                  : `Sign in to your SquaLink ${roleTitle.toLowerCase()} account`}
+              </p>
             </div>
 
             <div className="bg-white px-6 py-8 shadow-xl rounded-2xl border border-gray-100">
@@ -165,12 +203,19 @@ export function LoginPage() {
               </form>
 
               <div className="mt-6 flex flex-col gap-3 text-center text-sm">
-                <Link
-                  to={`/register?role=CUSTOMER${redirect ? `&redirect=${encodeURIComponent(redirect)}` : ''}`}
-                  className="text-primary-600 hover:text-primary-700 font-semibold"
-                >
-                  Don't have an account? Create Account
-                </Link>
+                {!isAdminRole && (
+                  <Link
+                    to={`/register?role=CUSTOMER${redirect ? `&redirect=${encodeURIComponent(redirect)}` : ''}`}
+                    className="text-primary-600 hover:text-primary-700 font-semibold"
+                  >
+                    Don't have an account? Create Account
+                  </Link>
+                )}
+                {isAdminRole && (
+                  <p className="text-xs text-gray-500">
+                    Admin accounts are created by the platform owner and are not self-registered.
+                  </p>
+                )}
                 <button
                   onClick={() => navigate('/login')}
                   className="text-gray-500 hover:text-gray-700"

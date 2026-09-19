@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
   CheckCircle2,
@@ -10,8 +11,8 @@ import {
 import { Badge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/States';
 import { formatPrice, formatDate } from '@/utils/format';
-import { demoOrders } from '@/utils/demo-data';
-import type { Order, OrderStatus } from '@/types';
+import { businessApi } from '@/api/business';
+import type { BusinessOrderSummary, OrderStatus } from '@/types';
 
 const statusVariants: Record<OrderStatus, 'default' | 'success' | 'warning' | 'error' | 'info' | 'neutral'> = {
   PENDING: 'warning',
@@ -24,14 +25,21 @@ const statusVariants: Record<OrderStatus, 'default' | 'success' | 'warning' | 'e
 };
 
 export function BusinessOrdersPage() {
-  const orders = demoOrders;
+  const { data, isLoading } = useQuery({
+    queryKey: ['business-orders'],
+    queryFn: businessApi.listOrders,
+  });
+
+  const orders = Array.isArray(data?.data) ? (data.data as unknown as BusinessOrderSummary[]) : [];
 
   return (
     <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 py-8">
       <h1 className="font-display text-2xl font-bold text-gray-900 mb-1">Business Orders</h1>
       <p className="text-sm text-gray-500 mb-6">Accept, prepare, and mark orders ready for pickup.</p>
 
-      {orders.length === 0 ? (
+      {isLoading ? (
+        <p className="text-sm text-gray-600">Loading business orders…</p>
+      ) : orders.length === 0 ? (
         <EmptyState
           icon={<ClipboardList className="h-7 w-7" />}
           title="No orders yet"
@@ -41,8 +49,8 @@ export function BusinessOrdersPage() {
         <div className="space-y-3">
           {orders.map((order) => (
             <Link
-              key={order.id}
-              to={`/business/orders/${order.id}`}
+              key={order.orderId}
+              to={`/business/orders/${order.orderId}`}
               className="flex items-center justify-between rounded-2xl border border-gray-100 bg-white p-5 shadow-sm hover:shadow-md hover:border-primary-200 transition-all"
             >
               <div className="flex items-center gap-4">
@@ -51,17 +59,16 @@ export function BusinessOrdersPage() {
                 </div>
                 <div>
                   <p className="font-semibold text-gray-900 text-sm">
-                    #{order.id.slice(-6).toUpperCase()}
+                    #{order.orderId.slice(-6).toUpperCase()}
                   </p>
                   <p className="text-xs text-gray-500">
-                    {formatDate(order.createdAt)} · {order.items.length} items
+                    {formatDate(order.createdAt)}
                   </p>
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                <span className="font-display text-lg font-bold text-gray-900">{formatPrice(order.total)}</span>
-                <Badge variant={statusVariants[order.status]}>
-                  {order.status.replace(/_/g, ' ')}
+                <Badge variant={statusVariants[(order.status as OrderStatus) ?? 'PENDING']}>
+                  {(order.status ?? 'PENDING').replace(/_/g, ' ')}
                 </Badge>
               </div>
             </Link>
@@ -74,9 +81,29 @@ export function BusinessOrdersPage() {
 
 export function BusinessOrderDetailPage() {
   const { orderId } = useParams<{ orderId: string }>();
-  const [order, setOrder] = useState<Order | undefined>(
-    demoOrders.find((o) => o.id === orderId)
-  );
+  const queryClient = useQueryClient();
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['business-orders'],
+    queryFn: businessApi.listOrders,
+  });
+
+  const orders = Array.isArray(data?.data) ? (data.data as unknown as BusinessOrderSummary[]) : [];
+  const order = useMemo(() => orders.find((entry) => entry.orderId === orderId), [orders, orderId]);
+
+  const acceptMutation = useMutation({
+    mutationFn: () => businessApi.acceptOrder(orderId as string),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['business-orders'] }),
+  });
+
+  const readyMutation = useMutation({
+    mutationFn: () => businessApi.markOrderReady(orderId as string),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['business-orders'] }),
+  });
+
+  if (isLoading) {
+    return <div className="mx-auto max-w-3xl px-4 py-8 text-sm text-gray-600">Loading order details…</div>;
+  }
 
   if (!order) {
     return (
@@ -84,19 +111,11 @@ export function BusinessOrderDetailPage() {
         <EmptyState
           icon={<Package className="h-7 w-7" />}
           title="Order not found"
-          description="This order could not be found."
+          description="This order is not available to this business yet."
         />
       </div>
     );
   }
-
-  const advanceStatus = () => {
-    const flow: OrderStatus[] = ['PENDING', 'CONFIRMED', 'PREPARING', 'READY_FOR_PICKUP', 'OUT_FOR_DELIVERY', 'DELIVERED'];
-    const idx = flow.indexOf(order.status);
-    if (idx < flow.length - 1) {
-      setOrder({ ...order, status: flow[idx + 1] });
-    }
-  };
 
   return (
     <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8 py-8">
@@ -111,84 +130,51 @@ export function BusinessOrderDetailPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="font-display text-2xl font-bold text-gray-900">
-            Order #{order.id.slice(-6).toUpperCase()}
+            Order #{order.orderId.slice(-6).toUpperCase()}
           </h1>
           <p className="mt-1 text-sm text-gray-500">{formatDate(order.createdAt)}</p>
         </div>
-        <Badge variant={statusVariants[order.status]}>
-          {order.status.replace(/_/g, ' ')}
+        <Badge variant={statusVariants[(order.status as OrderStatus) ?? 'PENDING']}>
+          {(order.status ?? 'PENDING').replace(/_/g, ' ')}
         </Badge>
       </div>
 
-      {/* Actions */}
       <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm mb-6">
         <h2 className="font-display text-lg font-bold text-gray-900 mb-4">Actions</h2>
 
-        {order.status === 'PENDING' && (
+        {order.status === 'CONFIRMED' && (
           <button
-            onClick={advanceStatus}
+            onClick={() => acceptMutation.mutate()}
             className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-primary-600 px-6 text-sm font-semibold text-white hover:bg-primary-700 transition-colors"
           >
             <CheckCircle2 className="h-4 w-4" /> Accept Order
           </button>
         )}
 
-        {order.status === 'CONFIRMED' && (
+        {order.status === 'PREPARING' && (
           <button
-            onClick={advanceStatus}
+            onClick={() => readyMutation.mutate()}
             className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-secondary-500 px-6 text-sm font-semibold text-secondary-950 hover:bg-secondary-400 transition-colors"
           >
             <Store className="h-4 w-4" /> Mark Ready for Pickup
           </button>
         )}
 
-        {(order.status === 'PREPARING' || order.status === 'READY_FOR_PICKUP') && (
+        {(order.status === 'READY_FOR_PICKUP' || order.status === 'OUT_FOR_DELIVERY' || order.status === 'DELIVERED') && (
           <div className="flex items-center gap-2 rounded-xl bg-success-50 border border-success-200 p-4">
             <CheckCircle2 className="h-5 w-5 text-success-600" />
             <p className="text-sm font-semibold text-success-800">
-              {order.status === 'READY_FOR_PICKUP'
-                ? 'Order is ready for rider pickup.'
-                : 'Order is being prepared.'}
-            </p>
-          </div>
-        )}
-
-        {(order.status === 'OUT_FOR_DELIVERY' || order.status === 'DELIVERED') && (
-          <div className="flex items-center gap-2 rounded-xl bg-gray-50 p-4">
-            <Package className="h-5 w-5 text-gray-400" />
-            <p className="text-sm text-gray-600">
-              {order.status === 'DELIVERED'
-                ? 'Order has been delivered.'
-                : 'Order is out for delivery.'}
+              {order.status === 'READY_FOR_PICKUP' ? 'Order is ready for rider pickup.' : order.status === 'OUT_FOR_DELIVERY' ? 'Order is out for delivery.' : 'Order has been delivered.'}
             </p>
           </div>
         )}
       </div>
 
-      {/* Items */}
-      <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm mb-6">
-        <h2 className="font-display text-lg font-bold text-gray-900 mb-4">Items</h2>
-        <div className="space-y-3">
-          {order.items.map((item) => (
-            <div key={item.productId} className="flex items-center justify-between py-3 border-b border-gray-50 last:border-0">
-              <div>
-                <p className="text-sm font-semibold text-gray-900">{item.name}</p>
-                <p className="text-xs text-gray-500">{item.quantity} x {formatPrice(item.price)}</p>
-              </div>
-              <span className="text-sm font-bold text-gray-900">{formatPrice(item.subtotal)}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Summary */}
       <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-        <h2 className="font-display text-lg font-bold text-gray-900 mb-4">Payment</h2>
-        <div className="space-y-3 text-sm">
-          <div className="flex justify-between"><span className="text-gray-600">Subtotal</span><span className="font-semibold text-gray-900">{formatPrice(order.subtotal)}</span></div>
-          <div className="flex justify-between"><span className="text-gray-600">Delivery</span><span className="text-gray-700">{formatPrice(order.deliveryFee)}</span></div>
-          <div className="flex justify-between"><span className="text-gray-600">VAT</span><span className="text-gray-700">{formatPrice(order.vat)}</span></div>
-          <div className="border-t border-gray-100 pt-3 flex justify-between"><span className="font-bold text-gray-900">Total</span><span className="font-display text-xl font-bold text-gray-900">{formatPrice(order.total)}</span></div>
+        <h2 className="font-display text-lg font-bold text-gray-900 mb-4">Summary</h2>
+        <div className="space-y-3 text-sm text-gray-600">
+          <div className="flex items-center justify-between"><span>Fulfillment status</span><span className="font-medium text-gray-900">{order.fulfillmentStatus ?? 'N/A'}</span></div>
+          <div className="flex items-center justify-between"><span>Order status</span><span className="font-medium text-gray-900">{order.status}</span></div>
         </div>
       </div>
     </div>

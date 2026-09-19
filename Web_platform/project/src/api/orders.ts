@@ -2,6 +2,7 @@ import { apiRequest } from './client';
 import type {
   CheckoutPreview,
   Order,
+  OrderCreationResult,
   ApiSingleResponse,
   ApiListResponse,
 } from '@/types';
@@ -24,7 +25,7 @@ export const checkoutApi = {
 
 export const ordersApi = {
   create: (payload: CreateOrderPayload, idempotencyKey: string) =>
-    apiRequest<ApiSingleResponse<Order>>('/api/v1/orders', {
+    apiRequest<ApiSingleResponse<OrderCreationResult>>('/api/v1/orders', {
       method: 'POST',
       body: payload,
       headers: { 'Idempotency-Key': idempotencyKey },

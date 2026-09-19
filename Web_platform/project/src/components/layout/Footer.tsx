@@ -14,7 +14,7 @@ const footerSections = [
   {
     title: 'Businesses',
     links: [
-      { label: 'Partner With Us', path: '/register' },
+      { label: 'Partner With Us', path: '/register?intent=business' },
       { label: 'Business Dashboard', path: '/login' },
       { label: 'How It Works', path: '/#how-it-works' },
       { label: 'FAQ', path: '/faq' },
@@ -23,7 +23,7 @@ const footerSections = [
   {
     title: 'Riders',
     links: [
-      { label: 'Become a Rider', path: '/register' },
+      { label: 'Become a Rider', path: '/contact' },
       { label: 'Rider Dashboard', path: '/login' },
       { label: 'How It Works', path: '/#how-it-works' },
       { label: 'FAQ', path: '/faq' },
