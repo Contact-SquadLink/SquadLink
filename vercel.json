@@ -1,0 +1,14 @@
+{
+  "services": {
+    "frontend": {
+      "root": "Web_platform/project/"
+    },
+    "backend": {
+      "root": "Backend_system/"
+    }
+  },
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": { "service": "backend" } },
+    { "source": "/(.*)", "destination": { "service": "frontend" } }
+  ]
+}
