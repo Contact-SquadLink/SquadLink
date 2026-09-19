@@ -14,17 +14,28 @@ import { catalogRoutes } from "./modules/catalog/catalog.routes";
 import { inventoryRoutes } from "./modules/inventory/inventory.routes";
 import { cartRoutes } from "./modules/cart/cart.routes";
 import { checkoutRoutes } from "./modules/checkout/checkout.routes";
+import { orderRoutes } from "./modules/order/order.routes";
 import { businessVerificationRoutes} from "./modules/business-verification/business-verification.routes";
+import { lifecycleRoutes } from "./modules/lifecycle/lifecycle.routes";
+import { ensureRiderRuntimeTables } from "./modules/lifecycle/lifecycle.service";
+import { adminAccessRoutes } from "./modules/admin-access/admin-access.routes";
 
 export async function buildApp() {
   const app = Fastify({
     logger: true
   });
 
+  await ensureRiderRuntimeTables();
+
   await app.register(helmet);
 
   await app.register(cors, {
-    origin: env.CORS_ORIGIN
+    origin: env.CORS_ORIGIN,
+    // @fastify/cors defaults to GET,HEAD,POST only. The cart API uses
+    // PUT/DELETE (update item, remove item, clear cart), so those methods must
+    // be allowed or browser preflights from the frontend origin will be
+    // rejected. Transport configuration only — no API contract changes.
+    methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']
   });
 
   await app.register(rateLimit, {
@@ -43,6 +54,10 @@ export async function buildApp() {
 
   await app.register(businessRoutes, {
     prefix: "/api/v1/businesses"
+  });
+
+  await app.register(adminAccessRoutes, {
+    prefix: "/api/v1/admin"
   });
 
   await app.register(
@@ -66,6 +81,14 @@ await app.register(cartRoutes, {
 
 await app.register(checkoutRoutes, {
   prefix: "/api/v1/checkout"
+});
+
+await app.register(orderRoutes, {
+  prefix: "/api/v1/orders"
+});
+
+await app.register(lifecycleRoutes, {
+  prefix: "/api/v1"
 });
 
   app.get("/health", async () => {

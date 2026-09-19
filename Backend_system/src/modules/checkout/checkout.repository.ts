@@ -1,4 +1,7 @@
 import { db } from "../../db/database";
+import type { PoolClient } from "pg";
+
+type QueryClient = typeof db | PoolClient;
 
 export interface CheckoutCartItem {
   productId: string;
@@ -24,9 +27,10 @@ export interface CheckoutBusinessProduct {
 }
 
 export async function findActiveCartItems(
-  userId: string
+  userId: string,
+  client: QueryClient = db
 ): Promise<CheckoutCartItem[]> {
-  const result = await db.query<{
+  const result = await client.query<{
     product_id: string;
     product_name: string;
     quantity: number;
@@ -58,9 +62,10 @@ export async function findActiveCartItems(
 export async function findCandidateBusinesses(
   latitude: number,
   longitude: number,
-  radiusMeters: number
+  radiusMeters: number,
+  client: QueryClient = db
 ): Promise<CheckoutBusinessCandidate[]> {
-  const result = await db.query<{
+  const result = await client.query<{
     business_id: string;
     business_name: string;
     distance_meters: number;
@@ -123,13 +128,14 @@ export async function findCandidateBusinesses(
 
 export async function findBusinessProducts(
   businessId: string,
-  productIds: string[]
+  productIds: string[],
+  client: QueryClient = db
 ): Promise<CheckoutBusinessProduct[]> {
   if (productIds.length === 0) {
     return [];
   }
 
-  const result = await db.query<{
+  const result = await client.query<{
     business_id: string;
     product_id: string;
     business_product_id: string;
@@ -182,9 +188,10 @@ export async function findBusinessProducts(
 }
 
 export async function isBusinessCurrentlyOpen(
-  businessId: string
+  businessId: string,
+  client: QueryClient = db
 ): Promise<boolean> {
-  const result = await db.query<{
+  const result = await client.query<{
     is_open: boolean;
   }>(
     `

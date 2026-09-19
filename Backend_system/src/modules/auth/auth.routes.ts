@@ -92,7 +92,12 @@ export async function authRoutes(
       return reply.status(200).send(
         successResponse(
           {
+            id: request.user.id,
             userId: request.user.id,
+            email: request.user.email,
+            phoneNumber: request.user.phoneNumber,
+            firstName: request.user.firstName,
+            lastName: request.user.lastName,
             role: request.user.role
           },
           request.id

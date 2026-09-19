@@ -28,6 +28,30 @@ export function registerErrorHandler(app: FastifyInstance): void {
       );
     }
 
+    const requestError = error as {
+      statusCode?: number;
+      code?: string;
+    };
+
+    if (
+      typeof requestError.statusCode === "number"
+      && requestError.statusCode >= 400
+      && requestError.statusCode < 500
+    ) {
+      return reply.status(requestError.statusCode).send(
+        errorResponse(
+          requestError.statusCode === 400
+            ? "VALIDATION_ERROR"
+            : requestError.code ?? "REQUEST_ERROR",
+          requestError.statusCode === 400
+            ? "Request validation failed."
+            : "Request could not be processed.",
+          undefined,
+          request.id
+        )
+      );
+    }
+
     request.log.error(error);
 
     return reply.status(500).send(
