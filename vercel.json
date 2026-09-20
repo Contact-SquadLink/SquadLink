@@ -6,10 +6,7 @@
     "backend": {
       "root": "Backend_system/",
       "entrypoint": "src/server.ts"
-    }
-    "devDependencies": {
-  "typescript": "5.5.4"
-}
+
   },
   "rewrites": [
     { "source": "/api/(.*)", "destination": { "service": "backend" } },
