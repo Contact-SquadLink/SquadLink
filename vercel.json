@@ -5,7 +5,8 @@
     },
     "backend": {
       "root": "Backend_system/",
-      "entrypoint": "src/server.ts"
+      "entrypoint": "src/server.ts",
+      "installCommand": "pnpm install --prod=false"
     }
   },
   "rewrites": [
