@@ -6,7 +6,7 @@
     "backend": {
       "root": "Backend_system/",
       "entrypoint": "src/server.ts"
-
+    }
   },
   "rewrites": [
     { "source": "/api/(.*)", "destination": { "service": "backend" } },
