@@ -41,3 +41,4 @@
     "typescript": "^7.0.2"
   }
 }
+"test:security": "node Security_integration/api-security-tests.js",
