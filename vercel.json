@@ -1,0 +1,16 @@
+{
+  "services": {
+    "frontend": {
+      "root": "Web_platform/project/"
+    },
+    "backend": {
+      "root": "Backend_system/",
+      "entrypoint": "src/server.ts",
+      "installCommand": "pnpm install --prod=false"
+    }
+  },
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": { "service": "backend" } },
+    { "source": "/(.*)", "destination": { "service": "frontend" } }
+  ]
+}
