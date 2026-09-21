@@ -42,4 +42,3 @@
     "typescript": "5.5.4"
   }
 }
-"test:security": "node Security_integration/api-security-tests.js",
