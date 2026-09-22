@@ -106,3 +106,4 @@ await app.register(lifecycleRoutes, {
 
   return app;
 }
+export default buildApp;
