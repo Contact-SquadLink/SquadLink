@@ -3,7 +3,9 @@ import { env } from "./config/env";
 import { db } from "./db/database";
 
 async function start() {
+  console.log("[STARTUP] Before buildApp");
   const app = await buildApp();
+  console.log("[STARTUP] After buildApp");
 
   const shutdown = async (signal: string) => {
     app.log.info(`Received ${signal}. Shutting down...`);
