@@ -1,3 +1,4 @@
+
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
@@ -15,33 +16,36 @@ import { inventoryRoutes } from "./modules/inventory/inventory.routes";
 import { cartRoutes } from "./modules/cart/cart.routes";
 import { checkoutRoutes } from "./modules/checkout/checkout.routes";
 import { orderRoutes } from "./modules/order/order.routes";
-import { businessVerificationRoutes} from "./modules/business-verification/business-verification.routes";
+import { businessVerificationRoutes } from "./modules/business-verification/business-verification.routes";
 import { lifecycleRoutes } from "./modules/lifecycle/lifecycle.routes";
 import { ensureRiderRuntimeTables } from "./modules/lifecycle/lifecycle.service";
 import { adminAccessRoutes } from "./modules/admin-access/admin-access.routes";
 
 export async function buildApp() {
+  console.log("[STARTUP] buildApp entered");
+
   const app = Fastify({
     logger: true
   });
 
+  console.log("[STARTUP] Before ensureRiderRuntimeTables");
   await ensureRiderRuntimeTables();
+  console.log("[STARTUP] After ensureRiderRuntimeTables");
 
   await app.register(helmet);
+  console.log("[STARTUP] Helmet registered");
 
   await app.register(cors, {
     origin: env.CORS_ORIGIN,
-    // @fastify/cors defaults to GET,HEAD,POST only. The cart API uses
-    // PUT/DELETE (update item, remove item, clear cart), so those methods must
-    // be allowed or browser preflights from the frontend origin will be
-    // rejected. Transport configuration only — no API contract changes.
-    methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']
+    methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
   });
+  console.log("[STARTUP] CORS registered");
 
   await app.register(rateLimit, {
     max: 100,
     timeWindow: "1 minute"
   });
+  console.log("[STARTUP] Rate limit registered");
 
   app.addHook("onRequest", requestIdMiddleware);
 
@@ -51,45 +55,52 @@ export async function buildApp() {
   await app.register(authRoutes, {
     prefix: "/api/v1/auth"
   });
+  console.log("[STARTUP] Auth routes registered");
 
   await app.register(businessRoutes, {
     prefix: "/api/v1/businesses"
   });
+  console.log("[STARTUP] Business routes registered");
 
   await app.register(adminAccessRoutes, {
     prefix: "/api/v1/admin"
   });
+  console.log("[STARTUP] Admin routes registered");
 
-  await app.register(
-  businessVerificationRoutes,
-  {
-    prefix:
-      "/api/v1/admin/business-verifications"
+  await app.register(businessVerificationRoutes, {
+    prefix: "/api/v1/admin/business-verifications"
   });
+  console.log("[STARTUP] Business verification routes registered");
 
   await app.register(catalogRoutes, {
     prefix: "/api/v1/catalog"
   });
+  console.log("[STARTUP] Catalog routes registered");
 
   await app.register(inventoryRoutes, {
-  prefix: "/api/v1/inventory"
-});
+    prefix: "/api/v1/inventory"
+  });
+  console.log("[STARTUP] Inventory routes registered");
 
-await app.register(cartRoutes, {
-  prefix: "/api/v1/cart"
-});
+  await app.register(cartRoutes, {
+    prefix: "/api/v1/cart"
+  });
+  console.log("[STARTUP] Cart routes registered");
 
-await app.register(checkoutRoutes, {
-  prefix: "/api/v1/checkout"
-});
+  await app.register(checkoutRoutes, {
+    prefix: "/api/v1/checkout"
+  });
+  console.log("[STARTUP] Checkout routes registered");
 
-await app.register(orderRoutes, {
-  prefix: "/api/v1/orders"
-});
+  await app.register(orderRoutes, {
+    prefix: "/api/v1/orders"
+  });
+  console.log("[STARTUP] Order routes registered");
 
-await app.register(lifecycleRoutes, {
-  prefix: "/api/v1"
-});
+  await app.register(lifecycleRoutes, {
+    prefix: "/api/v1"
+  });
+  console.log("[STARTUP] Lifecycle routes registered");
 
   app.get("/health", async () => {
     const result = await db.query(
@@ -104,6 +115,10 @@ await app.register(lifecycleRoutes, {
     };
   });
 
+  console.log("[STARTUP] Health route registered");
+  console.log("[STARTUP] Fastify setup complete");
+
   return app;
 }
+
 export default buildApp;
