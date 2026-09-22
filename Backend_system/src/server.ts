@@ -1,3 +1,4 @@
+import Fastify from "fastify";
 import { buildApp } from "./app-builder";
 import { env } from "./config/env";
 import { db } from "./db/database";
