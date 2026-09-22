@@ -36,9 +36,11 @@ export async function buildApp() {
   console.log("[STARTUP] Helmet registered");
 
   await app.register(cors, {
-    origin: env.CORS_ORIGIN,
-    methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
-  });
+  origin: env.CORS_ORIGIN,
+  credentials: true,
+  methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+});
+
   console.log("[STARTUP] CORS registered");
 
   await app.register(rateLimit, {
