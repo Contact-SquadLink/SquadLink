@@ -39,8 +39,8 @@ export async function buildApp() {
   origin: env.CORS_ORIGIN,
   credentials: true,
   methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
-});
-
+  });
+  
   console.log("[STARTUP] CORS registered");
 
   await app.register(rateLimit, {
@@ -104,17 +104,52 @@ export async function buildApp() {
   });
   console.log("[STARTUP] Lifecycle routes registered");
 
-  app.get("/health", async () => {
-    const result = await db.query(
-      "SELECT NOW() AS database_time"
-    );
+  app.get("/health", async (_request, reply) => {
+    app.log.info("[HEALTH] handler entered");
 
-    return {
-      status: "ok",
-      service: "delivery-system-api",
-      database: "connected",
-      databaseTime: result.rows[0].database_time
-    };
+    let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+
+    try {
+      app.log.info("[HEALTH] before database query");
+
+      const queryTimeout = new Promise<never>((_, reject) => {
+        timeoutHandle = setTimeout(
+          () => reject(new Error("Health database query timed out after 5000ms")),
+          5000
+        );
+      });
+
+      const result = await Promise.race([
+        db.query("SELECT NOW() AS database_time"),
+        queryTimeout
+      ]);
+
+      app.log.info("[HEALTH] database query resolved successfully");
+
+      const response = {
+        status: "ok",
+        service: "delivery-system-api",
+        database: "connected",
+        databaseTime: result.rows[0].database_time
+      };
+
+      app.log.info("[HEALTH] before sending response");
+      return reply.send(response);
+    } catch (error) {
+      app.log.error(error, "[HEALTH] database query failed");
+      app.log.info("[HEALTH] before sending error response");
+
+      return reply.status(500).send({
+        status: "error",
+        service: "delivery-system-api",
+        database: "unavailable",
+        message: "Database health check failed."
+      });
+    } finally {
+      if (timeoutHandle) {
+        clearTimeout(timeoutHandle);
+      }
+    }
   });
 
   console.log("[STARTUP] Health route registered");

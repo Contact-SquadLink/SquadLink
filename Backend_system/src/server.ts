@@ -1,9 +1,12 @@
-import { buildApp } from "./app";
+import Fastify from "fastify";
+import { buildApp } from "./app-builder";
 import { env } from "./config/env";
 import { db } from "./db/database";
 
 async function start() {
+  console.log("[STARTUP] Before buildApp");
   const app = await buildApp();
+  console.log("[STARTUP] After buildApp");
 
   const shutdown = async (signal: string) => {
     app.log.info(`Received ${signal}. Shutting down...`);
@@ -29,10 +32,12 @@ async function start() {
   });
 
   try {
+    console.log("[STARTUP] Before app.listen");
     await app.listen({
       port: env.PORT,
       host: "0.0.0.0"
     });
+    console.log("[STARTUP] After app.listen");
 
     console.log(
       `Delivery System API running on http://localhost:${env.PORT}`
