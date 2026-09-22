@@ -29,10 +29,12 @@ async function start() {
   });
 
   try {
+    console.log("[STARTUP] Before app.listen");
     await app.listen({
       port: env.PORT,
       host: "0.0.0.0"
     });
+    console.log("[STARTUP] After app.listen");
 
     console.log(
       `Delivery System API running on http://localhost:${env.PORT}`
