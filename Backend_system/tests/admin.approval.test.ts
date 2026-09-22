@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
 import jwt from "jsonwebtoken";
 
-import { buildApp } from "../src/app";
+import { buildApp } from "../src/app-builder";
 import { db } from "../src/db/database";
 import { env } from "../src/config/env";
 

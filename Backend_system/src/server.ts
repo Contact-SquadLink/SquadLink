@@ -1,4 +1,4 @@
-import { buildApp } from "./app";
+import { buildApp } from "./app-builder";
 import { env } from "./config/env";
 import { db } from "./db/database";
 
