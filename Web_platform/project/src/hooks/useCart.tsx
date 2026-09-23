@@ -79,10 +79,14 @@ export function CartProvider({ children }: { children: ReactNode }) {
         let response = await cartApi.get();
 
         for (const item of guestItems) {
-          response = await cartApi.addItem({
-            productId: item.productId,
-            quantity: item.quantity,
-          });
+          try {
+            response = await cartApi.addItem({
+              productId: item.productId,
+              quantity: item.quantity,
+            });
+          } catch {
+            // Ignore stale local products and continue transferring valid items.
+          }
         }
 
         if (active) {

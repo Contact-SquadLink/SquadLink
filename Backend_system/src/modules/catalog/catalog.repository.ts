@@ -46,6 +46,9 @@ export interface ProductRecord {
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
+  businessId?: string;
+  priceAmount?: number;
+  currency?: string;
 }
 
 interface ProductRow {
@@ -57,6 +60,9 @@ interface ProductRow {
   is_active: boolean;
   created_at: Date;
   updated_at: Date;
+  business_id?: string | null;
+  price_amount?: string | number | null;
+  currency?: string | null;
 }
 
 function mapProduct(
@@ -70,7 +76,10 @@ function mapProduct(
     description: row.description,
     isActive: row.is_active,
     createdAt: row.created_at,
-    updatedAt: row.updated_at
+    updatedAt: row.updated_at,
+    businessId: row.business_id ?? undefined,
+    priceAmount: row.price_amount == null ? undefined : Number(row.price_amount),
+    currency: row.currency ?? undefined
   };
 }
 
@@ -281,10 +290,28 @@ export async function listProducts(): Promise<
         p.description,
         p.is_active,
         p.created_at,
-        p.updated_at
+        p.updated_at,
+        bp.business_id,
+        bp.price_amount,
+        bp.currency
       FROM public.products p
       INNER JOIN public.categories c
         ON c.id = p.category_id
+      INNER JOIN LATERAL (
+        SELECT business_id, price_amount, currency
+        FROM public.business_products
+        WHERE product_id = p.id
+          AND is_available = TRUE
+        ORDER BY updated_at DESC, business_id
+        LIMIT 1
+      ) bp ON TRUE
+      INNER JOIN public.businesses b
+        ON b.id = bp.business_id
+       AND b.is_active = TRUE
+       AND b.status = 'ACTIVE'
+       AND b.accepts_orders = TRUE
+       AND b.location IS NOT NULL
+      WHERE p.is_active = TRUE
       ORDER BY c.name ASC, p.name ASC
     `
   );

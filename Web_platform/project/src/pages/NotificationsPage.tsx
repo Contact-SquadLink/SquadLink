@@ -4,6 +4,7 @@ import { formatDate } from '@/utils/format';
 import { EmptyState } from '@/components/ui/States';
 import type { Notification } from '@/types';
 import { notificationsApi } from '@/api/notifications';
+import { ApiRequestError } from '@/api/client';
 
 export function NotificationsPage() {
   const queryClient = useQueryClient();
@@ -26,8 +27,14 @@ export function NotificationsPage() {
 
       {isLoading ? (
         <p className="text-sm text-gray-600">Loading notifications...</p>
+      ) : error && !(error instanceof ApiRequestError && error.statusCode === 404) ? (
+        <p className="text-sm text-red-600">We could not load your notifications right now. Please try again later.</p>
       ) : error ? (
-        <p className="text-sm text-red-600">We could not load your notifications right now.</p>
+        <EmptyState
+          icon={<Bell className="h-7 w-7" />}
+          title="No notifications yet"
+          description="Your order and delivery updates will appear here when they are available."
+        />
       ) : notifications.length === 0 ? (
         <EmptyState
           icon={<Bell className="h-7 w-7" />}

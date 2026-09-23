@@ -17,6 +17,7 @@ export interface User {
 
 export interface Product {
   id: string;
+  businessId?: string;
   name: string;
   description?: string;
   price: number;
