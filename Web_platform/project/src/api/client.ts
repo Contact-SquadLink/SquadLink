@@ -86,11 +86,25 @@ export async function apiRequest<T>(
   }
 
   if (!response.ok) {
-    const errorBody = json as { message?: string; error?: string; details?: unknown } | null;
+    const errorBody = json as {
+      message?: string;
+      error?: string | { message?: string; details?: unknown };
+      details?: unknown;
+    } | null;
+    const nestedError =
+      errorBody?.error && typeof errorBody.error === 'object'
+        ? errorBody.error
+        : null;
     const message =
       errorBody?.message ||
+      (typeof errorBody?.error === 'string' ? errorBody.error : undefined) ||
+      nestedError?.message ||
       getErrorMessage(response.status);
-    throw new ApiRequestError(response.status, message, errorBody?.details);
+    throw new ApiRequestError(
+      response.status,
+      message,
+      nestedError?.details ?? errorBody?.details
+    );
   }
 
   return json as T;
