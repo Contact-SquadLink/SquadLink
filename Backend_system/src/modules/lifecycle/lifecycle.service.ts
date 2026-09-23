@@ -4,6 +4,7 @@ import type { PoolClient } from "pg";
 
 import { withTransaction } from "../../db/transaction";
 import { AppError } from "../../utils/app-error";
+import { env } from "../../config/env";
 import type { ProviderPaymentInput } from "./lifecycle.schemas";
 
 function fail(message: string, status: number, code: string): never {
@@ -592,6 +593,45 @@ export async function processProviderPayment(
   });
 }
 
+export async function processSandboxPayment(
+  userId: string,
+  paymentId: string,
+  paymentAttemptId: string,
+  cardNumber: string
+) {
+  if (env.NODE_ENV === "production") {
+    fail("Sandbox payments are unavailable.", 404, "SANDBOX_PAYMENT_UNAVAILABLE");
+  }
+
+  const normalizedCardNumber = cardNumber.replace(/[\s-]/g, "");
+  if (normalizedCardNumber !== "4084084084084081") {
+    fail("Use the configured sandbox test card.", 402, "SANDBOX_CARD_DECLINED");
+  }
+
+  const { db } = await import("../../db/database");
+  const ownership = await db.query<{ id: string }>(
+    `
+      SELECT p.id
+      FROM public.payments p
+      INNER JOIN public.orders o ON o.id = p.order_id
+      WHERE p.id = $1 AND o.user_id = $2
+      LIMIT 1
+    `,
+    [paymentId, userId]
+  );
+
+  if (ownership.rows.length === 0) {
+    fail("Payment not found.", 404, "PAYMENT_NOT_FOUND");
+  }
+
+  return processProviderPayment(userId, paymentId, {
+    providerEventId: `sandbox-${paymentId}`,
+    paymentAttemptId,
+    status: "SUCCESS",
+    providerReference: `sandbox-reference-${paymentId}`
+  });
+}
+
 async function createDelivery(client: PoolClient, orderId: string, actorUserId: string) {
   const existing = await client.query<{ id: string; status: string }>(
     `SELECT id, status FROM public.deliveries WHERE order_id = $1 FOR UPDATE`,
@@ -713,6 +753,7 @@ export async function listRiderDeliveries(userId: string) {
              o.delivery_address_line AS "deliveryAddressLine",
              o.delivery_city AS "deliveryCity",
              o.delivery_state AS "deliveryState",
+             o.delivery_contact_phone AS "deliveryContactPhone",
              o.user_id AS "customerUserId"
       FROM public.deliveries d
       INNER JOIN public.riders r ON r.id = d.rider_id
@@ -728,6 +769,7 @@ export async function listRiderDeliveries(userId: string) {
     orderId: row.orderId,
     status: row.status,
     deliveryAddress: [row.deliveryAddressLine, row.deliveryCity, row.deliveryState].filter(Boolean).join(", "),
+    deliveryContactPhone: row.deliveryContactPhone,
     assignedAt: row.assignedAt,
     pickedUpAt: row.pickedUpAt,
     deliveredAt: row.deliveredAt,
@@ -746,6 +788,7 @@ export async function getRiderDelivery(userId: string, deliveryId: string) {
              o.delivery_address_line AS "deliveryAddressLine",
              o.delivery_city AS "deliveryCity",
              o.delivery_state AS "deliveryState",
+             o.delivery_contact_phone AS "deliveryContactPhone",
              o.user_id AS "customerUserId"
       FROM public.deliveries d
       INNER JOIN public.riders r ON r.id = d.rider_id
@@ -765,6 +808,7 @@ export async function getRiderDelivery(userId: string, deliveryId: string) {
     orderId: row.orderId,
     status: row.status,
     deliveryAddress: [row.deliveryAddressLine, row.deliveryCity, row.deliveryState].filter(Boolean).join(", "),
+    deliveryContactPhone: row.deliveryContactPhone,
     assignedAt: row.assignedAt,
     pickedUpAt: row.pickedUpAt,
     deliveredAt: row.deliveredAt,

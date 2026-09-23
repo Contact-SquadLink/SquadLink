@@ -13,4 +13,20 @@ export const riderApi = {
       '/api/v1/rider/availability',
       { method: 'POST', body: { available } }
     ),
+
+  verifyPickup: (deliveryId: string, credential: string) =>
+    apiRequest<ApiSingleResponse<Delivery>>(`/api/v1/deliveries/${deliveryId}/pickup/verify`, {
+      method: 'POST',
+      body: { credential },
+    }),
+
+  markInTransit: (deliveryId: string) =>
+    apiRequest<ApiSingleResponse<Delivery>>(`/api/v1/deliveries/${deliveryId}/in-transit`, {
+      method: 'POST',
+    }),
+
+  markArrived: (deliveryId: string) =>
+    apiRequest<ApiSingleResponse<Delivery>>(`/api/v1/deliveries/${deliveryId}/arrived`, {
+      method: 'POST',
+    }),
 };

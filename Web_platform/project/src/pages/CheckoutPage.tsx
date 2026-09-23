@@ -9,8 +9,10 @@ import {
   X,
 } from 'lucide-react';
 import { useCart } from '@/hooks/useCart';
+import { useAuth } from '@/hooks/useAuth';
 import { checkoutApi, ordersApi } from '@/api/orders';
 import { formatPrice, cn } from '@/utils/format';
+import { normalizePhoneNumber } from '@/utils/phone';
 import type { CheckoutPreview, OrderItem } from '@/types';
 
 const DELIVERY_FEE = 500;
@@ -19,6 +21,7 @@ const VAT_RATE = 0.075;
 export function CheckoutPage() {
   const navigate = useNavigate();
   const { items, subtotal, clearCart } = useCart();
+  const { user } = useAuth();
 
   const [preview, setPreview] = useState<CheckoutPreview | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
@@ -26,9 +29,42 @@ export function CheckoutPage() {
   const [placingOrder, setPlacingOrder] = useState(false);
   const [placedOrderId, setPlacedOrderId] = useState<string | null>(null);
   const [showSandboxPayment, setShowSandboxPayment] = useState(false);
+  const [deliveryAddressLine, setDeliveryAddressLine] = useState('');
+  const [deliveryCity, setDeliveryCity] = useState('');
+  const [deliveryState, setDeliveryState] = useState('');
+  const [latitude, setLatitude] = useState('');
+  const [longitude, setLongitude] = useState('');
+  const [deliveryContactPhone, setDeliveryContactPhone] = useState('');
+  const [phoneEdited, setPhoneEdited] = useState(false);
+  const profilePhone = user?.phoneNumber ?? user?.phone;
 
   useEffect(() => {
-    if (items.length === 0) {
+    if (!phoneEdited && profilePhone) {
+      setDeliveryContactPhone(profilePhone);
+    }
+  }, [phoneEdited, profilePhone]);
+
+  const latitudeValue = Number(latitude);
+  const longitudeValue = Number(longitude);
+  const normalizedContactPhone = normalizePhoneNumber(deliveryContactPhone);
+  const hasValidLocation =
+    latitude.trim() !== '' &&
+    longitude.trim() !== '' &&
+    Number.isFinite(latitudeValue) &&
+    latitudeValue >= -90 &&
+    latitudeValue <= 90 &&
+    Number.isFinite(longitudeValue) &&
+    longitudeValue >= -180 &&
+    longitudeValue <= 180 &&
+    normalizedContactPhone !== null;
+  const hasValidDeliveryDetails =
+    deliveryAddressLine.trim().length >= 3 &&
+    deliveryCity.trim().length >= 2 &&
+    deliveryState.trim().length >= 2 &&
+    hasValidLocation;
+
+  useEffect(() => {
+    if (items.length === 0 || !hasValidDeliveryDetails) {
       setPreview(null);
       return;
     }
@@ -42,6 +78,12 @@ export function CheckoutPage() {
             productId: item.productId,
             quantity: item.quantity,
           })),
+          deliveryAddressLine: deliveryAddressLine.trim(),
+          deliveryCity: deliveryCity.trim(),
+          deliveryState: deliveryState.trim(),
+          latitude: latitudeValue,
+          longitude: longitudeValue,
+          deliveryContactPhone: normalizedContactPhone as string,
         });
 
         if (isMounted) {
@@ -60,17 +102,13 @@ export function CheckoutPage() {
     return () => {
       isMounted = false;
     };
-  }, [items]);
+  }, [deliveryAddressLine, deliveryCity, deliveryState, hasValidDeliveryDetails, items, latitudeValue, longitudeValue, normalizedContactPhone]);
 
   useEffect(() => {
     if (items.length === 0 && !orderPlaced && !placingOrder) {
       navigate('/cart');
     }
   }, [items.length, orderPlaced, placingOrder, navigate]);
-
-  if (items.length === 0 && !orderPlaced) {
-    return null;
-  }
 
   const deliveryFee = preview?.deliveryFee ?? (items.length > 0 ? DELIVERY_FEE : 0);
   const vat = preview?.vat ?? Math.round(subtotal * VAT_RATE);
@@ -85,7 +123,10 @@ export function CheckoutPage() {
   }));
 
   const handlePlaceOrder = useCallback(async () => {
-    if (placingOrder || items.length === 0) return;
+    if (placingOrder || items.length === 0 || !hasValidDeliveryDetails) {
+      setPreviewError('Enter a valid delivery address and location before placing the order.');
+      return;
+    }
 
     setPlacingOrder(true);
     setPreviewError(null);
@@ -96,11 +137,27 @@ export function CheckoutPage() {
           productId: item.productId,
           quantity: item.quantity,
         })),
+        deliveryAddressLine: deliveryAddressLine.trim(),
+        deliveryCity: deliveryCity.trim(),
+        deliveryState: deliveryState.trim(),
+        latitude: latitudeValue,
+        longitude: longitudeValue,
+        deliveryContactPhone: normalizedContactPhone as string,
       };
 
       const idempotencyKey = globalThis.crypto?.randomUUID?.() ?? `order-${Date.now()}`;
       const response = await ordersApi.create(payload, idempotencyKey);
       const orderId = response.data.orderId;
+
+      if (!response.data.payment) {
+        throw new Error('Payment details were not returned for this order.');
+      }
+
+      await ordersApi.completeSandboxPayment(
+        response.data.payment.paymentId,
+        response.data.payment.paymentAttemptId,
+        '4084 0840 8408 4081'
+      );
 
       setPlacedOrderId(orderId);
       setOrderPlaced(true);
@@ -115,7 +172,11 @@ export function CheckoutPage() {
       setPlacingOrder(false);
       setShowSandboxPayment(false);
     }
-  }, [clearCart, items, navigate, placingOrder]);
+  }, [clearCart, deliveryAddressLine, deliveryCity, deliveryState, hasValidDeliveryDetails, items, latitudeValue, longitudeValue, navigate, normalizedContactPhone, placingOrder]);
+
+  if (items.length === 0 && !orderPlaced) {
+    return null;
+  }
 
   return (
     <div className="bg-gray-50 min-h-screen">
@@ -139,6 +200,144 @@ export function CheckoutPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-4">
+            <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+              <h2 className="font-display text-lg font-bold text-gray-900 mb-1">Delivery details</h2>
+              <p className="mb-4 text-sm text-gray-500">
+                Add the address and map coordinates where your order should be delivered.
+              </p>
+              <div className="space-y-4">
+                <div>
+                  <label htmlFor="deliveryAddressLine" className="block text-sm font-medium text-gray-700 mb-1">
+                    Address
+                  </label>
+                  <input
+                    id="deliveryAddressLine"
+                    value={deliveryAddressLine}
+                    onChange={(event) => setDeliveryAddressLine(event.target.value)}
+                    className="w-full rounded-lg border border-gray-300 px-3.5 py-2 focus:border-primary-500 focus:ring-2 focus:ring-primary-500 outline-none"
+                    placeholder="12 Market Street"
+                    minLength={3}
+                    maxLength={255}
+                    required
+                  />
+                </div>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <label htmlFor="deliveryCity" className="block text-sm font-medium text-gray-700 mb-1">
+                      City
+                    </label>
+                    <input
+                      id="deliveryCity"
+                      value={deliveryCity}
+                      onChange={(event) => setDeliveryCity(event.target.value)}
+                      className="w-full rounded-lg border border-gray-300 px-3.5 py-2 focus:border-primary-500 focus:ring-2 focus:ring-primary-500 outline-none"
+                      placeholder="Abuja"
+                      minLength={2}
+                      maxLength={100}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="deliveryState" className="block text-sm font-medium text-gray-700 mb-1">
+                      State
+                    </label>
+                    <input
+                      id="deliveryState"
+                      value={deliveryState}
+                      onChange={(event) => setDeliveryState(event.target.value)}
+                      className="w-full rounded-lg border border-gray-300 px-3.5 py-2 focus:border-primary-500 focus:ring-2 focus:ring-primary-500 outline-none"
+                      placeholder="FCT"
+                      minLength={2}
+                      maxLength={100}
+                      required
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label htmlFor="deliveryContactPhone" className="block text-sm font-medium text-gray-700 mb-1">
+                    Delivery contact phone
+                  </label>
+                  <input
+                    id="deliveryContactPhone"
+                    type="tel"
+                    value={deliveryContactPhone}
+                    onChange={(event) => {
+                      setPhoneEdited(true);
+                      setDeliveryContactPhone(event.target.value);
+                    }}
+                    className="w-full rounded-lg border border-gray-300 px-3.5 py-2 focus:border-primary-500 focus:ring-2 focus:ring-primary-500 outline-none"
+                    placeholder="08031234567 or +2348031234567"
+                    minLength={7}
+                    maxLength={30}
+                    required
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    Nigerian local numbers and international country-code formats are accepted.
+                  </p>
+                  {deliveryContactPhone && !normalizedContactPhone && (
+                    <p className="mt-1 text-xs text-error-600">
+                      Enter a valid Nigerian or international phone number.
+                    </p>
+                  )}
+                </div>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <label htmlFor="latitude" className="block text-sm font-medium text-gray-700 mb-1">
+                      Latitude
+                    </label>
+                    <input
+                      id="latitude"
+                      type="number"
+                      step="any"
+                      value={latitude}
+                      onChange={(event) => setLatitude(event.target.value)}
+                      className="w-full rounded-lg border border-gray-300 px-3.5 py-2 focus:border-primary-500 focus:ring-2 focus:ring-primary-500 outline-none"
+                      placeholder="9.0765"
+                      min={-90}
+                      max={90}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="longitude" className="block text-sm font-medium text-gray-700 mb-1">
+                      Longitude
+                    </label>
+                    <input
+                      id="longitude"
+                      type="number"
+                      step="any"
+                      value={longitude}
+                      onChange={(event) => setLongitude(event.target.value)}
+                      className="w-full rounded-lg border border-gray-300 px-3.5 py-2 focus:border-primary-500 focus:ring-2 focus:ring-primary-500 outline-none"
+                      placeholder="7.3986"
+                      min={-180}
+                      max={180}
+                      required
+                    />
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!navigator.geolocation) {
+                      setPreviewError('Location detection is not available in this browser.');
+                      return;
+                    }
+                    navigator.geolocation.getCurrentPosition(
+                      (position) => {
+                        setLatitude(position.coords.latitude.toFixed(6));
+                        setLongitude(position.coords.longitude.toFixed(6));
+                        setPreviewError(null);
+                      },
+                      () => setPreviewError('Unable to detect your location. Enter the coordinates manually.')
+                    );
+                  }}
+                  className="text-sm font-semibold text-primary-700 hover:text-primary-800"
+                >
+                  Use my current location
+                </button>
+              </div>
+            </div>
             <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
               <h2 className="font-display text-lg font-bold text-gray-900 mb-4">Order Items</h2>
               <div className="space-y-3">
@@ -189,10 +388,10 @@ export function CheckoutPage() {
 
               <button
                 onClick={() => setShowSandboxPayment(true)}
-                disabled={placingOrder || !!previewError}
+                disabled={placingOrder || !!previewError || !hasValidDeliveryDetails}
                 className={cn(
                   'mt-6 flex w-full items-center justify-center gap-2 rounded-xl h-12 text-sm font-semibold text-white transition-colors',
-                  placingOrder || previewError
+                  placingOrder || previewError || !hasValidDeliveryDetails
                     ? 'bg-primary-400 cursor-not-allowed'
                     : 'bg-primary-600 hover:bg-primary-700'
                 )}

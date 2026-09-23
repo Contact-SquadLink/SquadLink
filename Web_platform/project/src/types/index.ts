@@ -94,6 +94,11 @@ export interface Order {
   deliveryFee: number;
   vat: number;
   total: number;
+  deliveryContactPhone?: string | null;
+  delivery?: {
+    id: string;
+    status: DeliveryStatus;
+  } | null;
   createdAt: string;
   updatedAt?: string;
 }
@@ -154,6 +159,7 @@ export interface Delivery {
   riderName?: string;
   pickupAddress?: string;
   deliveryAddress?: string;
+  deliveryContactPhone?: string | null;
   assignedAt?: string;
   pickedUpAt?: string;
   deliveredAt?: string;
@@ -231,6 +237,7 @@ export interface Notification {
   title: string;
   message: string;
   read: boolean;
+  orderId?: string | null;
   createdAt: string;
 }
 

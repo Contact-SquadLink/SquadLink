@@ -20,6 +20,11 @@ export const providerPaymentSchema = z.object({
   failureReason: z.string().trim().max(255).optional()
 });
 
+export const sandboxPaymentSchema = z.object({
+  paymentAttemptId: z.string().uuid(),
+  cardNumber: z.string().trim().min(13).max(19)
+});
+
 export const pickupCredentialSchema = z.object({
   credential: z.string().trim().min(12).max(255)
 });

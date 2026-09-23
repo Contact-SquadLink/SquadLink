@@ -9,6 +9,7 @@ import {
   paymentIdParamsSchema,
   pickupCredentialSchema,
   providerPaymentSchema,
+  sandboxPaymentSchema,
   deliveryOtpSchema
 } from "./lifecycle.schemas";
 import {
@@ -21,6 +22,7 @@ import {
   listRiderDeliveries,
   markBusinessReady,
   processProviderPayment,
+  processSandboxPayment,
   registerRider,
   setRiderAvailability,
   updateRiderDeliveryStatus,
@@ -69,6 +71,24 @@ export async function lifecycleRoutes(app: FastifyInstance): Promise<void> {
       const input = providerPaymentSchema.parse(request.body);
       return successResponse(
         await processProviderPayment(request.user.id, paymentId, input),
+        request.id
+      );
+    }
+  );
+
+  app.post(
+    "/payments/:paymentId/sandbox-complete",
+    { preHandler: [authenticate, authorize("CUSTOMER", "BUSINESS_USER")] },
+    async (request) => {
+      const { paymentId } = paymentIdParamsSchema.parse(request.params);
+      const input = sandboxPaymentSchema.parse(request.body);
+      return successResponse(
+        await processSandboxPayment(
+          request.user.id,
+          paymentId,
+          input.paymentAttemptId,
+          input.cardNumber
+        ),
         request.id
       );
     }

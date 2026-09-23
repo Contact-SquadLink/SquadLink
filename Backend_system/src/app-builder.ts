@@ -20,6 +20,7 @@ import { businessVerificationRoutes } from "./modules/business-verification/busi
 import { lifecycleRoutes } from "./modules/lifecycle/lifecycle.routes";
 import { ensureRiderRuntimeTables } from "./modules/lifecycle/lifecycle.service";
 import { adminAccessRoutes } from "./modules/admin-access/admin-access.routes";
+import { notificationRoutes } from "./modules/notification/notification.routes";
 
 export async function buildApp() {
   console.log("[STARTUP] buildApp entered");
@@ -103,6 +104,11 @@ export async function buildApp() {
     prefix: "/api/v1"
   });
   console.log("[STARTUP] Lifecycle routes registered");
+
+  await app.register(notificationRoutes, {
+    prefix: "/api/v1/notifications"
+  });
+  console.log("[STARTUP] Notification routes registered");
 
   app.get("/health", async (_request, reply) => {
     app.log.info("[HEALTH] handler entered");

@@ -1,9 +1,11 @@
+import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, Package, CheckCircle2, Truck, Store, MapPin } from 'lucide-react';
 import { EmptyState } from '@/components/ui/States';
 import { formatDate, formatPrice } from '@/utils/format';
 import { ordersApi } from '@/api/orders';
+import { deliveryApi } from '@/api/delivery';
 import type { Order } from '@/types';
 
 const orderStages: Record<string, string[]> = {
@@ -23,6 +25,10 @@ export function OrderDetailPage() {
     queryFn: () => ordersApi.getById(orderId as string),
     enabled: Boolean(orderId),
   });
+  const [deliveryOtp, setDeliveryOtp] = useState<string | null>(null);
+  const [enteredOtp, setEnteredOtp] = useState('');
+  const [otpMessage, setOtpMessage] = useState<string | null>(null);
+  const [otpLoading, setOtpLoading] = useState(false);
 
   const order = (data?.data ?? null) as Order | null;
 
@@ -65,6 +71,42 @@ export function OrderDetailPage() {
   const stageList = orderStages[order.status] ?? ['Order created'];
   const currentStageIndex = Math.max(stageList.length - 1, 0);
   const progress = ((currentStageIndex + 1) / Math.max(stageList.length, 1)) * 100;
+  const delivery = order.delivery;
+  const canRequestOtp = delivery?.status === 'IN_TRANSIT' || delivery?.status === 'ARRIVED';
+
+  const requestOtp = async () => {
+    if (!delivery) return;
+    setOtpLoading(true);
+    setOtpMessage(null);
+    try {
+      const response = await deliveryApi.requestOtp(delivery.id);
+      setDeliveryOtp(response.data.otp);
+      setOtpMessage(`This OTP expires in ${response.data.expiresInMinutes} minutes.`);
+    } catch (requestError) {
+      setOtpMessage(requestError instanceof Error ? requestError.message : 'Unable to issue the delivery OTP.');
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
+  const confirmWithOtp = async () => {
+    if (!delivery || !/^\d{6}$/.test(enteredOtp)) {
+      setOtpMessage('Enter the six-digit OTP provided to you.');
+      return;
+    }
+    setOtpLoading(true);
+    setOtpMessage(null);
+    try {
+      await deliveryApi.confirmDelivery(delivery.id, enteredOtp);
+      setOtpMessage('Delivery confirmed successfully.');
+      setDeliveryOtp(null);
+      setEnteredOtp('');
+    } catch (requestError) {
+      setOtpMessage(requestError instanceof Error ? requestError.message : 'Unable to confirm delivery.');
+    } finally {
+      setOtpLoading(false);
+    }
+  };
 
   return (
     <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8 py-8">
@@ -156,6 +198,51 @@ export function OrderDetailPage() {
               </p>
               <p className="mt-3 text-xs text-primary-600">Created {formatDate(order.createdAt)}</p>
             </div>
+
+            {canRequestOtp && delivery && (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                <h2 className="text-sm font-semibold text-amber-950">Delivery confirmation</h2>
+                <p className="mt-2 text-sm text-amber-800">
+                  Request an OTP when the rider arrives. Keep it private and share it only with the rider at delivery.
+                </p>
+                <button
+                  type="button"
+                  onClick={requestOtp}
+                  disabled={otpLoading}
+                  className="mt-4 rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
+                >
+                  {otpLoading ? 'Requesting...' : deliveryOtp ? 'Request a new OTP' : 'Request delivery OTP'}
+                </button>
+                {deliveryOtp && (
+                  <div className="mt-4 rounded-lg border border-amber-300 bg-white p-3">
+                    <p className="text-xs font-medium uppercase tracking-wider text-amber-700">Your delivery OTP</p>
+                    <p className="mt-1 font-mono text-2xl font-bold tracking-[0.3em] text-amber-950">{deliveryOtp}</p>
+                    <p className="mt-2 text-xs text-amber-700">Keep this OTP private and give it to the rider only after your order has arrived.</p>
+                  </div>
+                )}
+                <div className="mt-4 flex gap-2">
+                  <input
+                    value={enteredOtp}
+                    onChange={(event) => setEnteredOtp(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                    inputMode="numeric"
+                    pattern="[0-9]{6}"
+                    maxLength={6}
+                    placeholder="Enter OTP"
+                    aria-label="Delivery OTP"
+                    className="min-w-0 flex-1 rounded-lg border border-amber-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={confirmWithOtp}
+                    disabled={otpLoading || enteredOtp.length !== 6}
+                    className="rounded-lg bg-success-600 px-4 py-2 text-sm font-semibold text-white hover:bg-success-700 disabled:opacity-50"
+                  >
+                    Confirm
+                  </button>
+                </div>
+                {otpMessage && <p className="mt-2 text-xs text-amber-800">{otpMessage}</p>}
+              </div>
+            )}
           </div>
         </div>
       </div>

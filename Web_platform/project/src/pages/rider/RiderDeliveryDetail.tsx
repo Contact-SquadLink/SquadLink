@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import {
   ArrowLeft,
   Package,
@@ -15,7 +16,7 @@ import {
 import { Badge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/States';
 import { formatDate, cn } from '@/utils/format';
-import { demoDeliveries } from '@/utils/demo-data';
+import { riderApi } from '@/api/rider';
 import type { Delivery, DeliveryStatus } from '@/types';
 
 const deliverySteps: { status: DeliveryStatus; label: string; icon: typeof Clock }[] = [
@@ -43,11 +44,21 @@ function getStepIndex(status: DeliveryStatus): number {
 
 export function RiderDeliveryDetailPage() {
   const { deliveryId } = useParams<{ deliveryId: string }>();
-  const [delivery, setDelivery] = useState<Delivery | undefined>(
-    demoDeliveries.find((d) => d.id === deliveryId)
-  );
+  const [credential, setCredential] = useState('');
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [isActing, setIsActing] = useState(false);
+  const { data, isLoading } = useQuery({
+    queryKey: ['rider-delivery', deliveryId],
+    queryFn: () => riderApi.getDelivery(deliveryId as string),
+    enabled: Boolean(deliveryId),
+  });
+  const delivery = data?.data as Delivery | undefined;
 
-  if (!delivery) {
+  if (isLoading) {
+    return <p className="mx-auto max-w-3xl px-4 py-8 text-sm text-gray-600">Loading delivery...</p>;
+  }
+
+  if (!delivery || !deliveryId) {
     return (
       <div className="mx-auto max-w-3xl px-4 py-8">
         <EmptyState
@@ -61,11 +72,26 @@ export function RiderDeliveryDetailPage() {
 
   const currentStep = getStepIndex(delivery.status);
 
-  const advanceStatus = () => {
-    const flow: DeliveryStatus[] = ['ASSIGNED', 'PICKED_UP', 'IN_TRANSIT', 'ARRIVED', 'DELIVERED'];
-    const idx = flow.indexOf(delivery.status);
-    if (idx < flow.length - 1) {
-      setDelivery({ ...delivery, status: flow[idx + 1] });
+  const advanceStatus = async () => {
+    setIsActing(true);
+    setActionError(null);
+    try {
+      if (delivery.status === 'ASSIGNED') {
+        if (credential.trim().length < 12) {
+          setActionError('Enter the pickup credential provided by the business.');
+          return;
+        }
+        await riderApi.verifyPickup(delivery.id, credential.trim());
+      } else if (delivery.status === 'PICKED_UP') {
+        await riderApi.markInTransit(delivery.id);
+      } else if (delivery.status === 'IN_TRANSIT') {
+        await riderApi.markArrived(delivery.id);
+      }
+      window.location.reload();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'Unable to update delivery status.');
+    } finally {
+      setIsActing(false);
     }
   };
 
@@ -144,19 +170,22 @@ export function RiderDeliveryDetailPage() {
           <h2 className="font-display text-lg font-bold text-gray-900 mb-4">Actions</h2>
 
           {delivery.status === 'ASSIGNED' && (
-            <ActionButton
-              onClick={advanceStatus}
-              icon={ShieldCheck}
-              label="Verify Pickup"
-              color="bg-primary-600 hover:bg-primary-700"
-            />
+            <div className="space-y-3">
+              <input
+                value={credential}
+                onChange={(event) => setCredential(event.target.value)}
+                placeholder="Pickup credential"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              />
+              <ActionButton onClick={advanceStatus} icon={ShieldCheck} label={isActing ? 'Verifying...' : 'Verify Pickup'} color="bg-primary-600 hover:bg-primary-700" />
+            </div>
           )}
 
           {delivery.status === 'PICKED_UP' && (
             <ActionButton
               onClick={advanceStatus}
               icon={Truck}
-              label="Start Transit"
+                label={isActing ? 'Updating...' : 'Start Transit'}
               color="bg-accent-600 hover:bg-accent-700"
             />
           )}
@@ -165,7 +194,7 @@ export function RiderDeliveryDetailPage() {
             <ActionButton
               onClick={advanceStatus}
               icon={MapPin}
-              label="Mark Arrived"
+                label={isActing ? 'Updating...' : 'Mark Arrived'}
               color="bg-secondary-500 hover:bg-secondary-400"
             />
           )}
@@ -181,12 +210,7 @@ export function RiderDeliveryDetailPage() {
                   </p>
                 </div>
               </div>
-              <ActionButton
-                onClick={advanceStatus}
-                icon={CheckCircle2}
-                label="Confirm Delivery"
-                color="bg-success-600 hover:bg-success-700"
-              />
+              <p className="text-sm text-primary-700">Wait for the customer to provide the OTP and confirm delivery from their order page.</p>
             </div>
           )}
         </div>
@@ -224,6 +248,7 @@ export function RiderDeliveryDetailPage() {
             </div>
           )}
         </div>
+        {actionError && <p className="mt-3 text-sm text-error-600">{actionError}</p>}
       </div>
     </div>
   );

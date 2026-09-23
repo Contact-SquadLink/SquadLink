@@ -1,68 +1,34 @@
 import { Bell, CheckCircle2 } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { formatDate } from '@/utils/format';
 import { EmptyState } from '@/components/ui/States';
 import type { Notification } from '@/types';
-
-const demoNotifications: Notification[] = [
-  {
-    id: 'notif-1',
-    type: 'ORDER',
-    title: 'Order Confirmed',
-    message: 'Your order #ORD-002 has been confirmed by the business and is being prepared.',
-    read: false,
-    createdAt: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
-  },
-  {
-    id: 'notif-2',
-    type: 'DELIVERY',
-    title: 'Rider Assigned',
-    message: 'A rider has been assigned to your order #ORD-005 and is on the way to pick it up.',
-    read: false,
-    createdAt: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
-  },
-  {
-    id: 'notif-3',
-    type: 'DELIVERY',
-    title: 'Out for Delivery',
-    message: 'Your order #ORD-005 is now out for delivery. The rider will arrive shortly.',
-    read: false,
-    createdAt: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
-  },
-  {
-    id: 'notif-4',
-    type: 'ORDER',
-    title: 'Order Delivered',
-    message: 'Your order #ORD-006 has been delivered successfully. Enjoy your purchase!',
-    read: true,
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
-  },
-  {
-    id: 'notif-5',
-    type: 'PROMOTION',
-    title: 'Weekend Special',
-    message: 'Get 15% off all fresh produce this weekend. Use code FRESH15 at checkout.',
-    read: true,
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString(),
-  },
-  {
-    id: 'notif-6',
-    type: 'SYSTEM',
-    title: 'Welcome to SQUADLINK',
-    message: 'Your account has been created. Start browsing products from local businesses near you!',
-    read: true,
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 72).toISOString(),
-  },
-];
+import { notificationsApi } from '@/api/notifications';
 
 export function NotificationsPage() {
-  const notifications = demoNotifications;
+  const queryClient = useQueryClient();
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['customer-notifications'],
+    queryFn: notificationsApi.list,
+  });
+  const notifications = (data?.data ?? []) as Notification[];
+
+  const markRead = async (notification: Notification) => {
+    if (notification.read) return;
+    await notificationsApi.markRead(notification.id);
+    await queryClient.invalidateQueries({ queryKey: ['customer-notifications'] });
+  };
 
   return (
     <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8 py-8">
       <h1 className="font-display text-2xl font-bold text-gray-900 mb-1">Notifications</h1>
       <p className="text-sm text-gray-500 mb-6">Stay updated on your orders and deliveries.</p>
 
-      {notifications.length === 0 ? (
+      {isLoading ? (
+        <p className="text-sm text-gray-600">Loading notifications...</p>
+      ) : error ? (
+        <p className="text-sm text-red-600">We could not load your notifications right now.</p>
+      ) : notifications.length === 0 ? (
         <EmptyState
           icon={<Bell className="h-7 w-7" />}
           title="No notifications"
@@ -73,8 +39,17 @@ export function NotificationsPage() {
           {notifications.map((n) => (
             <div
               key={n.id}
+              onClick={() => void markRead(n)}
+              role={n.read ? undefined : 'button'}
+              tabIndex={n.read ? undefined : 0}
+              onKeyDown={(event) => {
+                if (!n.read && (event.key === 'Enter' || event.key === ' ')) {
+                  event.preventDefault();
+                  void markRead(n);
+                }
+              }}
               className={`rounded-2xl border bg-white p-5 shadow-sm transition-colors ${
-                n.read ? 'border-gray-100' : 'border-primary-200 bg-primary-50/30'
+                n.read ? 'border-gray-100' : 'border-primary-200 bg-primary-50/30 cursor-pointer'
               }`}
             >
               <div className="flex items-start gap-3">

@@ -18,6 +18,9 @@ function serializeOrderRow(row: {
   subtotal_amount: number | string;
   delivery_fee_amount: number | string;
   total_amount: number | string;
+  delivery_contact_phone: string | null;
+  delivery_id: string | null;
+  delivery_status: string | null;
   items: Array<{
     productId: string;
     name: string;
@@ -34,6 +37,8 @@ function serializeOrderRow(row: {
     deliveryFee: Number(row.delivery_fee_amount),
     vat: 0,
     total: Number(row.total_amount),
+    deliveryContactPhone: row.delivery_contact_phone,
+    delivery: row.delivery_id ? { id: row.delivery_id, status: row.delivery_status } : null,
     items: (row.items ?? []).map((item) => ({
       productId: item.productId,
       name: item.name,
@@ -52,6 +57,9 @@ export async function listOrdersForUser(userId: string) {
     subtotal_amount: number | string;
     delivery_fee_amount: number | string;
     total_amount: number | string;
+    delivery_contact_phone: string | null;
+    delivery_id: string | null;
+    delivery_status: string | null;
     items: Array<{
       productId: string;
       name: string;
@@ -66,6 +74,9 @@ export async function listOrdersForUser(userId: string) {
            o.subtotal_amount,
            o.delivery_fee_amount,
            o.total_amount,
+           o.delivery_contact_phone,
+           d.id AS delivery_id,
+           d.status AS delivery_status,
            COALESCE(
              json_agg(
                json_build_object(
@@ -80,8 +91,9 @@ export async function listOrdersForUser(userId: string) {
            ) AS items
     FROM public.orders o
     LEFT JOIN public.order_items oi ON oi.order_id = o.id
+    LEFT JOIN public.deliveries d ON d.order_id = o.id
     WHERE o.user_id = $1
-    GROUP BY o.id, o.status, o.created_at, o.subtotal_amount, o.delivery_fee_amount, o.total_amount
+    GROUP BY o.id, o.status, o.created_at, o.subtotal_amount, o.delivery_fee_amount, o.total_amount, o.delivery_contact_phone, d.id, d.status
     ORDER BY o.created_at DESC
   `, [userId]);
 
@@ -96,6 +108,9 @@ export async function getOrderForUser(userId: string, orderId: string) {
     subtotal_amount: number | string;
     delivery_fee_amount: number | string;
     total_amount: number | string;
+    delivery_contact_phone: string | null;
+    delivery_id: string | null;
+    delivery_status: string | null;
     items: Array<{
       productId: string;
       name: string;
@@ -110,6 +125,9 @@ export async function getOrderForUser(userId: string, orderId: string) {
            o.subtotal_amount,
            o.delivery_fee_amount,
            o.total_amount,
+           o.delivery_contact_phone,
+           d.id AS delivery_id,
+           d.status AS delivery_status,
            COALESCE(
              json_agg(
                json_build_object(
@@ -124,8 +142,9 @@ export async function getOrderForUser(userId: string, orderId: string) {
            ) AS items
     FROM public.orders o
     LEFT JOIN public.order_items oi ON oi.order_id = o.id
+    LEFT JOIN public.deliveries d ON d.order_id = o.id
     WHERE o.user_id = $1 AND o.id = $2
-    GROUP BY o.id, o.status, o.created_at, o.subtotal_amount, o.delivery_fee_amount, o.total_amount
+    GROUP BY o.id, o.status, o.created_at, o.subtotal_amount, o.delivery_fee_amount, o.total_amount, o.delivery_contact_phone, d.id, d.status
   `, [userId, orderId]);
 
   if (result.rows.length === 0) {
@@ -338,6 +357,7 @@ export async function placeOrder(
           delivery_address_line,
           delivery_city,
           delivery_state,
+          delivery_contact_phone,
           delivery_location,
           subtotal_amount,
           delivery_fee_amount,
@@ -350,10 +370,11 @@ export async function placeOrder(
           $2,
           $3,
           $4,
-          ST_SetSRID(ST_MakePoint($6, $5), 4326)::geography,
-          $7,
+          $5,
+          ST_SetSRID(ST_MakePoint($7, $6), 4326)::geography,
+          $8,
           0,
-          $7,
+          $8,
           'NGN'
         )
         RETURNING id
@@ -363,6 +384,7 @@ export async function placeOrder(
         input.deliveryAddressLine,
         input.deliveryCity,
         input.deliveryState,
+        input.deliveryContactPhone,
         input.latitude,
         input.longitude,
         orderTotals.subtotal
