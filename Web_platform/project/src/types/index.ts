@@ -41,6 +41,7 @@ export interface CartItem {
   imageUrl?: string;
   unit?: string;
   quantity: number;
+  serverItemId?: string;
 }
 
 export interface Cart {
