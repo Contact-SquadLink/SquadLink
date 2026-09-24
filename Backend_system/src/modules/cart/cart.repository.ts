@@ -7,6 +7,9 @@ export interface CartItemRecord {
   productId: string;
   productName: string;
   productDescription: string | null;
+  productPriceAmount: number | null;
+  productCurrency: string | null;
+  productImageUrl: string | null;
   productIsActive: boolean;
   quantity: number;
   createdAt: Date;
@@ -40,6 +43,9 @@ interface CartItemRow {
   product_id: string;
   product_name: string;
   product_description: string | null;
+  product_price_amount: string | number | null;
+  product_currency: string | null;
+  product_image_url: string | null;
   product_is_active: boolean;
   quantity: number;
   created_at: Date;
@@ -53,6 +59,9 @@ function mapCartItem(row: CartItemRow): CartItemRecord {
     productId: row.product_id,
     productName: row.product_name,
     productDescription: row.product_description,
+    productPriceAmount: row.product_price_amount == null ? null : Number(row.product_price_amount),
+    productCurrency: row.product_currency,
+    productImageUrl: row.product_image_url,
     productIsActive: row.product_is_active,
     quantity: row.quantity,
     createdAt: row.created_at,
@@ -109,7 +118,10 @@ async function findCartItems(
         ci.cart_id,
         ci.product_id,
         p.name AS product_name,
-        p.description AS product_description,
+        COALESCE(bp.description, p.description) AS product_description,
+        COALESCE(bp.price_amount, p.suggested_price_amount) AS product_price_amount,
+        COALESCE(bp.currency, 'NGN') AS product_currency,
+        COALESCE(bp.image_url, p.image_url) AS product_image_url,
         p.is_active AS product_is_active,
         ci.quantity,
         ci.created_at,
@@ -117,6 +129,27 @@ async function findCartItems(
       FROM public.cart_items ci
       INNER JOIN public.products p
         ON p.id = ci.product_id
+      LEFT JOIN LATERAL (
+        SELECT
+          bp_candidate.description,
+          bp_candidate.price_amount,
+          bp_candidate.currency,
+          bp_candidate.image_url
+        FROM public.business_products bp_candidate
+        INNER JOIN public.businesses b_candidate
+          ON b_candidate.id = bp_candidate.business_id
+         AND b_candidate.is_active = TRUE
+         AND b_candidate.status = 'ACTIVE'
+         AND b_candidate.accepts_orders = TRUE
+         AND b_candidate.operating_hours_configured = TRUE
+         AND b_candidate.catalog_configured = TRUE
+         AND b_candidate.inventory_configured = TRUE
+         AND b_candidate.onboarding_completed = TRUE
+        WHERE bp_candidate.product_id = p.id
+          AND bp_candidate.is_available = TRUE
+        ORDER BY bp_candidate.updated_at DESC, bp_candidate.business_id
+        LIMIT 1
+      ) bp ON TRUE
       WHERE ci.cart_id = $1
       ORDER BY ci.created_at ASC
     `,
@@ -195,7 +228,10 @@ export async function getOrCreateCart(
           ci.cart_id,
           ci.product_id,
           p.name AS product_name,
-          p.description AS product_description,
+          COALESCE(bp.description, p.description) AS product_description,
+          bp.price_amount AS product_price_amount,
+          bp.currency AS product_currency,
+          COALESCE(bp.image_url, p.image_url) AS product_image_url,
           p.is_active AS product_is_active,
           ci.quantity,
           ci.created_at,
@@ -203,6 +239,21 @@ export async function getOrCreateCart(
         FROM public.cart_items ci
         INNER JOIN public.products p
           ON p.id = ci.product_id
+        LEFT JOIN LATERAL (
+          SELECT bp_candidate.description, bp_candidate.price_amount, bp_candidate.currency, bp_candidate.image_url
+          FROM public.business_products bp_candidate
+          INNER JOIN public.businesses b_candidate ON b_candidate.id = bp_candidate.business_id
+          WHERE bp_candidate.product_id = p.id
+            AND bp_candidate.is_available = TRUE
+            AND b_candidate.is_active = TRUE
+            AND b_candidate.status = 'ACTIVE'
+            AND b_candidate.accepts_orders = TRUE
+            AND b_candidate.operating_hours_configured = TRUE
+            AND b_candidate.catalog_configured = TRUE
+            AND b_candidate.inventory_configured = TRUE
+          ORDER BY bp_candidate.updated_at DESC, bp_candidate.business_id
+          LIMIT 1
+        ) bp ON TRUE
         WHERE ci.cart_id = $1
         ORDER BY ci.created_at ASC
       `,
@@ -377,7 +428,10 @@ export async function addCartItem(
           ci.cart_id,
           ci.product_id,
           p.name AS product_name,
-          p.description AS product_description,
+          COALESCE(bp.description, p.description) AS product_description,
+          bp.price_amount AS product_price_amount,
+          bp.currency AS product_currency,
+          COALESCE(bp.image_url, p.image_url) AS product_image_url,
           p.is_active AS product_is_active,
           ci.quantity,
           ci.created_at,
@@ -385,6 +439,21 @@ export async function addCartItem(
         FROM public.cart_items ci
         INNER JOIN public.products p
           ON p.id = ci.product_id
+        LEFT JOIN LATERAL (
+          SELECT bp_candidate.description, bp_candidate.price_amount, bp_candidate.currency, bp_candidate.image_url
+          FROM public.business_products bp_candidate
+          INNER JOIN public.businesses b_candidate ON b_candidate.id = bp_candidate.business_id
+          WHERE bp_candidate.product_id = p.id
+            AND bp_candidate.is_available = TRUE
+            AND b_candidate.is_active = TRUE
+            AND b_candidate.status = 'ACTIVE'
+            AND b_candidate.accepts_orders = TRUE
+            AND b_candidate.operating_hours_configured = TRUE
+            AND b_candidate.catalog_configured = TRUE
+            AND b_candidate.inventory_configured = TRUE
+          ORDER BY bp_candidate.updated_at DESC, bp_candidate.business_id
+          LIMIT 1
+        ) bp ON TRUE
         WHERE ci.cart_id = $1
         ORDER BY ci.created_at ASC
       `,
@@ -493,7 +562,10 @@ export async function updateCartItem(
           ci.cart_id,
           ci.product_id,
           p.name AS product_name,
-          p.description AS product_description,
+          COALESCE(bp.description, p.description) AS product_description,
+          bp.price_amount AS product_price_amount,
+          bp.currency AS product_currency,
+          COALESCE(bp.image_url, p.image_url) AS product_image_url,
           p.is_active AS product_is_active,
           ci.quantity,
           ci.created_at,
@@ -501,6 +573,21 @@ export async function updateCartItem(
         FROM public.cart_items ci
         INNER JOIN public.products p
           ON p.id = ci.product_id
+        LEFT JOIN LATERAL (
+          SELECT bp_candidate.description, bp_candidate.price_amount, bp_candidate.currency, bp_candidate.image_url
+          FROM public.business_products bp_candidate
+          INNER JOIN public.businesses b_candidate ON b_candidate.id = bp_candidate.business_id
+          WHERE bp_candidate.product_id = p.id
+            AND bp_candidate.is_available = TRUE
+            AND b_candidate.is_active = TRUE
+            AND b_candidate.status = 'ACTIVE'
+            AND b_candidate.accepts_orders = TRUE
+            AND b_candidate.operating_hours_configured = TRUE
+            AND b_candidate.catalog_configured = TRUE
+            AND b_candidate.inventory_configured = TRUE
+          ORDER BY bp_candidate.updated_at DESC, bp_candidate.business_id
+          LIMIT 1
+        ) bp ON TRUE
         WHERE ci.cart_id = $1
         ORDER BY ci.created_at ASC
       `,

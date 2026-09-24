@@ -34,7 +34,7 @@ const allNavLinks: NavLink[] = [
   { label: 'Home', path: '/', icon: Home, roles: ['CUSTOMER', 'BUSINESS_USER', 'RIDER', 'ADMIN'] },
   { label: 'Browse', path: '/browse', icon: ShoppingBag, roles: ['CUSTOMER', 'BUSINESS_USER', 'RIDER', 'ADMIN'] },
   { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard, roles: ['CUSTOMER'] },
-  { label: 'Cart', path: '/cart', icon: ShoppingCart, roles: ['CUSTOMER', 'BUSINESS_USER', 'RIDER', 'ADMIN'] },
+  { label: 'Cart', path: '/cart', icon: ShoppingCart, roles: ['CUSTOMER', 'BUSINESS_USER'] },
   { label: 'Orders', path: '/orders', icon: Package, roles: ['CUSTOMER', 'BUSINESS_USER'] },
   { label: 'Notifications', path: '/notifications', icon: Bell, roles: ['CUSTOMER', 'BUSINESS_USER', 'RIDER', 'ADMIN'] },
   { label: 'Profile', path: '/profile', icon: UserIcon, roles: ['CUSTOMER', 'BUSINESS_USER', 'RIDER', 'ADMIN'] },

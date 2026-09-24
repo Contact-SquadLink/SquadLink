@@ -1,7 +1,16 @@
 import { Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { ArrowRight, Search, ShoppingBag, Package } from 'lucide-react';
+import { catalogService } from '@/services/catalogService';
+import { ProductCard, ProductCardSkeleton } from '@/components/catalog/ProductCard';
 
 export function PublicCatalogSection() {
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ['home-catalog'],
+    queryFn: () => catalogService.list({ availability: 'in-stock' }),
+  });
+  const products = data?.products.slice(0, 4) ?? [];
+
   return (
     <section className="py-20 bg-white">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -24,15 +33,26 @@ export function PublicCatalogSection() {
           </Link>
         </div>
 
-        <div className="mt-10 rounded-2xl border border-dashed border-gray-200 bg-gray-50 p-8 text-center">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-white text-primary-600 shadow-sm">
-            <Package className="h-6 w-6" />
+        {isLoading ? (
+          <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            {Array.from({ length: 4 }, (_, index) => <ProductCardSkeleton key={index} />)}
           </div>
-          <h3 className="mt-4 font-display text-xl font-bold text-gray-900">No public products are currently available</h3>
-          <p className="mt-2 text-sm text-gray-600">
-            Approved businesses will publish their catalogue items here once they have selected, priced, and configured the products they want to sell.
-          </p>
-        </div>
+        ) : products.length > 0 ? (
+          <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            {products.map((product) => <ProductCard key={`${product.businessId}-${product.id}`} product={product} />)}
+          </div>
+        ) : (
+          <div className="mt-10 rounded-2xl border border-dashed border-gray-200 bg-gray-50 p-8 text-center">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-white text-primary-600 shadow-sm">
+              <Package className="h-6 w-6" />
+            </div>
+            <h3 className="mt-4 font-display text-xl font-bold text-gray-900">No public products are currently available</h3>
+            <p className="mt-2 text-sm text-gray-600">
+              Approved businesses will publish their catalogue items here once they have selected, priced, and configured the products they want to sell.
+            </p>
+          </div>
+        )}
+        {isError && <p className="mt-4 text-center text-sm text-red-600">The catalogue could not be loaded right now.</p>}
 
         <div className="mt-12 flex flex-col items-center justify-between gap-4 rounded-2xl bg-gray-50 p-8 sm:flex-row">
           <div className="flex items-center gap-4">

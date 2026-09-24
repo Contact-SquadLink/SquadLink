@@ -50,6 +50,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
     productId: string;
     productName?: string;
     name?: string;
+    productPriceAmount?: number | null;
+    productCurrency?: string | null;
+    productImageUrl?: string | null;
     quantity: number;
   }>) => {
     if (!serverItems.length) {
@@ -66,8 +69,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
         return {
           productId: serverItem.productId,
           name: serverItem.productName ?? serverItem.name ?? currentItem?.name ?? 'Product',
-          price: currentItem?.price ?? 0,
-          imageUrl: currentItem?.imageUrl,
+          price: serverItem.productPriceAmount ?? currentItem?.price ?? 0,
+          imageUrl: serverItem.productImageUrl ?? currentItem?.imageUrl,
           unit: currentItem?.unit,
           quantity: serverItem.quantity,
           serverItemId: serverItem.id ?? currentItem?.serverItemId,
