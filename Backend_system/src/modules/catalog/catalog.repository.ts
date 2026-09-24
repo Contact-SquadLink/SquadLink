@@ -49,6 +49,8 @@ export interface ProductRecord {
   businessId?: string;
   priceAmount?: number;
   currency?: string;
+  imageUrl?: string;
+  suggestedPriceAmount?: number;
 }
 
 interface ProductRow {
@@ -63,6 +65,8 @@ interface ProductRow {
   business_id?: string | null;
   price_amount?: string | number | null;
   currency?: string | null;
+  image_url?: string | null;
+  suggested_price_amount?: string | number | null;
 }
 
 function mapProduct(
@@ -79,7 +83,11 @@ function mapProduct(
     updatedAt: row.updated_at,
     businessId: row.business_id ?? undefined,
     priceAmount: row.price_amount == null ? undefined : Number(row.price_amount),
-    currency: row.currency ?? undefined
+    currency: row.currency ?? undefined,
+    imageUrl: row.image_url ?? undefined,
+    suggestedPriceAmount: row.suggested_price_amount == null
+      ? undefined
+      : Number(row.suggested_price_amount)
   };
 }
 
@@ -144,6 +152,25 @@ export async function listCategories(): Promise<
         created_at,
         updated_at
       FROM public.categories
+      WHERE is_active = TRUE
+        AND EXISTS (
+          SELECT 1
+          FROM public.products p
+          INNER JOIN public.business_products bp
+            ON bp.product_id = p.id
+           AND bp.is_available = TRUE
+          INNER JOIN public.businesses b
+            ON b.id = bp.business_id
+           AND b.is_active = TRUE
+           AND b.status = 'ACTIVE'
+           AND b.accepts_orders = TRUE
+           AND b.onboarding_completed = TRUE
+           AND b.operating_hours_configured = TRUE
+           AND b.catalog_configured = TRUE
+           AND b.inventory_configured = TRUE
+          WHERE p.category_id = categories.id
+            AND p.is_active = TRUE
+        )
       ORDER BY name ASC
     `
   );
@@ -229,7 +256,7 @@ export async function findProductById(
         p.category_id,
         c.name AS category_name,
         p.name,
-        p.description,
+        COALESCE(bp.description, p.description) AS description,
         p.is_active,
         p.created_at,
         p.updated_at
@@ -293,30 +320,98 @@ export async function listProducts(): Promise<
         p.updated_at,
         bp.business_id,
         bp.price_amount,
-        bp.currency
+        bp.currency,
+        COALESCE(bp.image_url, p.image_url) AS image_url,
+        p.suggested_price_amount
       FROM public.products p
       INNER JOIN public.categories c
         ON c.id = p.category_id
       INNER JOIN LATERAL (
-        SELECT business_id, price_amount, currency
-        FROM public.business_products
-        WHERE product_id = p.id
-          AND is_available = TRUE
-        ORDER BY updated_at DESC, business_id
+        SELECT
+          bp_candidate.business_id,
+          bp_candidate.price_amount,
+          bp_candidate.currency,
+          bp_candidate.description,
+          bp_candidate.image_url
+        FROM public.business_products bp_candidate
+        INNER JOIN public.businesses b_candidate
+          ON b_candidate.id = bp_candidate.business_id
+         AND b_candidate.is_active = TRUE
+         AND b_candidate.status = 'ACTIVE'
+         AND b_candidate.accepts_orders = TRUE
+         AND b_candidate.location IS NOT NULL
+         AND b_candidate.onboarding_completed = TRUE
+         AND b_candidate.operating_hours_configured = TRUE
+         AND b_candidate.catalog_configured = TRUE
+         AND b_candidate.inventory_configured = TRUE
+        WHERE bp_candidate.product_id = p.id
+          AND bp_candidate.is_available = TRUE
+        ORDER BY bp_candidate.updated_at DESC, bp_candidate.business_id
         LIMIT 1
       ) bp ON TRUE
-      INNER JOIN public.businesses b
-        ON b.id = bp.business_id
-       AND b.is_active = TRUE
-       AND b.status = 'ACTIVE'
-       AND b.accepts_orders = TRUE
-       AND b.location IS NOT NULL
       WHERE p.is_active = TRUE
       ORDER BY c.name ASC, p.name ASC
     `
   );
 
   return result.rows.map(mapProduct);
+}
+
+export async function findPublicProductById(
+  productId: string
+): Promise<ProductRecord | null> {
+  const result = await db.query<ProductRow>(
+    `
+      SELECT
+        p.id,
+        p.category_id,
+        c.name AS category_name,
+        COALESCE(bp.description, p.description) AS description,
+        p.name,
+        p.is_active,
+        p.created_at,
+        p.updated_at,
+        bp.business_id,
+        bp.price_amount,
+        bp.currency,
+        COALESCE(bp.image_url, p.image_url) AS image_url,
+        p.suggested_price_amount
+      FROM public.products p
+      INNER JOIN public.categories c
+        ON c.id = p.category_id
+      INNER JOIN LATERAL (
+        SELECT
+          bp_candidate.business_id,
+          bp_candidate.price_amount,
+          bp_candidate.currency,
+          bp_candidate.description,
+          bp_candidate.image_url
+        FROM public.business_products bp_candidate
+        INNER JOIN public.businesses b_candidate
+          ON b_candidate.id = bp_candidate.business_id
+         AND b_candidate.is_active = TRUE
+         AND b_candidate.status = 'ACTIVE'
+         AND b_candidate.accepts_orders = TRUE
+         AND b_candidate.onboarding_completed = TRUE
+         AND b_candidate.operating_hours_configured = TRUE
+         AND b_candidate.catalog_configured = TRUE
+         AND b_candidate.inventory_configured = TRUE
+        WHERE bp_candidate.product_id = p.id
+          AND bp_candidate.is_available = TRUE
+        ORDER BY bp_candidate.updated_at DESC, bp_candidate.business_id
+        LIMIT 1
+      ) bp ON TRUE
+      WHERE p.id = $1
+        AND p.is_active = TRUE
+        AND c.is_active = TRUE
+      LIMIT 1
+    `,
+    [productId]
+  );
+
+  return result.rows.length > 0
+    ? mapProduct(result.rows[0])
+    : null;
 }
 
 export async function createProduct(
@@ -408,7 +503,9 @@ export async function updateProduct(
     : null;
 }
 
-export async function listPlatformProducts(): Promise<ProductRecord[]> {
+export async function listPlatformProducts(
+  search?: string
+): Promise<ProductRecord[]> {
   const result = await db.query<ProductRow>(`
     SELECT
       p.id,
@@ -418,12 +515,21 @@ export async function listPlatformProducts(): Promise<ProductRecord[]> {
       p.description,
       p.is_active,
       p.created_at,
-      p.updated_at
+      p.updated_at,
+      p.image_url,
+      p.suggested_price_amount
     FROM public.products p
     INNER JOIN public.categories c ON c.id = p.category_id
-    WHERE p.is_active = TRUE AND c.is_active = TRUE
+    WHERE p.is_active = TRUE
+      AND c.is_active = TRUE
+      AND (
+        $1::text IS NULL
+        OR p.name ILIKE '%' || $1 || '%'
+        OR COALESCE(p.description, '') ILIKE '%' || $1 || '%'
+        OR c.name ILIKE '%' || $1 || '%'
+      )
     ORDER BY c.name ASC, p.name ASC
-  `);
+  `, [search?.trim() || null]);
 
   return result.rows.map(mapProduct);
 }

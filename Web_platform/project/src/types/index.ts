@@ -21,6 +21,7 @@ export interface Product {
   name: string;
   description?: string;
   price: number;
+  suggestedPriceAmount?: number;
   currency?: string;
   imageUrl?: string;
   images?: string[];

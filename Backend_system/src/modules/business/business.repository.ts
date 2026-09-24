@@ -88,6 +88,7 @@ export interface BusinessCatalogItemRecord {
   productId: string;
   productName: string;
   productDescription: string | null;
+  imageUrl: string | null;
   categoryId: string;
   categoryName: string;
   priceAmount: number;
@@ -164,6 +165,9 @@ interface BusinessCatalogItemRow {
   product_id: string;
   product_name: string;
   product_description: string | null;
+  business_description: string | null;
+  product_image_url: string | null;
+  business_image_url: string | null;
   category_id: string;
   category_name: string;
   price_amount: string;
@@ -260,7 +264,8 @@ function mapBusinessCatalogItem(
     businessId: row.business_id,
     productId: row.product_id,
     productName: row.product_name,
-    productDescription: row.product_description,
+    productDescription: row.business_description ?? row.product_description,
+    imageUrl: row.business_image_url ?? row.product_image_url,
     categoryId: row.category_id,
     categoryName: row.category_name,
     priceAmount: Number(row.price_amount),
@@ -834,6 +839,9 @@ const businessCatalogSelect = `
     bp.product_id,
     p.name AS product_name,
     p.description AS product_description,
+    bp.description AS business_description,
+    p.image_url AS product_image_url,
+    bp.image_url AS business_image_url,
     c.id AS category_id,
     c.name AS category_name,
     bp.price_amount,
@@ -1009,14 +1017,18 @@ export async function createBusinessCatalogItem(
             product_id,
             price_amount,
             currency,
-            is_available
+            is_available,
+            description,
+            image_url
           )
           VALUES (
             $1,
             $2,
             $3,
             $4,
-            $5
+            $5,
+            $6,
+            $7
           )
           RETURNING
             id,
@@ -1033,7 +1045,9 @@ export async function createBusinessCatalogItem(
           input.productId,
           input.priceAmount,
           input.currency,
-          input.isAvailable
+          input.isAvailable,
+          input.description ?? null,
+          input.imageUrl ?? null
         ]
       );
 
@@ -1128,9 +1142,19 @@ export async function updateBusinessCatalogItem(
           price_amount = COALESCE($1, price_amount),
           currency = COALESCE($2, currency),
           is_available = COALESCE($3, is_available),
+          description = CASE
+            WHEN $4::text IS NULL AND $5::boolean = true THEN NULL
+            WHEN $4::text IS NOT NULL THEN $4
+            ELSE description
+          END,
+          image_url = CASE
+            WHEN $6::text IS NULL AND $7::boolean = true THEN NULL
+            WHEN $6::text IS NOT NULL THEN $6
+            ELSE image_url
+          END,
           updated_at = now()
-        WHERE business_id = $4
-          AND id = $5
+        WHERE business_id = $8
+          AND id = $9
         RETURNING
           id,
           business_id,
@@ -1145,6 +1169,10 @@ export async function updateBusinessCatalogItem(
         input.priceAmount ?? null,
         input.currency ?? null,
         input.isAvailable ?? null,
+        input.description ?? null,
+        input.description === null,
+        input.imageUrl ?? null,
+        input.imageUrl === null,
         businessId,
         businessProductId
       ]

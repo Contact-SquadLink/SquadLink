@@ -14,6 +14,7 @@ import {
   findCategoryByName,
   findProductByCategoryAndName,
   findProductById,
+  findPublicProductById,
   listCategories,
   listProducts,
   listPlatformProducts,
@@ -95,8 +96,12 @@ export async function getProducts() {
   return listProducts();
 }
 
-export async function getPlatformProducts() {
-  return listPlatformProducts();
+export async function getPublicProductById(productId: string) {
+  return findPublicProductById(productId);
+}
+
+export async function getPlatformProducts(search?: string) {
+  return listPlatformProducts(search);
 }
 
 export async function registerProduct(

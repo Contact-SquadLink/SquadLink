@@ -231,6 +231,21 @@ export async function findProductById(
         is_active
       FROM public.products
       WHERE id = $1
+        AND EXISTS (
+          SELECT 1
+          FROM public.business_products bp
+          INNER JOIN public.businesses b
+            ON b.id = bp.business_id
+          WHERE bp.product_id = products.id
+            AND bp.is_available = TRUE
+            AND b.is_active = TRUE
+            AND b.status = 'ACTIVE'
+            AND b.accepts_orders = TRUE
+            AND b.onboarding_completed = TRUE
+            AND b.operating_hours_configured = TRUE
+            AND b.catalog_configured = TRUE
+            AND b.inventory_configured = TRUE
+        )
       LIMIT 1
     `,
     [productId]
@@ -303,6 +318,21 @@ export async function addCartItem(
           is_active
         FROM public.products
         WHERE id = $1
+          AND EXISTS (
+            SELECT 1
+            FROM public.business_products bp
+            INNER JOIN public.businesses b
+              ON b.id = bp.business_id
+            WHERE bp.product_id = products.id
+              AND bp.is_available = TRUE
+              AND b.is_active = TRUE
+              AND b.status = 'ACTIVE'
+              AND b.accepts_orders = TRUE
+              AND b.onboarding_completed = TRUE
+              AND b.operating_hours_configured = TRUE
+              AND b.catalog_configured = TRUE
+              AND b.inventory_configured = TRUE
+          )
         LIMIT 1
       `,
       [productId]

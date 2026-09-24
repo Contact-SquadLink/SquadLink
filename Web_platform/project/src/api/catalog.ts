@@ -20,8 +20,8 @@ export interface CatalogCategory {
 }
 
 export const catalogApi = {
-  listTemplates: () =>
-    apiRequest<ApiListResponse<Product>>('/api/v1/catalog/templates'),
+  listTemplates: (search?: string) =>
+    apiRequest<ApiListResponse<Product>>(`/api/v1/catalog/templates${search ? `?search=${encodeURIComponent(search)}` : ''}`),
 
   listCategories: () =>
     apiRequest<ApiListResponse<CatalogCategory>>('/api/v1/catalog/categories'),

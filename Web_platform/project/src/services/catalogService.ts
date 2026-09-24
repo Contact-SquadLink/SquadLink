@@ -34,9 +34,12 @@ function mapBackendProduct(raw: Record<string, unknown>): Product | null {
     name,
     description: typeof raw.description === 'string' ? raw.description : undefined,
     price: typeof raw.priceAmount === 'number' ? raw.priceAmount : 0,
+    suggestedPriceAmount: typeof raw.suggestedPriceAmount === 'number'
+      ? raw.suggestedPriceAmount
+      : undefined,
     currency: typeof raw.currency === 'string' ? raw.currency : 'NGN',
     businessId: typeof raw.businessId === 'string' ? raw.businessId : undefined,
-    imageUrl: undefined,
+    imageUrl: typeof raw.imageUrl === 'string' ? raw.imageUrl : undefined,
     category: categoryName,
     unit: undefined,
     inStock: isActive,
@@ -65,7 +68,7 @@ export const catalogService = {
     const rows = Array.isArray(res.data) ? res.data : [];
     const products = rows
       .map((row) => mapBackendProduct(row as unknown as Record<string, unknown>))
-      .filter((product): product is Product => product !== null);
+      .filter((product): product is Product => product !== null && Boolean(product.businessId));
 
     return { products, source: 'backend' };
   },
@@ -73,7 +76,7 @@ export const catalogService = {
   async getById(id: string): Promise<{ product: Product | null; source: CatalogSource; related: Product[] }> {
     const res = await catalogApi.getById(id);
     const product = mapBackendProduct(res.data as unknown as Record<string, unknown>);
-    return { product, source: 'backend', related: [] };
+    return { product: product && product.businessId ? product : null, source: 'backend', related: [] };
   },
 
   async getCategories(): Promise<Array<{ id: string; name: string; slug: string; icon: string; description: string }>> {

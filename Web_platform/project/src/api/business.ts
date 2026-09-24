@@ -34,6 +34,7 @@ export interface BusinessCatalogItem {
   currency: string;
   isAvailable: boolean;
   productIsActive: boolean;
+  imageUrl: string | null;
 }
 
 export interface InventoryItem {
@@ -99,7 +100,7 @@ export const businessApi = {
   listCatalog: () =>
     apiRequest<ApiResponseEnvelope<BusinessCatalogItem[]>>('/api/v1/businesses/me/catalog'),
 
-  addCatalogItem: (payload: { productId: string; priceAmount: number; currency?: string; isAvailable?: boolean }) =>
+  addCatalogItem: (payload: { productId: string; priceAmount: number; description?: string | null; imageUrl?: string | null; currency?: string; isAvailable?: boolean }) =>
     apiRequest<ApiResponseEnvelope<BusinessCatalogItem>>('/api/v1/businesses/me/catalog', { method: 'POST', body: payload }),
 
   listInventory: () =>
@@ -110,5 +111,8 @@ export const businessApi = {
 
   updateInventory: (inventoryId: string, payload: { quantityOnHand?: number; lowStockThreshold?: number }) =>
     apiRequest<ApiResponseEnvelope<InventoryItem>>(`/api/v1/inventory/me/${inventoryId}`, { method: 'PUT', body: payload }),
+
+  updateCatalogItem: (businessProductId: string, payload: { priceAmount?: number; description?: string | null; imageUrl?: string | null; currency?: string; isAvailable?: boolean }) =>
+    apiRequest<ApiResponseEnvelope<BusinessCatalogItem>>(`/api/v1/businesses/me/catalog/${businessProductId}`, { method: 'PUT', body: payload }),
 };
 

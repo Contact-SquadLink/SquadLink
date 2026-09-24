@@ -18,6 +18,7 @@ import {
 import {
   getCategories,
   getProducts,
+  getPublicProductById,
   getPlatformProducts,
   modifyCategory,
   modifyProduct,
@@ -54,10 +55,14 @@ export async function catalogRoutes(
     {
       preHandler: [authenticate, authorize("BUSINESS_USER", "ADMIN")]
     },
-    async (request) => successResponse(
-      await getPlatformProducts(),
-      request.id
-    )
+    async (request) => {
+      const query = request.query as { search?: string };
+
+      return successResponse(
+        await getPlatformProducts(query.search),
+        request.id
+      );
+    }
   );
 
   /**
@@ -191,6 +196,31 @@ export async function catalogRoutes(
           products,
           request.id
         )
+      );
+    }
+  );
+
+  app.get(
+    "/products/:productId",
+    async (request, reply) => {
+      const params = request.params as { productId?: string };
+      const product = params.productId
+        ? await getPublicProductById(params.productId)
+        : null;
+
+      if (!product) {
+        return reply.status(404).send({
+          success: false,
+          error: {
+            code: "PRODUCT_NOT_FOUND",
+            message: "Product not found."
+          },
+          requestId: request.id
+        });
+      }
+
+      return reply.status(200).send(
+        successResponse(product, request.id)
       );
     }
   );

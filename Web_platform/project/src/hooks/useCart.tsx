@@ -4,6 +4,7 @@ import {
   useState,
   useEffect,
   useCallback,
+  useRef,
   type ReactNode,
 } from 'react';
 import type { CartItem, Product } from '@/types';
@@ -40,6 +41,7 @@ function loadGuestCart(): CartItem[] {
 export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>(loadGuestCart);
   const { user } = useAuth();
+  const syncedUserIdRef = useRef<string | null>(null);
 
   const mergeServerCart = useCallback((serverItems: Array<{
     id?: string;
@@ -48,25 +50,38 @@ export function CartProvider({ children }: { children: ReactNode }) {
     name?: string;
     quantity: number;
   }>) => {
-    setItems((currentItems) => serverItems.map((serverItem) => {
-      const currentItem = currentItems.find(
-        (item) => item.productId === serverItem.productId
-      );
+    if (!serverItems.length) {
+      setItems([]);
+      localStorage.removeItem(GUEST_CART_KEY);
+      return;
+    }
 
-      return {
-        productId: serverItem.productId,
-        name: serverItem.productName ?? serverItem.name ?? currentItem?.name ?? 'Product',
-        price: currentItem?.price ?? 0,
-        imageUrl: currentItem?.imageUrl,
-        unit: currentItem?.unit,
-        quantity: serverItem.quantity,
-        serverItemId: serverItem.id ?? currentItem?.serverItemId,
-      };
-    }));
+    setItems((currentItems) => {
+      const currentById = new Map(currentItems.map((item) => [item.productId, item]));
+
+      return serverItems.map((serverItem) => {
+        const currentItem = currentById.get(serverItem.productId);
+        return {
+          productId: serverItem.productId,
+          name: serverItem.productName ?? serverItem.name ?? currentItem?.name ?? 'Product',
+          price: currentItem?.price ?? 0,
+          imageUrl: currentItem?.imageUrl,
+          unit: currentItem?.unit,
+          quantity: serverItem.quantity,
+          serverItemId: serverItem.id ?? currentItem?.serverItemId,
+        };
+      });
+    });
   }, []);
 
   useEffect(() => {
     if (!user || (user.role !== 'CUSTOMER' && user.role !== 'BUSINESS_USER')) {
+      localStorage.removeItem(GUEST_CART_KEY);
+      syncedUserIdRef.current = null;
+      return;
+    }
+
+    if (syncedUserIdRef.current === user.id) {
       return;
     }
 
@@ -92,9 +107,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
         if (active) {
           mergeServerCart(response.data.items);
           localStorage.removeItem(GUEST_CART_KEY);
+          syncedUserIdRef.current = user.id;
         }
       } catch {
-        // Keep the guest cart visible when the authenticated cart is unavailable.
+        syncedUserIdRef.current = user.id;
       }
     };
 
@@ -106,6 +122,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, [mergeServerCart, user]);
 
   useEffect(() => {
+    if (items.length === 0) {
+      localStorage.removeItem(GUEST_CART_KEY);
+      return;
+    }
+
     localStorage.setItem(GUEST_CART_KEY, JSON.stringify(items));
   }, [items]);
 
@@ -191,6 +212,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const clearCart = useCallback(() => {
     const previousItems = items;
     setItems([]);
+    localStorage.removeItem(GUEST_CART_KEY);
 
     if (!user) {
       return;
@@ -198,6 +220,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
     void cartApi.clear().catch(() => {
       setItems(previousItems);
+      if (previousItems.length > 0) {
+        localStorage.setItem(GUEST_CART_KEY, JSON.stringify(previousItems));
+      }
     });
   }, [items, user]);
 

@@ -3,6 +3,8 @@ import { z } from "zod";
 export const createBusinessCatalogItemSchema = z.object({
   productId: z.string().uuid(),
   priceAmount: z.number().int().nonnegative(),
+  description: z.string().trim().max(5000).nullable().optional(),
+  imageUrl: z.string().url().max(2000).nullable().optional(),
   currency: z
     .string()
     .trim()
@@ -21,6 +23,8 @@ export type CreateBusinessCatalogItemInput =
 
 export const updateBusinessCatalogItemSchema = z.object({
   priceAmount: z.number().int().nonnegative().optional(),
+  description: z.string().trim().max(5000).nullable().optional(),
+  imageUrl: z.string().url().max(2000).nullable().optional(),
   currency: z
     .string()
     .trim()
