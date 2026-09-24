@@ -51,6 +51,13 @@ export interface InventoryItem {
   lowStockThreshold: number;
 }
 
+export interface OperatingHour {
+  dayOfWeek: string;
+  opensAt: string | null;
+  closesAt: string | null;
+  isClosed: boolean;
+}
+
 export const businessApi = {
   getApplication: () =>
     apiRequest<ApiResponseEnvelope<{
@@ -117,5 +124,11 @@ export const businessApi = {
 
   updateCatalogItem: (businessProductId: string, payload: { priceAmount?: number; description?: string | null; imageUrl?: string | null; currency?: string; isAvailable?: boolean }) =>
     apiRequest<ApiResponseEnvelope<BusinessCatalogItem>>(`/api/v1/businesses/me/catalog/${businessProductId}`, { method: 'PUT', body: payload }),
+
+  getOperatingHours: () =>
+    apiRequest<ApiResponseEnvelope<OperatingHour[]>>('/api/v1/businesses/me/operating-hours'),
+
+  updateOperatingHours: (hours: OperatingHour[]) =>
+    apiRequest<ApiResponseEnvelope<OperatingHour[]>>('/api/v1/businesses/me/operating-hours', { method: 'PUT', body: { hours } }),
 };
 

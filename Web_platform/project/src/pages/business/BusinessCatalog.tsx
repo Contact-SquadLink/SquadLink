@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Image, Package, Plus, RefreshCw, Save, Search, Store } from 'lucide-react';
-import { businessApi, type BusinessCatalogItem, type InventoryItem } from '@/api/business';
+import { businessApi, type BusinessCatalogItem, type InventoryItem, type OperatingHour } from '@/api/business';
 import { catalogApi } from '@/api/catalog';
 import { Badge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/States';
@@ -13,6 +13,9 @@ interface CatalogDraft {
   imageUrl: string;
 }
 
+const days = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
+const defaultHours: OperatingHour[] = days.map((dayOfWeek) => ({ dayOfWeek, opensAt: '08:00', closesAt: '22:00', isClosed: false }));
+
 export function BusinessCatalogPage() {
   const queryClient = useQueryClient();
   const [selectedProductId, setSelectedProductId] = useState('');
@@ -23,10 +26,12 @@ export function BusinessCatalogPage() {
   const [quantity, setQuantity] = useState('');
   const [threshold, setThreshold] = useState('0');
   const [drafts, setDrafts] = useState<Record<string, CatalogDraft>>({});
+  const [hours, setHours] = useState<OperatingHour[]>(defaultHours);
   const [error, setError] = useState<string | null>(null);
 
   const catalogQuery = useQuery({ queryKey: ['business-catalog'], queryFn: businessApi.listCatalog });
   const inventoryQuery = useQuery({ queryKey: ['business-inventory'], queryFn: businessApi.listInventory });
+  const hoursQuery = useQuery({ queryKey: ['business-operating-hours'], queryFn: businessApi.getOperatingHours });
   const productsQuery = useQuery({
     queryKey: ['platform-product-templates', search],
     queryFn: () => catalogApi.listTemplates(search),
@@ -41,6 +46,9 @@ export function BusinessCatalogPage() {
   const catalog = catalogQuery.data?.data ?? [];
   const inventory = inventoryQuery.data?.data ?? [];
   const templates = productsQuery.data?.data ?? [];
+  useEffect(() => {
+    if (hoursQuery.data?.data?.length === 7) setHours(hoursQuery.data.data);
+  }, [hoursQuery.data]);
   const availableProducts = templates.filter((product) => !catalog.some((item) => item.productId === product.id));
   const selectedProduct = templates.find((product) => product.id === selectedProductId);
 
@@ -95,6 +103,16 @@ export function BusinessCatalogPage() {
     }
   };
 
+  const saveHours = async () => {
+    setError(null);
+    try {
+      await businessApi.updateOperatingHours(hours);
+      refresh();
+    } catch (caughtError) {
+      setError(caughtError instanceof Error ? caughtError.message : 'Unable to save operating hours.');
+    }
+  };
+
   const getDraft = (item: BusinessCatalogItem): CatalogDraft => drafts[item.id] ?? {
     price: String(item.priceAmount),
     description: item.productDescription ?? '',
@@ -120,6 +138,28 @@ export function BusinessCatalogPage() {
       </div>
 
       {error && <div className="mb-5 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
+
+      <section className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="font-display text-lg font-bold text-gray-900">Weekly operating hours</h2>
+            <p className="mt-1 text-sm text-gray-600">Save your hours before products can appear in the customer catalogue.</p>
+          </div>
+          <button type="button" onClick={() => void saveHours()} disabled={hoursQuery.isLoading} className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary-600 px-4 text-sm font-semibold text-white disabled:opacity-50"><Save className="h-4 w-4" /> Save hours</button>
+        </div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {hours.map((hour, index) => (
+            <div key={hour.dayOfWeek} className="rounded-xl border border-amber-200 bg-white p-3">
+              <p className="text-xs font-semibold text-gray-700">{hour.dayOfWeek}</p>
+              <div className="mt-2 flex items-center gap-2">
+                <input type="time" value={hour.opensAt ?? ''} disabled={hour.isClosed} onChange={(event) => setHours((current) => current.map((entry, entryIndex) => entryIndex === index ? { ...entry, opensAt: event.target.value } : entry))} className="min-w-0 flex-1 rounded border border-gray-300 px-2 py-1 text-xs" />
+                <input type="time" value={hour.closesAt ?? ''} disabled={hour.isClosed} onChange={(event) => setHours((current) => current.map((entry, entryIndex) => entryIndex === index ? { ...entry, closesAt: event.target.value } : entry))} className="min-w-0 flex-1 rounded border border-gray-300 px-2 py-1 text-xs" />
+              </div>
+              <label className="mt-2 flex items-center gap-2 text-xs text-gray-600"><input type="checkbox" checked={hour.isClosed} onChange={(event) => setHours((current) => current.map((entry, entryIndex) => entryIndex === index ? { ...entry, isClosed: event.target.checked, opensAt: event.target.checked ? null : entry.opensAt ?? '08:00', closesAt: event.target.checked ? null : entry.closesAt ?? '22:00' } : entry))} /> Closed</label>
+            </div>
+          ))}
+        </div>
+      </section>
 
       <section className="mb-6 rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
         <h2 className="font-display text-lg font-bold text-gray-900">Add platform template</h2>
