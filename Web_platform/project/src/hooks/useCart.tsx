@@ -99,6 +99,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
       try {
         let response = await cartApi.get();
 
+        if (guestItems.length > 0 && response.data.items.length > 0) {
+          await cartApi.clear();
+          response = await cartApi.get();
+        }
+
         for (const item of guestItems) {
           try {
             response = await cartApi.addItem({

@@ -1166,7 +1166,7 @@ export async function issueDeliveryOtp(userId: string, deliveryId: string) {
 export async function confirmDelivery(userId: string, deliveryId: string, otp: string) {
   return withTransaction(async (client) => {
     const result = await client.query<{ delivery_id: string; delivery_status: string; order_id: string; order_status: string; rider_id: string | null; rider_user_id: string | null; business_owner_user_id: string | null }>(
-      `SELECT d.id AS delivery_id, d.status AS delivery_status, d.order_id, o.status AS order_status, d.rider_id, r.user_id AS rider_user_id, b.owner_user_id AS business_owner_user_id FROM public.deliveries d INNER JOIN public.orders o ON o.id = d.order_id LEFT JOIN public.riders r ON r.id = d.rider_id LEFT JOIN public.fulfillments f ON f.order_id = o.id LEFT JOIN public.businesses b ON b.id = f.business_id WHERE d.id = $1 AND o.user_id = $2 FOR UPDATE OF d, o`,
+      `SELECT d.id AS delivery_id, d.status AS delivery_status, d.order_id, o.status AS order_status, d.rider_id, r.user_id AS rider_user_id, b.owner_user_id AS business_owner_user_id FROM public.deliveries d INNER JOIN public.orders o ON o.id = d.order_id LEFT JOIN public.riders r ON r.id = d.rider_id LEFT JOIN public.fulfillments f ON f.order_id = o.id LEFT JOIN public.businesses b ON b.id = f.business_id WHERE d.id = $1 AND r.user_id = $2 FOR UPDATE OF d, o`,
       [deliveryId, userId]
     );
     if (result.rows.length === 0) {

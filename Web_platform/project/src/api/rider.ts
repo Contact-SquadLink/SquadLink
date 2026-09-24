@@ -44,4 +44,10 @@ export const riderApi = {
     apiRequest<ApiSingleResponse<Delivery>>(`/api/v1/deliveries/${deliveryId}/arrived`, {
       method: 'POST',
     }),
+
+  confirmDelivery: (deliveryId: string, otp: string) =>
+    apiRequest<ApiSingleResponse<Delivery>>(`/api/v1/deliveries/${deliveryId}/confirm`, {
+      method: 'POST',
+      body: { otp },
+    }),
 };

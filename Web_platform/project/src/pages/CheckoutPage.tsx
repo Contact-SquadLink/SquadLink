@@ -388,10 +388,10 @@ export function CheckoutPage() {
 
               <button
                 onClick={() => setShowSandboxPayment(true)}
-                disabled={placingOrder || !!previewError || !hasValidDeliveryDetails}
+                disabled={placingOrder || !hasValidDeliveryDetails}
                 className={cn(
                   'mt-6 flex w-full items-center justify-center gap-2 rounded-xl h-12 text-sm font-semibold text-white transition-colors',
-                  placingOrder || previewError || !hasValidDeliveryDetails
+                  placingOrder || !hasValidDeliveryDetails
                     ? 'bg-primary-400 cursor-not-allowed'
                     : 'bg-primary-600 hover:bg-primary-700'
                 )}

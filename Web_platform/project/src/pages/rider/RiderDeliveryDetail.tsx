@@ -45,6 +45,7 @@ function getStepIndex(status: DeliveryStatus): number {
 export function RiderDeliveryDetailPage() {
   const { deliveryId } = useParams<{ deliveryId: string }>();
   const [credential, setCredential] = useState('');
+  const [deliveryOtp, setDeliveryOtp] = useState('');
   const [rejectionReason, setRejectionReason] = useState('');
   const [actionError, setActionError] = useState<string | null>(null);
   const [isActing, setIsActing] = useState(false);
@@ -87,6 +88,12 @@ export function RiderDeliveryDetailPage() {
         await riderApi.markInTransit(delivery.id);
       } else if (delivery.status === 'IN_TRANSIT') {
         await riderApi.markArrived(delivery.id);
+      } else if (delivery.status === 'ARRIVED') {
+        if (!/^\d{6}$/.test(deliveryOtp)) {
+          setActionError('Enter the six-digit OTP provided by the customer.');
+          return;
+        }
+        await riderApi.confirmDelivery(delivery.id, deliveryOtp);
       }
       window.location.reload();
     } catch (error) {
@@ -219,7 +226,9 @@ export function RiderDeliveryDetailPage() {
                   </p>
                 </div>
               </div>
-              <p className="text-sm text-primary-700">Wait for the customer to provide the OTP and confirm delivery from their order page.</p>
+              <p className="text-sm text-primary-700">Enter the OTP provided by the customer to complete delivery.</p>
+              <input value={deliveryOtp} onChange={(event) => setDeliveryOtp(event.target.value.replace(/\D/g, '').slice(0, 6))} inputMode="numeric" maxLength={6} placeholder="Customer OTP" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+              <ActionButton onClick={advanceStatus} icon={KeyRound} label={isActing ? 'Confirming...' : 'Confirm delivery'} color="bg-primary-600 hover:bg-primary-700" />
             </div>
           )}
         </div>

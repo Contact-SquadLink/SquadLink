@@ -272,7 +272,7 @@ export async function lifecycleRoutes(app: FastifyInstance): Promise<void> {
 
   app.post(
     "/deliveries/:deliveryId/confirm",
-    { preHandler: [authenticate, authorize("CUSTOMER")] },
+    { preHandler: [authenticate, authorize("RIDER")] },
     async (request) => {
       const { deliveryId } = deliveryIdParamsSchema.parse(request.params);
       const { otp } = deliveryOtpSchema.parse(request.body);

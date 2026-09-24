@@ -340,6 +340,8 @@ export async function listProducts(): Promise<
          AND b_candidate.status = 'ACTIVE'
          AND b_candidate.accepts_orders = TRUE
          AND b_candidate.location IS NOT NULL
+         AND b_candidate.onboarding_completed = TRUE
+         AND b_candidate.onboarding_completed = TRUE
          AND b_candidate.operating_hours_configured = TRUE
          AND b_candidate.catalog_configured = TRUE
          AND b_candidate.inventory_configured = TRUE

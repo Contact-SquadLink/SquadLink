@@ -229,8 +229,8 @@ export async function getOrCreateCart(
           ci.product_id,
           p.name AS product_name,
           COALESCE(bp.description, p.description) AS product_description,
-          bp.price_amount AS product_price_amount,
-          bp.currency AS product_currency,
+          COALESCE(bp.price_amount, p.suggested_price_amount) AS product_price_amount,
+          COALESCE(bp.currency, 'NGN') AS product_currency,
           COALESCE(bp.image_url, p.image_url) AS product_image_url,
           p.is_active AS product_is_active,
           ci.quantity,
@@ -248,6 +248,7 @@ export async function getOrCreateCart(
             AND b_candidate.is_active = TRUE
             AND b_candidate.status = 'ACTIVE'
             AND b_candidate.accepts_orders = TRUE
+            AND b_candidate.onboarding_completed = TRUE
             AND b_candidate.operating_hours_configured = TRUE
             AND b_candidate.catalog_configured = TRUE
             AND b_candidate.inventory_configured = TRUE
@@ -429,8 +430,8 @@ export async function addCartItem(
           ci.product_id,
           p.name AS product_name,
           COALESCE(bp.description, p.description) AS product_description,
-          bp.price_amount AS product_price_amount,
-          bp.currency AS product_currency,
+          COALESCE(bp.price_amount, p.suggested_price_amount) AS product_price_amount,
+          COALESCE(bp.currency, 'NGN') AS product_currency,
           COALESCE(bp.image_url, p.image_url) AS product_image_url,
           p.is_active AS product_is_active,
           ci.quantity,
@@ -448,6 +449,7 @@ export async function addCartItem(
             AND b_candidate.is_active = TRUE
             AND b_candidate.status = 'ACTIVE'
             AND b_candidate.accepts_orders = TRUE
+            AND b_candidate.onboarding_completed = TRUE
             AND b_candidate.operating_hours_configured = TRUE
             AND b_candidate.catalog_configured = TRUE
             AND b_candidate.inventory_configured = TRUE
@@ -563,8 +565,8 @@ export async function updateCartItem(
           ci.product_id,
           p.name AS product_name,
           COALESCE(bp.description, p.description) AS product_description,
-          bp.price_amount AS product_price_amount,
-          bp.currency AS product_currency,
+          COALESCE(bp.price_amount, p.suggested_price_amount) AS product_price_amount,
+          COALESCE(bp.currency, 'NGN') AS product_currency,
           COALESCE(bp.image_url, p.image_url) AS product_image_url,
           p.is_active AS product_is_active,
           ci.quantity,
@@ -582,6 +584,7 @@ export async function updateCartItem(
             AND b_candidate.is_active = TRUE
             AND b_candidate.status = 'ACTIVE'
             AND b_candidate.accepts_orders = TRUE
+            AND b_candidate.onboarding_completed = TRUE
             AND b_candidate.operating_hours_configured = TRUE
             AND b_candidate.catalog_configured = TRUE
             AND b_candidate.inventory_configured = TRUE
