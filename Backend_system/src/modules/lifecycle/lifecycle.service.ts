@@ -109,6 +109,22 @@ export async function registerRider(
     );
 
     await client.query(
+      `
+        INSERT INTO public.notifications (
+          user_id, type, channel, status, title, message, event_key
+        )
+        VALUES ($1, 'RIDER_APPLICATION_SUBMITTED'::public.notification_type, 'IN_APP', 'SENT', $2, $3, $4)
+        ON CONFLICT (event_key) WHERE event_key IS NOT NULL DO NOTHING
+      `,
+      [
+        userId,
+        "Rider application submitted",
+        "Your rider application was submitted and is awaiting admin verification.",
+        `rider-application:${riderId}:SUBMITTED`
+      ]
+    );
+
+    await client.query(
       `INSERT INTO public.rider_wallets (rider_id, current_balance_amount, currency)
        VALUES ($1, 0, 'NGN')
        ON CONFLICT (rider_id) DO NOTHING`,
@@ -879,7 +895,7 @@ export async function markBusinessReady(userId: string, orderId: string) {
     await client.query(`UPDATE public.orders SET status = 'READY_FOR_PICKUP', updated_at = NOW() WHERE id = $1`, [orderId]);
     await writeOrderHistory(client, orderId, "PREPARING", "READY_FOR_PICKUP", userId, "Business marked the order ready for pickup.");
     const delivery = await assignRider(client, orderId, userId);
-    await writeOutbox(client, "ORDER_READY_FOR_PICKUP", "ORDER", orderId, { orderId, deliveryId: delivery.deliveryId });
+    await writeOutbox(client, "ORDER_READY_FOR_PICKUP", "ORDER", orderId, { orderId, deliveryId: delivery.deliveryId, pickupCredential: delivery.pickupCredential ?? null });
     await writeAudit(client, userId, "ORDER_READY_FOR_PICKUP", "ORDER", orderId, "Business marked the order ready.");
     return { orderId, status: "READY_FOR_PICKUP", delivery };
   });
@@ -892,7 +908,7 @@ export async function retryRiderAssignment(userId: string, orderId: string) {
       fail("Only orders ready for pickup can retry rider assignment.", 409, "INVALID_ORDER_TRANSITION");
     }
     const delivery = await assignRider(client, orderId, userId);
-    await writeOutbox(client, "ORDER_READY_FOR_PICKUP", "ORDER", orderId, { orderId, deliveryId: delivery.deliveryId });
+    await writeOutbox(client, "ORDER_READY_FOR_PICKUP", "ORDER", orderId, { orderId, deliveryId: delivery.deliveryId, pickupCredential: delivery.pickupCredential ?? null });
     return { orderId, status: order.order_status, delivery };
   });
 }
@@ -925,7 +941,7 @@ async function assignRider(client: PoolClient, orderId: string, actorUserId: str
     [delivery.delivery_id]
   );
   if (riderResult.rows.length === 0) {
-    return { deliveryId: delivery.delivery_id, status: "SEARCHING_RIDER" };
+    return { deliveryId: delivery.delivery_id, status: "SEARCHING_RIDER", pickupCredential: undefined };
   }
   const rider = riderResult.rows[0];
   await client.query(`UPDATE public.riders SET is_available = FALSE, updated_at = NOW() WHERE id = $1`, [rider.rider_id]);

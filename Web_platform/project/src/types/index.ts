@@ -97,6 +97,7 @@ export interface Order {
   vat: number;
   total: number;
   deliveryContactPhone?: string | null;
+  pickupPin?: string | null;
   delivery?: {
     id: string;
     status: DeliveryStatus;

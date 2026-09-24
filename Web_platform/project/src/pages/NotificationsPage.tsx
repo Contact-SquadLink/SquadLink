@@ -79,6 +79,11 @@ export function NotificationsPage() {
                       Open business workspace
                     </Link>
                   )}
+                  {n.type === 'RIDER_APPLICATION_APPROVED' && (
+                    <Link to="/rider" className="mt-2 inline-flex text-sm font-semibold text-primary-700">
+                      Open rider workspace
+                    </Link>
+                  )}
                   <p className="mt-2 text-xs text-gray-400">{formatDate(n.createdAt)}</p>
                 </div>
               </div>

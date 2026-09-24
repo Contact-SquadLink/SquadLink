@@ -100,6 +100,7 @@ async function findCartRowByUserId(
         updated_at
       FROM public.carts
       WHERE user_id = $1
+        AND status = 'ACTIVE'
       LIMIT 1
     `,
     [userId]
@@ -199,6 +200,32 @@ export async function getOrCreateCart(
 
     if (existing.rows.length > 0) {
       cart = existing.rows[0];
+      if (cart.status !== "ACTIVE") {
+        await client.query(
+          `DELETE FROM public.cart_items WHERE cart_id = $1`,
+          [cart.id]
+        );
+        const reactivated = await client.query<CartRow>(
+          `
+            UPDATE public.carts
+            SET status = 'ACTIVE',
+                checked_out_at = NULL,
+                abandoned_at = NULL,
+                updated_at = NOW()
+            WHERE id = $1
+            RETURNING
+              id,
+              user_id,
+              status,
+              checked_out_at,
+              abandoned_at,
+              created_at,
+              updated_at
+          `,
+          [cart.id]
+        );
+        cart = reactivated.rows[0];
+      }
     } else {
       const created = await client.query<CartRow>(
         `
@@ -323,6 +350,7 @@ export async function addCartItem(
           updated_at
         FROM public.carts
         WHERE user_id = $1
+        AND status = 'ACTIVE'
         LIMIT 1
         FOR UPDATE
       `,
@@ -503,6 +531,7 @@ export async function updateCartItem(
           updated_at
         FROM public.carts
         WHERE user_id = $1
+        AND status = 'ACTIVE'
         LIMIT 1
         FOR UPDATE
       `,
@@ -637,6 +666,7 @@ export async function removeCartItem(
           updated_at
         FROM public.carts
         WHERE user_id = $1
+        AND status = 'ACTIVE'
         LIMIT 1
         FOR UPDATE
       `,
@@ -735,6 +765,7 @@ export async function clearCart(
           updated_at
         FROM public.carts
         WHERE user_id = $1
+        AND status = 'ACTIVE'
         LIMIT 1
         FOR UPDATE
       `,

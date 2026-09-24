@@ -158,13 +158,17 @@ async function notificationJobs(
     customer_user_id: string;
     business_owner_user_id: string | null;
     rider_user_id: string | null;
+    pickup_address: string;
+    delivery_address: string;
   }>(
     `
       SELECT
         o.id AS order_id,
         o.user_id AS customer_user_id,
         b.owner_user_id AS business_owner_user_id,
-        rider_user.id AS rider_user_id
+        rider_user.id AS rider_user_id,
+        CONCAT_WS(', ', b.address_line, b.city, b.state) AS pickup_address,
+        CONCAT_WS(', ', o.delivery_address_line, o.delivery_city, o.delivery_state) AS delivery_address
       FROM public.orders o
       LEFT JOIN public.fulfillments f ON f.order_id = o.id
       LEFT JOIN public.businesses b ON b.id = f.business_id
@@ -182,13 +186,17 @@ async function notificationJobs(
         customer_user_id: string;
         business_owner_user_id: string | null;
         rider_user_id: string | null;
+        pickup_address: string;
+        delivery_address: string;
       }>(
         `
           SELECT
             o.id AS order_id,
             o.user_id AS customer_user_id,
             b.owner_user_id AS business_owner_user_id,
-            rider_user.id AS rider_user_id
+            rider_user.id AS rider_user_id,
+            CONCAT_WS(', ', b.address_line, b.city, b.state) AS pickup_address,
+            CONCAT_WS(', ', o.delivery_address_line, o.delivery_city, o.delivery_state) AS delivery_address
           FROM public.deliveries d
           INNER JOIN public.orders o ON o.id = d.order_id
           LEFT JOIN public.fulfillments f ON f.order_id = o.id
@@ -271,7 +279,11 @@ async function notificationJobs(
     case "RIDER_ASSIGNED":
       addCustomer("DELIVERY_ASSIGNMENT", "Rider assigned", "A rider has been assigned to your delivery.");
       addBusiness("DELIVERY_ASSIGNMENT", "Rider assigned", "A rider has been assigned to this order.");
-      addRider("RIDER_ASSIGNED", "Delivery assigned", "A delivery has been assigned to you.");
+      addRider(
+        "RIDER_ASSIGNED",
+        "Delivery assigned",
+        `Pickup: ${context.pickup_address}. Drop-off: ${context.delivery_address}. Pickup pin: ${typeof event.payload.pickupCredential === "string" ? event.payload.pickupCredential : "available in delivery details"}.`
+      );
       break;
     case "ORDER_PICKED_UP":
       addCustomer("ORDER_IN_TRANSIT", "Order picked up", "Your order is now on its way.");
