@@ -276,6 +276,10 @@ export async function setRiderAvailability(userId: string, available: boolean) {
     fail("Rider profile not found.", 404, "RIDER_NOT_FOUND");
   }
 
+  if (available) {
+    await assignWaitingDeliveries(userId);
+  }
+
   return {
     userId,
     available: result.rows[0].is_available,
@@ -307,7 +311,30 @@ export async function setRiderLocation(
     fail("Verified rider profile not found.", 404, "RIDER_NOT_FOUND");
   }
 
+  await assignWaitingDeliveries(userId);
+
   return { userId, latitude, longitude };
+}
+
+async function assignWaitingDeliveries(actorUserId: string): Promise<void> {
+  await withTransaction(async (client) => {
+    const waiting = await client.query<{ order_id: string }>(
+      `
+        SELECT d.order_id
+        FROM public.deliveries d
+        INNER JOIN public.orders o ON o.id = d.order_id
+        WHERE d.status = 'SEARCHING_RIDER'
+          AND o.status = 'READY_FOR_PICKUP'
+        ORDER BY d.updated_at ASC
+        FOR UPDATE OF d SKIP LOCKED
+        LIMIT 10
+      `
+    );
+
+    for (const delivery of waiting.rows) {
+      await assignRider(client, delivery.order_id, actorUserId);
+    }
+  });
 }
 
 async function writeAudit(
@@ -914,8 +941,8 @@ export async function retryRiderAssignment(userId: string, orderId: string) {
 }
 
 async function assignRider(client: PoolClient, orderId: string, actorUserId: string) {
-  const deliveryResult = await client.query<{ delivery_id: string; status: string }>(
-    `SELECT id AS delivery_id, status FROM public.deliveries WHERE order_id = $1 FOR UPDATE`,
+  const deliveryResult = await client.query<{ delivery_id: string; rider_id: string | null; status: string }>(
+    `SELECT id AS delivery_id, rider_id, status FROM public.deliveries WHERE order_id = $1 FOR UPDATE`,
     [orderId]
   );
   if (deliveryResult.rows.length === 0) {
@@ -923,6 +950,26 @@ async function assignRider(client: PoolClient, orderId: string, actorUserId: str
   }
   const delivery = deliveryResult.rows[0];
   if (delivery.status === "ASSIGNED") {
+    const assignmentResult = await client.query<{ rider_id: string; status: string }>(
+      `
+        SELECT rider_id, status
+        FROM public.delivery_assignment_decisions
+        WHERE delivery_id = $1
+        ORDER BY created_at DESC
+        LIMIT 1
+        FOR UPDATE
+      `,
+      [delivery.delivery_id]
+    );
+
+    if (assignmentResult.rows.length === 0 && delivery.rider_id) {
+      await client.query(
+        `INSERT INTO public.delivery_assignment_decisions (delivery_id, rider_id)
+         VALUES ($1, $2)
+         ON CONFLICT DO NOTHING`,
+        [delivery.delivery_id, delivery.rider_id]
+      );
+    }
     return { deliveryId: delivery.delivery_id, status: delivery.status };
   }
   const riderResult = await client.query<{ rider_id: string; vehicle_id: string }>(
@@ -959,7 +1006,7 @@ async function assignRider(client: PoolClient, orderId: string, actorUserId: str
     [delivery.delivery_id, rider.rider_id]
   );
   await writeDeliveryHistory(client, delivery.delivery_id, "SEARCHING_RIDER", "ASSIGNED", actorUserId, "Rider automatically assigned.");
-  await writeOutbox(client, "RIDER_ASSIGNED", "DELIVERY", delivery.delivery_id, { deliveryId: delivery.delivery_id, riderId: rider.rider_id });
+  await writeOutbox(client, "RIDER_ASSIGNED", "DELIVERY", delivery.delivery_id, { deliveryId: delivery.delivery_id, riderId: rider.rider_id, pickupCredential: credential });
   return { deliveryId: delivery.delivery_id, riderId: rider.rider_id, status: "ASSIGNED", pickupCredential: credential };
 }
 
