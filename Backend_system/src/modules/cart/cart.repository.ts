@@ -241,7 +241,6 @@ export async function findProductById(
             AND b.is_active = TRUE
             AND b.status = 'ACTIVE'
             AND b.accepts_orders = TRUE
-            AND b.onboarding_completed = TRUE
             AND b.operating_hours_configured = TRUE
             AND b.catalog_configured = TRUE
             AND b.inventory_configured = TRUE
@@ -328,7 +327,6 @@ export async function addCartItem(
               AND b.is_active = TRUE
               AND b.status = 'ACTIVE'
               AND b.accepts_orders = TRUE
-              AND b.onboarding_completed = TRUE
               AND b.operating_hours_configured = TRUE
               AND b.catalog_configured = TRUE
               AND b.inventory_configured = TRUE

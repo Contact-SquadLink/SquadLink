@@ -45,6 +45,7 @@ function getStepIndex(status: DeliveryStatus): number {
 export function RiderDeliveryDetailPage() {
   const { deliveryId } = useParams<{ deliveryId: string }>();
   const [credential, setCredential] = useState('');
+  const [rejectionReason, setRejectionReason] = useState('');
   const [actionError, setActionError] = useState<string | null>(null);
   const [isActing, setIsActing] = useState(false);
   const { data, isLoading } = useQuery({
@@ -90,6 +91,20 @@ export function RiderDeliveryDetailPage() {
       window.location.reload();
     } catch (error) {
       setActionError(error instanceof Error ? error.message : 'Unable to update delivery status.');
+    } finally {
+      setIsActing(false);
+    }
+  };
+
+  const decideAssignment = async (accepted: boolean) => {
+    setIsActing(true);
+    setActionError(null);
+    try {
+      if (accepted) await riderApi.acceptAssignment(delivery.id);
+      else await riderApi.rejectAssignment(delivery.id, rejectionReason.trim() || undefined);
+      window.location.reload();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'Unable to update assignment.');
     } finally {
       setIsActing(false);
     }
@@ -171,13 +186,7 @@ export function RiderDeliveryDetailPage() {
 
           {delivery.status === 'ASSIGNED' && (
             <div className="space-y-3">
-              <input
-                value={credential}
-                onChange={(event) => setCredential(event.target.value)}
-                placeholder="Pickup credential"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-              />
-              <ActionButton onClick={advanceStatus} icon={ShieldCheck} label={isActing ? 'Verifying...' : 'Verify Pickup'} color="bg-primary-600 hover:bg-primary-700" />
+              {delivery.assignmentStatus !== 'ACCEPTED' ? <><div className="rounded-xl border border-secondary-200 bg-secondary-50 p-4 text-sm text-secondary-800">Review the pickup and drop-off details, then accept this assignment before collecting the order.</div><div className="flex flex-wrap gap-2"><ActionButton onClick={() => void decideAssignment(true)} icon={CheckCircle2} label={isActing ? 'Accepting...' : 'Accept assignment'} color="bg-success-600 hover:bg-success-700" /><ActionButton onClick={() => void decideAssignment(false)} icon={ArrowLeft} label={isActing ? 'Rejecting...' : 'Reject assignment'} color="bg-red-600 hover:bg-red-700" /></div><input value={rejectionReason} onChange={(event) => setRejectionReason(event.target.value)} placeholder="Reason for rejection (optional)" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" /></> : <><input value={credential} onChange={(event) => setCredential(event.target.value)} placeholder="Pickup credential" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" /><ActionButton onClick={advanceStatus} icon={ShieldCheck} label={isActing ? 'Verifying...' : 'Verify Pickup'} color="bg-primary-600 hover:bg-primary-700" /></>}
             </div>
           )}
 

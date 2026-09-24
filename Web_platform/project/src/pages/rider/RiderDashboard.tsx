@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { Bike, Package, ArrowRight, Clock, MapPin, CheckCircle2 } from 'lucide-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Bike, Package, ArrowRight, Clock, MapPin, CheckCircle2, LocateFixed } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/States';
 import { formatDate } from '@/utils/format';
@@ -17,6 +17,8 @@ const statusVariants: Record<DeliveryStatus, 'default' | 'success' | 'warning' |
 };
 
 export function RiderDashboard() {
+  const queryClient = useQueryClient();
+  const profileQuery = useQuery({ queryKey: ['rider-profile'], queryFn: riderApi.getProfile });
   const { data, isLoading } = useQuery({
     queryKey: ['rider-deliveries'],
     queryFn: riderApi.listDeliveries,
@@ -25,6 +27,21 @@ export function RiderDashboard() {
   const deliveries = (data?.data ?? []) as Delivery[];
   const activeDeliveries = deliveries.filter((d) => d.status !== 'DELIVERED');
   const completedDeliveries = deliveries.filter((d) => d.status === 'DELIVERED');
+  const availabilityMutation = useMutation({
+    mutationFn: (available: boolean) => riderApi.setAvailable(available),
+    onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ['rider-profile'] }); },
+  });
+  const locationMutation = useMutation({
+    mutationFn: ({ latitude, longitude }: { latitude: number; longitude: number }) => riderApi.setLocation(latitude, longitude),
+  });
+  const profile = profileQuery.data?.data;
+  const updateLocation = () => {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      (position) => locationMutation.mutate({ latitude: position.coords.latitude, longitude: position.coords.longitude }),
+      () => undefined
+    );
+  };
 
   return (
     <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 py-8">
@@ -38,11 +55,10 @@ export function RiderDashboard() {
           </div>
           <div>
             <h2 className="text-sm font-bold text-primary-900">Availability</h2>
-            <p className="text-xs text-primary-700">
-              The rider status is synchronized with the platform assignment logic.
-            </p>
+            <p className="text-xs text-primary-700">{profile?.verificationStatus === 'VERIFIED' ? 'Verified rider account.' : 'Your account is awaiting verification.'}</p>
           </div>
         </div>
+        {profile?.verificationStatus === 'VERIFIED' && <div className="mt-4 flex flex-wrap gap-2"><button type="button" onClick={() => availabilityMutation.mutate(!profile.available)} disabled={availabilityMutation.isPending} className="rounded-lg bg-primary-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50">{profile.available ? 'Go offline' : 'Go online'}</button><button type="button" onClick={updateLocation} disabled={locationMutation.isPending} className="inline-flex items-center gap-2 rounded-lg border border-primary-200 px-3 py-2 text-sm font-semibold text-primary-700 disabled:opacity-50"><LocateFixed className="h-4 w-4" /> Update location</button></div>}
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-8">

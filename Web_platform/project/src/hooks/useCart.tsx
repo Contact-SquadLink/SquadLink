@@ -9,6 +9,7 @@ import {
 } from 'react';
 import type { CartItem, Product } from '@/types';
 import { cartApi } from '@/api/cart';
+import { ApiRequestError } from '@/api/client';
 import { useAuth } from '@/hooks/useAuth';
 
 const GUEST_CART_KEY = 'squadlink_guest_cart';
@@ -42,6 +43,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>(loadGuestCart);
   const { user } = useAuth();
   const syncedUserIdRef = useRef<string | null>(null);
+  const cartOperationRef = useRef(0);
 
   const mergeServerCart = useCallback((serverItems: Array<{
     id?: string;
@@ -88,6 +90,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     let active = true;
 
     const syncCart = async () => {
+      const syncOperation = cartOperationRef.current;
       const guestItems = loadGuestCart();
 
       try {
@@ -104,7 +107,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
           }
         }
 
-        if (active) {
+        if (active && syncOperation === cartOperationRef.current) {
           mergeServerCart(response.data.items);
           localStorage.removeItem(GUEST_CART_KEY);
           syncedUserIdRef.current = user.id;
@@ -131,6 +134,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, [items]);
 
   const addItem = useCallback((product: Product, quantity: number) => {
+    cartOperationRef.current += 1;
+    const operation = cartOperationRef.current;
     const previousItems = items;
     setItems((prev) => {
       const existing = prev.find((i) => i.productId === product.id);
@@ -159,13 +164,19 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
 
     void cartApi.addItem({ productId: product.id, quantity }).then((response) => {
-      mergeServerCart(response.data.items);
+      if (operation === cartOperationRef.current) {
+        mergeServerCart(response.data.items);
+      }
     }).catch(() => {
-      setItems(previousItems);
+      if (operation === cartOperationRef.current) {
+        setItems(previousItems);
+      }
     });
   }, [items, mergeServerCart, user]);
 
   const removeItem = useCallback((productId: string) => {
+    cartOperationRef.current += 1;
+    const operation = cartOperationRef.current;
     const previousItems = items;
     const item = items.find((currentItem) => currentItem.productId === productId);
     setItems((prev) => prev.filter((currentItem) => currentItem.productId !== productId));
@@ -175,22 +186,32 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
 
     void cartApi.removeItem(item.serverItemId).then((response) => {
-      mergeServerCart(response.data.items);
-    }).catch(() => {
-      setItems(previousItems);
+      if (operation === cartOperationRef.current) {
+        mergeServerCart(response.data.items);
+      }
+    }).catch((error: unknown) => {
+      if (operation === cartOperationRef.current && !(error instanceof ApiRequestError && error.statusCode === 404)) {
+        setItems(previousItems);
+      }
     });
   }, [items, mergeServerCart, user]);
 
   const updateQuantity = useCallback((productId: string, quantity: number) => {
+    cartOperationRef.current += 1;
+    const operation = cartOperationRef.current;
     const previousItems = items;
     const item = items.find((currentItem) => currentItem.productId === productId);
     if (quantity <= 0) {
       setItems((prev) => prev.filter((i) => i.productId !== productId));
       if (user && item?.serverItemId) {
         void cartApi.removeItem(item.serverItemId).then((response) => {
-          mergeServerCart(response.data.items);
-        }).catch(() => {
-          setItems(previousItems);
+          if (operation === cartOperationRef.current) {
+            mergeServerCart(response.data.items);
+          }
+        }).catch((error: unknown) => {
+          if (operation === cartOperationRef.current && !(error instanceof ApiRequestError && error.statusCode === 404)) {
+            setItems(previousItems);
+          }
         });
       }
       return;
@@ -203,13 +224,19 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
 
     void cartApi.updateItem(item.serverItemId, { quantity }).then((response) => {
-      mergeServerCart(response.data.items);
-    }).catch(() => {
-      setItems(previousItems);
+      if (operation === cartOperationRef.current) {
+        mergeServerCart(response.data.items);
+      }
+    }).catch((error: unknown) => {
+      if (operation === cartOperationRef.current && !(error instanceof ApiRequestError && error.statusCode === 404)) {
+        setItems(previousItems);
+      }
     });
   }, [items, mergeServerCart, user]);
 
   const clearCart = useCallback(() => {
+    cartOperationRef.current += 1;
+    const operation = cartOperationRef.current;
     const previousItems = items;
     setItems([]);
     localStorage.removeItem(GUEST_CART_KEY);
@@ -219,6 +246,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
 
     void cartApi.clear().catch(() => {
+      if (operation !== cartOperationRef.current) {
+        return;
+      }
       setItems(previousItems);
       if (previousItems.length > 0) {
         localStorage.setItem(GUEST_CART_KEY, JSON.stringify(previousItems));

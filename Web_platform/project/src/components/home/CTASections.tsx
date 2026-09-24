@@ -127,7 +127,7 @@ export function RiderCTASection() {
             </div>
 
             <Link
-              to="/contact"
+              to="/rider/register"
               className="mt-8 inline-flex h-12 items-center gap-2 rounded-xl bg-accent-600 px-6 text-base font-semibold text-white shadow-sm hover:bg-accent-700 transition-colors"
             >
               Rider onboarding managed by SQUADLINK

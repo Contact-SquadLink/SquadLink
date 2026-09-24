@@ -424,6 +424,22 @@ export async function createInventory(
         );
       }
 
+      await client.query(
+        `
+          UPDATE public.businesses
+          SET
+            onboarding_completed = TRUE,
+            onboarding_completed_at = COALESCE(onboarding_completed_at, NOW()),
+            updated_at = NOW()
+          WHERE id = $1
+            AND operating_hours_configured = TRUE
+            AND catalog_configured = TRUE
+            AND inventory_configured = TRUE
+            AND onboarding_completed = FALSE
+        `,
+        [businessProduct.business_id]
+      );
+
       const result =
         await client.query<InventoryRow>(
           `

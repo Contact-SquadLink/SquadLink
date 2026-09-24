@@ -77,6 +77,9 @@ export const businessApi = {
       { method: 'POST' }
     ),
 
+  retryRiderAssignment: (orderId: string) =>
+    apiRequest<ApiSingleResponse<{ orderId: string; status: string }>>(`/api/v1/business/orders/${orderId}/retry-rider`, { method: 'POST' }),
+
   createBusiness: (payload: CreateBusinessPayload) =>
     apiRequest<ApiResponseEnvelope<Business>>('/api/v1/businesses/', {
       method: 'POST',

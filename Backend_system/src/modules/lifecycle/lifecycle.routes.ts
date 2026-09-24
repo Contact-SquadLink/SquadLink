@@ -8,6 +8,9 @@ import {
   orderIdParamsSchema,
   paymentIdParamsSchema,
   pickupCredentialSchema,
+  riderRegistrationSchema,
+  riderLocationSchema,
+  riderAssignmentDecisionSchema,
   providerPaymentSchema,
   sandboxPaymentSchema,
   deliveryOtpSchema
@@ -21,11 +24,15 @@ import {
   listBusinessOrders,
   listRiderDeliveries,
   markBusinessReady,
+  retryRiderAssignment,
   processProviderPayment,
   processSandboxPayment,
   registerRider,
   setRiderAvailability,
+  setRiderLocation,
   updateRiderDeliveryStatus,
+  acceptRiderAssignment,
+  rejectRiderAssignment,
   verifyPickup
 } from "./lifecycle.service";
 
@@ -58,6 +65,18 @@ export async function lifecycleRoutes(app: FastifyInstance): Promise<void> {
       const { orderId } = orderIdParamsSchema.parse(request.params);
       return successResponse(
         await markBusinessReady(request.user.id, orderId),
+        request.id
+      );
+    }
+  );
+
+  app.post(
+    "/business/orders/:orderId/retry-rider",
+    { preHandler: [authenticate, authorize("BUSINESS_USER")] },
+    async (request) => {
+      const { orderId } = orderIdParamsSchema.parse(request.params);
+      return successResponse(
+        await retryRiderAssignment(request.user.id, orderId),
         request.id
       );
     }
@@ -98,20 +117,14 @@ export async function lifecycleRoutes(app: FastifyInstance): Promise<void> {
     "/rider/register",
     { preHandler: [authenticate, authorize("CUSTOMER")] },
     async (request, reply) => {
-      const input = request.body as {
-        vehicleType?: string;
-        vehicleRegistration?: string;
-        phoneNumber?: string;
-        firstName?: string;
-        lastName?: string;
-      };
+      const input = riderRegistrationSchema.parse(request.body);
 
       const rider = await registerRider(request.user.id, {
-        vehicleType: input.vehicleType ?? "MOTORCYCLE",
-        vehicleRegistration: input.vehicleRegistration ?? undefined,
-        phoneNumber: input.phoneNumber ?? undefined,
-        firstName: input.firstName ?? undefined,
-        lastName: input.lastName ?? undefined,
+        vehicleType: input.vehicleType,
+        vehicleRegistration: input.vehicleRegistration,
+        phoneNumber: input.phoneNumber,
+        firstName: input.firstName,
+        lastName: input.lastName,
       });
 
       return reply.status(201).send(successResponse(rider, request.id));
@@ -150,6 +163,18 @@ export async function lifecycleRoutes(app: FastifyInstance): Promise<void> {
     }
   );
 
+  app.post(
+    "/rider/location",
+    { preHandler: [authenticate, authorize("RIDER")] },
+    async (request) => {
+      const input = riderLocationSchema.parse(request.body);
+      return successResponse(
+        await setRiderLocation(request.user.id, input.latitude, input.longitude),
+        request.id
+      );
+    }
+  );
+
   app.get(
     "/rider/deliveries",
     { preHandler: [authenticate, authorize("RIDER")] },
@@ -166,6 +191,31 @@ export async function lifecycleRoutes(app: FastifyInstance): Promise<void> {
       const { deliveryId } = deliveryIdParamsSchema.parse(request.params);
       return successResponse(
         await getRiderDelivery(request.user.id, deliveryId),
+        request.id
+      );
+    }
+  );
+
+  app.post(
+    "/rider/deliveries/:deliveryId/accept",
+    { preHandler: [authenticate, authorize("RIDER")] },
+    async (request) => {
+      const { deliveryId } = deliveryIdParamsSchema.parse(request.params);
+      return successResponse(
+        await acceptRiderAssignment(request.user.id, deliveryId),
+        request.id
+      );
+    }
+  );
+
+  app.post(
+    "/rider/deliveries/:deliveryId/reject",
+    { preHandler: [authenticate, authorize("RIDER")] },
+    async (request) => {
+      const { deliveryId } = deliveryIdParamsSchema.parse(request.params);
+      const input = riderAssignmentDecisionSchema.parse(request.body ?? {});
+      return successResponse(
+        await rejectRiderAssignment(request.user.id, deliveryId, input.reason),
         request.id
       );
     }

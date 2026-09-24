@@ -17,10 +17,12 @@ import { cartRoutes } from "./modules/cart/cart.routes";
 import { checkoutRoutes } from "./modules/checkout/checkout.routes";
 import { orderRoutes } from "./modules/order/order.routes";
 import { businessVerificationRoutes } from "./modules/business-verification/business-verification.routes";
+import { riderVerificationRoutes } from "./modules/rider-verification/rider-verification.routes";
 import { lifecycleRoutes } from "./modules/lifecycle/lifecycle.routes";
-import { ensureRiderRuntimeTables } from "./modules/lifecycle/lifecycle.service";
 import { adminAccessRoutes } from "./modules/admin-access/admin-access.routes";
 import { notificationRoutes } from "./modules/notification/notification.routes";
+import { platformAdminRoutes } from "./modules/platform-admin/platform-admin.routes";
+import { earningsRoutes } from "./modules/earnings/earnings.routes";
 
 export async function buildApp() {
   console.log("[STARTUP] buildApp entered");
@@ -28,10 +30,6 @@ export async function buildApp() {
   const app = Fastify({
     logger: true
   });
-
-  console.log("[STARTUP] Before ensureRiderRuntimeTables");
-  await ensureRiderRuntimeTables();
-  console.log("[STARTUP] After ensureRiderRuntimeTables");
 
   await app.register(helmet);
   console.log("[STARTUP] Helmet registered");
@@ -70,10 +68,19 @@ export async function buildApp() {
   });
   console.log("[STARTUP] Admin routes registered");
 
+  await app.register(platformAdminRoutes, {
+    prefix: "/api/v1/admin/platform"
+  });
+
   await app.register(businessVerificationRoutes, {
     prefix: "/api/v1/admin/business-verifications"
   });
   console.log("[STARTUP] Business verification routes registered");
+
+  await app.register(riderVerificationRoutes, {
+    prefix: "/api/v1/admin/rider-verifications"
+  });
+  console.log("[STARTUP] Rider verification routes registered");
 
   await app.register(catalogRoutes, {
     prefix: "/api/v1/catalog"
@@ -109,6 +116,10 @@ export async function buildApp() {
     prefix: "/api/v1/notifications"
   });
   console.log("[STARTUP] Notification routes registered");
+
+  await app.register(earningsRoutes, {
+    prefix: "/api/v1/earnings"
+  });
 
   app.get("/health", async (_request, reply) => {
     app.log.info("[HEALTH] handler entered");

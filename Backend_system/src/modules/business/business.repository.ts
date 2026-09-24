@@ -544,6 +544,22 @@ export async function replaceOperatingHours(
       [businessId]
     );
 
+    await client.query(
+      `
+        UPDATE public.businesses
+        SET
+          onboarding_completed = TRUE,
+          onboarding_completed_at = COALESCE(onboarding_completed_at, NOW()),
+          updated_at = NOW()
+        WHERE id = $1
+          AND operating_hours_configured = TRUE
+          AND catalog_configured = TRUE
+          AND inventory_configured = TRUE
+          AND onboarding_completed = FALSE
+      `,
+      [businessId]
+    );
+
     const result =
       await client.query<OperatingHourRow>(
         `
@@ -1097,6 +1113,22 @@ export async function createBusinessCatalogItem(
         ]
       );
     }
+
+    await client.query(
+      `
+        UPDATE public.businesses
+        SET
+          onboarding_completed = TRUE,
+          onboarding_completed_at = COALESCE(onboarding_completed_at, NOW()),
+          updated_at = NOW()
+        WHERE id = $1
+          AND operating_hours_configured = TRUE
+          AND catalog_configured = TRUE
+          AND inventory_configured = TRUE
+          AND onboarding_completed = FALSE
+      `,
+      [businessId]
+    );
 
     const catalogResult =
       await client.query<BusinessCatalogItemRow>(

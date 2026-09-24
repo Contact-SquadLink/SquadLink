@@ -51,7 +51,7 @@ after(async () => {
 });
 
 describe("rider onboarding and availability", () => {
-  it("registers a customer as a rider and returns a rider profile", async () => {
+  it("registers a customer as a pending rider application", async () => {
     const response = await app.inject({
       method: "POST",
       url: "/api/v1/rider/register",
@@ -66,21 +66,19 @@ describe("rider onboarding and availability", () => {
     });
 
     assert.equal(response.statusCode, 201);
-    assert.equal(response.json().data.role, "RIDER");
+    assert.equal(response.json().data.role, "CUSTOMER");
+    assert.equal(response.json().data.verificationStatus, "PENDING");
     assert.equal(response.json().data.vehicleType, "MOTORCYCLE");
   });
 
-  it("reads rider availability and balance data for the same rider", async () => {
+  it("blocks rider operations until the application is approved", async () => {
     const me = await app.inject({
       method: "GET",
       url: "/api/v1/rider/me",
       headers: auth(CUSTOMER_ID, "RIDER")
     });
 
-    assert.equal(me.statusCode, 200);
-    assert.ok(me.json().data.userId);
-    assert.equal(me.json().data.role, "RIDER");
-    assert.equal(typeof me.json().data.currentBalance, "number");
+    assert.equal(me.statusCode, 403);
 
     const availability = await app.inject({
       method: "POST",
@@ -89,7 +87,6 @@ describe("rider onboarding and availability", () => {
       payload: { available: true }
     });
 
-    assert.equal(availability.statusCode, 200);
-    assert.equal(availability.json().data.available, true);
+    assert.equal(availability.statusCode, 403);
   });
 });

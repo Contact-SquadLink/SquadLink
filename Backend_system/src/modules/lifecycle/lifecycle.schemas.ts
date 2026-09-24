@@ -33,4 +33,21 @@ export const deliveryOtpSchema = z.object({
   otp: z.string().regex(/^\d{6}$/)
 });
 
+export const riderRegistrationSchema = z.object({
+  vehicleType: z.enum(["MOTORCYCLE", "KEKE"]).default("MOTORCYCLE"),
+  vehicleRegistration: z.string().trim().min(2).max(50),
+  phoneNumber: z.string().trim().min(7).max(30).optional(),
+  firstName: z.string().trim().min(1).max(100).optional(),
+  lastName: z.string().trim().min(1).max(100).optional()
+});
+
+export const riderLocationSchema = z.object({
+  latitude: z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180)
+});
+
+export const riderAssignmentDecisionSchema = z.object({
+  reason: z.string().trim().max(500).optional()
+});
+
 export type ProviderPaymentInput = z.infer<typeof providerPaymentSchema>;

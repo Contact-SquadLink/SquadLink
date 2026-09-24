@@ -157,6 +157,7 @@ export interface Delivery {
   id: string;
   orderId: string;
   status: DeliveryStatus;
+  assignmentStatus?: 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'EXPIRED' | null;
   riderId?: string;
   riderName?: string;
   pickupAddress?: string;

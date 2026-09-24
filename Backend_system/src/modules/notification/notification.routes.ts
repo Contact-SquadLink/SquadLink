@@ -15,7 +15,10 @@ const notificationParamsSchema = z.object({
 
 export async function notificationRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("preHandler", authenticate);
-  app.addHook("preHandler", authorize("CUSTOMER"));
+  app.addHook(
+    "preHandler",
+    authorize("CUSTOMER", "BUSINESS_USER", "RIDER", "ADMIN")
+  );
 
   app.get("/", async (request) => successResponse(
     await listNotificationsForUser(request.user.id),

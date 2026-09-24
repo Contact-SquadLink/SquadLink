@@ -26,6 +26,7 @@ import { OrdersPage } from '@/pages/OrdersPage';
 import { OrderDetailPage } from '@/pages/OrderDetailPage';
 import { NotificationsPage } from '@/pages/NotificationsPage';
 import { ProfilePage } from '@/pages/ProfilePage';
+import { EarningsPage } from '@/pages/EarningsPage';
 
 // Business pages
 import { BusinessDashboard } from '@/pages/business/BusinessDashboard';
@@ -36,12 +37,14 @@ import { BusinessRegisterPage } from '@/pages/business/BusinessRegisterPage';
 // Rider pages
 import { RiderDashboard } from '@/pages/rider/RiderDashboard';
 import { RiderDeliveryDetailPage } from '@/pages/rider/RiderDeliveryDetail';
+import { RiderRegisterPage } from '@/pages/rider/RiderRegisterPage';
 
 // Admin pages
 import { AdminDashboard } from '@/pages/admin/AdminDashboard';
 import { AdminBusinessesPage, AdminBusinessDetailPage } from '@/pages/admin/AdminBusinesses';
 import { AdminOperationsPage } from '@/pages/admin/AdminOperations';
 import { AdminAccessPage } from '@/pages/admin/AdminAccessPage';
+import { AdminRidersPage } from '@/pages/admin/AdminRiders';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -76,6 +79,7 @@ export default function App() {
                 path="/business/register"
                 element={<BusinessRegisterPage />}
               />
+              <Route path="/rider/register" element={<RiderRegisterPage />} />
               <Route path="/unauthorized" element={<UnauthorizedPage />} />
 
               {/* Public pages — with header and footer */}
@@ -102,6 +106,7 @@ export default function App() {
                 <Route path="/orders/:orderId" element={<OrderDetailPage />} />
                 <Route path="/notifications" element={<NotificationsPage />} />
                 <Route path="/profile" element={<ProfilePage />} />
+                <Route path="/earnings" element={<ProtectedRoute allowedRoles={['BUSINESS_USER', 'RIDER']}><EarningsPage /></ProtectedRoute>} />
 
                 {/* Business routes */}
                 <Route
@@ -169,6 +174,14 @@ export default function App() {
                   element={
                     <ProtectedRoute allowedRoles={['ADMIN']}>
                       <AdminBusinessesPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin/riders"
+                  element={
+                    <ProtectedRoute allowedRoles={['ADMIN']}>
+                      <AdminRidersPage />
                     </ProtectedRoute>
                   }
                 />

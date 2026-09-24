@@ -42,8 +42,10 @@ const allNavLinks: NavLink[] = [
   { label: 'Dashboard', path: '/business', icon: LayoutDashboard, roles: ['BUSINESS_USER'] },
   { label: 'Orders', path: '/business/orders', icon: ClipboardList, roles: ['BUSINESS_USER'] },
   { label: 'Catalog', path: '/business/catalog', icon: Store, roles: ['BUSINESS_USER'] },
+  { label: 'Earnings', path: '/earnings', icon: Repeat, roles: ['BUSINESS_USER'] },
   // Rider
   { label: 'Deliveries', path: '/rider', icon: Bike, roles: ['RIDER'] },
+  { label: 'Earnings', path: '/earnings', icon: Repeat, roles: ['RIDER'] },
   // Admin
   { label: 'Dashboard', path: '/admin', icon: LayoutDashboard, roles: ['ADMIN'] },
   { label: 'Businesses', path: '/admin/businesses', icon: Shield, roles: ['ADMIN'] },
@@ -75,14 +77,6 @@ export function DashboardLayout() {
 
   const links = allNavLinks.filter((l) => l.roles.includes(user.role));
 
-  const dashboardPath =
-    user.role === 'BUSINESS_USER'
-      ? '/business'
-      : user.role === 'RIDER'
-        ? '/rider'
-        : user.role === 'ADMIN'
-          ? '/admin'
-          : '/dashboard';
   const handleLogout = () => {
     logout();
     navigate('/');

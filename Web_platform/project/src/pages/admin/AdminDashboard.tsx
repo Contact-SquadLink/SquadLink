@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Shield,
   Store,
@@ -8,10 +8,16 @@ import {
   ArrowRight,
   LayoutDashboard,
   XCircle,
+  Users,
+  Bike,
+  UserCog,
+  Ban,
+  RotateCcw,
+  Trash2,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/States';
-import { adminApi } from '@/api/admin';
+import { adminApi, type PlatformAccount } from '@/api/admin';
 import type { BusinessVerificationRecord } from '@/types';
 
 function getStatusBadgeVariant(status: BusinessVerificationRecord['status']) {
@@ -41,12 +47,25 @@ function getStatusLabel(status: BusinessVerificationRecord['status']) {
 }
 
 export function AdminDashboard() {
+  const queryClient = useQueryClient();
   const { data, isLoading, error } = useQuery({
     queryKey: ['admin-business-verifications'],
     queryFn: adminApi.listBusinesses,
   });
 
   const businesses = Array.isArray(data?.data) ? (data.data as BusinessVerificationRecord[]) : [];
+  const summaryQuery = useQuery({ queryKey: ['platform-summary'], queryFn: adminApi.getPlatformSummary, retry: false });
+  const accountsQuery = useQuery({ queryKey: ['platform-accounts'], queryFn: adminApi.listAccounts, retry: false });
+  const accounts = (accountsQuery.data?.data ?? []) as PlatformAccount[];
+  const accountAction = async (action: 'suspend' | 'unsuspend' | 'delete', account: PlatformAccount) => {
+    const reason = window.prompt(`Reason for ${action}ing this account:`)?.trim();
+    if (!reason) return;
+    if (action === 'suspend') await adminApi.suspendAccount(account.id, reason);
+    if (action === 'unsuspend') await adminApi.unsuspendAccount(account.id, reason);
+    if (action === 'delete') await adminApi.deleteAccount(account.id, reason);
+    await queryClient.invalidateQueries({ queryKey: ['platform-accounts'] });
+    await queryClient.invalidateQueries({ queryKey: ['platform-summary'] });
+  };
 
   const stats = {
     total: businesses.length,
@@ -65,6 +84,10 @@ export function AdminDashboard() {
           We could not load the business verification queue.
         </div>
       ) : null}
+
+      {summaryQuery.data?.data && <div className="mb-8 grid grid-cols-2 gap-4 lg:grid-cols-4"><div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm"><Users className="h-5 w-5 text-primary-600" /><p className="mt-3 text-2xl font-bold text-gray-900">{summaryQuery.data.data.customers}</p><p className="text-xs text-gray-500">Customer accounts</p></div><div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm"><Store className="h-5 w-5 text-primary-600" /><p className="mt-3 text-2xl font-bold text-gray-900">{summaryQuery.data.data.businesses}</p><p className="text-xs text-gray-500">Business accounts</p></div><div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm"><Bike className="h-5 w-5 text-primary-600" /><p className="mt-3 text-2xl font-bold text-gray-900">{summaryQuery.data.data.riders}</p><p className="text-xs text-gray-500">Rider accounts</p></div><div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm"><UserCog className="h-5 w-5 text-primary-600" /><p className="mt-3 text-2xl font-bold text-gray-900">{summaryQuery.data.data.admins}</p><p className="text-xs text-gray-500">Admin accounts</p></div></div>}
+
+      {accountsQuery.data?.data && <div className="mb-8 rounded-2xl border border-gray-100 bg-white p-6 shadow-sm"><div className="flex items-center justify-between"><div><h2 className="font-display text-lg font-bold text-gray-900">Account authority</h2><p className="text-sm text-gray-500">Suspend, restore, or soft-delete accounts. Every action requires a reason and is audited.</p></div></div><div className="mt-4 space-y-2">{accounts.slice(0, 20).map((account) => <div key={account.id} className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 py-3"><div><p className="text-sm font-semibold text-gray-900">{[account.firstName, account.lastName].filter(Boolean).join(' ') || account.email || account.phoneNumber || account.id}</p><p className="text-xs text-gray-500">{account.role} · {account.deletedAt ? 'Deleted' : account.isActive ? 'Active' : 'Suspended'}</p></div><div className="flex gap-2">{!account.deletedAt && account.isActive && <button type="button" onClick={() => void accountAction('suspend', account)} title="Suspend account" className="rounded-lg border border-warning-200 p-2 text-warning-700"><Ban className="h-4 w-4" /></button>}{!account.deletedAt && !account.isActive && <button type="button" onClick={() => void accountAction('unsuspend', account)} title="Unsuspend account" className="rounded-lg border border-success-200 p-2 text-success-700"><RotateCcw className="h-4 w-4" /></button>}{!account.deletedAt && <button type="button" onClick={() => void accountAction('delete', account)} title="Delete account" className="rounded-lg border border-red-200 p-2 text-red-700"><Trash2 className="h-4 w-4" /></button>}</div></div>)}</div></div>}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">

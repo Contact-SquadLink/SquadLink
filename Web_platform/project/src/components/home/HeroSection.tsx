@@ -57,7 +57,7 @@ export function HeroSection() {
                 Join as a Business
               </Link>
               <Link
-                to="/contact"
+                to="/rider/register"
                 className="inline-flex items-center gap-2 font-medium text-gray-600 hover:text-primary-700 transition-colors"
               >
                 <Bike className="h-4 w-4 text-primary-600" />

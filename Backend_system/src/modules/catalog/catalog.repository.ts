@@ -285,7 +285,7 @@ export async function findProductByCategoryAndName(
         p.category_id,
         c.name AS category_name,
         p.name,
-        p.description,
+        COALESCE(bp.image_url, p.image_url) AS image_url,
         p.is_active,
         p.created_at,
         p.updated_at
@@ -314,7 +314,7 @@ export async function listProducts(): Promise<
         p.category_id,
         c.name AS category_name,
         p.name,
-        p.description,
+        COALESCE(bp.description, p.description) AS description,
         p.is_active,
         p.created_at,
         p.updated_at,
@@ -340,7 +340,6 @@ export async function listProducts(): Promise<
          AND b_candidate.status = 'ACTIVE'
          AND b_candidate.accepts_orders = TRUE
          AND b_candidate.location IS NOT NULL
-         AND b_candidate.onboarding_completed = TRUE
          AND b_candidate.operating_hours_configured = TRUE
          AND b_candidate.catalog_configured = TRUE
          AND b_candidate.inventory_configured = TRUE
@@ -392,7 +391,6 @@ export async function findPublicProductById(
          AND b_candidate.is_active = TRUE
          AND b_candidate.status = 'ACTIVE'
          AND b_candidate.accepts_orders = TRUE
-         AND b_candidate.onboarding_completed = TRUE
          AND b_candidate.operating_hours_configured = TRUE
          AND b_candidate.catalog_configured = TRUE
          AND b_candidate.inventory_configured = TRUE
