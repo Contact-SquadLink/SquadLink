@@ -14,7 +14,12 @@ const envSchema = z.object({
 
   JWT_EXPIRES_IN: z.string().default("1h"),
 
-  CORS_ORIGIN: z.string().min(1)
+  CORS_ORIGIN: z.string().min(1),
+
+  SANDBOX_PAYMENTS_ENABLED: z
+    .enum(["true", "false"])
+    .default("true")
+    .transform((value) => value === "true")
 });
 
 export const env = envSchema.parse(process.env);

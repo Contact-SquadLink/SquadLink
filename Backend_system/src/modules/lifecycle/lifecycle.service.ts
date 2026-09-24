@@ -622,8 +622,8 @@ export async function processSandboxPayment(
   paymentAttemptId: string,
   cardNumber: string
 ) {
-  if (env.NODE_ENV === "production") {
-    fail("Sandbox payments are unavailable.", 404, "SANDBOX_PAYMENT_UNAVAILABLE");
+  if (!env.SANDBOX_PAYMENTS_ENABLED) {
+    fail("Sandbox payments are disabled. Configure a live payment provider before accepting real payments.", 503, "SANDBOX_PAYMENT_UNAVAILABLE");
   }
 
   const normalizedCardNumber = cardNumber.replace(/[\s-]/g, "");
