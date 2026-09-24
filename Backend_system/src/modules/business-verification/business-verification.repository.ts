@@ -247,14 +247,14 @@ export async function updateBusinessVerification(
       }>(
         `
           SELECT
-            id,
-            business_id,
+            bv.id,
+            bv.business_id,
             b.owner_user_id,
-            status,
-            verification_notes
+            bv.status,
+            bv.verification_notes
           FROM public.business_verifications bv
           INNER JOIN public.businesses b ON b.id = bv.business_id
-          WHERE business_id = $1
+          WHERE bv.business_id = $1
           FOR UPDATE
         `,
         [businessId]
