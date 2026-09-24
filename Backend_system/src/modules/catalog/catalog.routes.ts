@@ -18,6 +18,7 @@ import {
 import {
   getCategories,
   getProducts,
+  getPlatformProducts,
   modifyCategory,
   modifyProduct,
   registerCategory,
@@ -46,6 +47,17 @@ export async function catalogRoutes(
         )
       );
     }
+  );
+
+  app.get(
+    "/templates",
+    {
+      preHandler: [authenticate, authorize("BUSINESS_USER", "ADMIN")]
+    },
+    async (request) => successResponse(
+      await getPlatformProducts(),
+      request.id
+    )
   );
 
   /**

@@ -3,6 +3,10 @@ import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { Eye, EyeOff, ShoppingBag, Loader2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 
+function safeRedirect(value: string | null): string | null {
+  return value && value.startsWith('/') && !value.startsWith('//') ? value : null;
+}
+
 export function RegisterPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -35,7 +39,7 @@ export function RegisterPage() {
       return;
     }
 
-    navigate(redirect || '/dashboard', { replace: true });
+    navigate(safeRedirect(redirect) || '/dashboard', { replace: true });
   }, [intent, navigate, redirect, user]);
 
   const [firstName, setFirstName] = useState('');
@@ -100,7 +104,7 @@ export function RegisterPage() {
       if (intent === 'business') {
         navigate('/business/register');
       } else {
-        navigate(redirect || '/dashboard');
+        navigate(safeRedirect(redirect) || '/dashboard');
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Registration failed. Please check your details and try again.';

@@ -16,6 +16,7 @@ import {
   findProductById,
   listCategories,
   listProducts,
+  listPlatformProducts,
   updateCategory,
   updateProduct
 } from "./catalog.repository";
@@ -92,6 +93,10 @@ export async function modifyCategory(
 
 export async function getProducts() {
   return listProducts();
+}
+
+export async function getPlatformProducts() {
+  return listPlatformProducts();
 }
 
 export async function registerProduct(

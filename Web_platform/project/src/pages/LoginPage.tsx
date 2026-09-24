@@ -62,6 +62,10 @@ const roleConfig: {
   },
 ];
 
+function safeRedirect(value: string | null): string | null {
+  return value && value.startsWith('/') && !value.startsWith('//') ? value : null;
+}
+
 export function LoginPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -88,8 +92,9 @@ export function LoginPage() {
     try {
       const user = await login(identifier, password);
 
-      if (redirect) {
-        navigate(redirect);
+      const destination = safeRedirect(redirect);
+      if (destination) {
+        navigate(destination);
         return;
       }
 

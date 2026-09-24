@@ -175,6 +175,7 @@ export interface Business {
   email?: string;
   isVerified: boolean;
   verificationStatus?: string;
+  status?: string;
 }
 
 export type VerificationStatus = 'PENDING' | 'VERIFIED' | 'REJECTED' | 'SUSPENDED';

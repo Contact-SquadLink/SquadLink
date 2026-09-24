@@ -1,4 +1,5 @@
 import { Bell, CheckCircle2 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { formatDate } from '@/utils/format';
 import { EmptyState } from '@/components/ui/States';
@@ -73,6 +74,11 @@ export function NotificationsPage() {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-gray-900">{n.title}</p>
                   <p className="mt-1 text-sm text-gray-600">{n.message}</p>
+                  {n.type === 'BUSINESS_APPLICATION_APPROVED' && (
+                    <Link to="/business" className="mt-2 inline-flex text-sm font-semibold text-primary-700">
+                      Open business workspace
+                    </Link>
+                  )}
                   <p className="mt-2 text-xs text-gray-400">{formatDate(n.createdAt)}</p>
                 </div>
               </div>

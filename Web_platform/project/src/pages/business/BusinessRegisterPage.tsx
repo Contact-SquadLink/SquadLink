@@ -54,7 +54,7 @@ function normalizeNumber(value: string, field: 'latitude' | 'longitude' | 'minim
 
 export function BusinessRegisterPage() {
   const navigate = useNavigate();
-  const { user, refreshUser } = useAuth();
+  const { user } = useAuth();
 
   const [form, setForm] = useState<BusinessFormState>(initialForm);
   const [error, setError] = useState<string | null>(null);
@@ -63,7 +63,6 @@ export function BusinessRegisterPage() {
 
   useEffect(() => {
     if (!user) {
-      navigate('/login?redirect=%2Fbusiness%2Fregister', { replace: true });
       return;
     }
 
@@ -71,6 +70,23 @@ export function BusinessRegisterPage() {
       navigate('/business', { replace: true });
     }
   }, [navigate, user]);
+
+  if (!user) {
+    const destination = encodeURIComponent('/business/register');
+    return (
+      <div className="min-h-screen bg-gray-50 px-4 py-16">
+        <div className="mx-auto max-w-lg rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-sm">
+          <Store className="mx-auto h-10 w-10 text-primary-600" />
+          <h1 className="mt-4 font-display text-2xl font-bold text-gray-900">Customer account required</h1>
+          <p className="mt-3 text-sm text-gray-600">Please create a customer account before applying for a business account. Once you have registered and logged in, you will return here to complete your application.</p>
+          <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
+            <Link to={`/register?role=CUSTOMER&intent=business&redirect=${destination}`} className="rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white">Create customer account</Link>
+            <Link to={`/login?role=CUSTOMER&redirect=${destination}`} className="rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-semibold text-gray-700">Sign in</Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const handleChange = (field: keyof BusinessFormState) => (
     event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -168,15 +184,10 @@ export function BusinessRegisterPage() {
 
       await businessApi.createBusiness(payload);
 
-      const refreshedUser = await refreshUser();
-      if (refreshedUser?.role !== 'BUSINESS_USER') {
-        throw new Error('Business registration submitted successfully, but your account role has not updated yet. Please refresh or sign in again.');
-      }
-
-      setSuccessMessage('Business registration submitted successfully. Your business is currently pending verification.');
+      setSuccessMessage('Business application submitted successfully. It is pending admin approval.');
 
       window.setTimeout(() => {
-        navigate('/business', { replace: true });
+        navigate('/dashboard', { replace: true });
       }, 1200);
     } catch (caughtError: unknown) {
       const message =

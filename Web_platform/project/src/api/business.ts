@@ -3,6 +3,7 @@ import type {
   Order,
   Business,
   BusinessOrderSummary,
+  BusinessVerificationRecord,
   ApiListResponse,
   ApiSingleResponse,
   ApiResponseEnvelope,
@@ -21,7 +22,42 @@ export interface CreateBusinessPayload {
   minimumOrderAmount?: number;
 }
 
+export interface BusinessCatalogItem {
+  id: string;
+  businessId: string;
+  productId: string;
+  productName: string;
+  productDescription: string | null;
+  categoryId: string;
+  categoryName: string;
+  priceAmount: number;
+  currency: string;
+  isAvailable: boolean;
+  productIsActive: boolean;
+}
+
+export interface InventoryItem {
+  id: string;
+  businessProductId: string;
+  productId: string;
+  productName: string;
+  priceAmount: string;
+  currency: string;
+  isAvailable: boolean;
+  quantityOnHand: number;
+  quantityReserved: number;
+  quantityAvailable: number;
+  lowStockThreshold: number;
+}
+
 export const businessApi = {
+  getApplication: () =>
+    apiRequest<ApiResponseEnvelope<{
+      status: 'NONE' | 'PENDING' | 'VERIFIED' | 'REJECTED' | 'SUSPENDED';
+      business: Business | null;
+      verification: BusinessVerificationRecord | null;
+    }>>('/api/v1/businesses/application'),
+
   listOrders: () =>
     apiRequest<ApiListResponse<BusinessOrderSummary>>('/api/v1/business/orders'),
 
@@ -59,5 +95,20 @@ export const businessApi = {
 
   getMyBusiness: () =>
     apiRequest<ApiResponseEnvelope<Business>>('/api/v1/businesses/me'),
+
+  listCatalog: () =>
+    apiRequest<ApiResponseEnvelope<BusinessCatalogItem[]>>('/api/v1/businesses/me/catalog'),
+
+  addCatalogItem: (payload: { productId: string; priceAmount: number; currency?: string; isAvailable?: boolean }) =>
+    apiRequest<ApiResponseEnvelope<BusinessCatalogItem>>('/api/v1/businesses/me/catalog', { method: 'POST', body: payload }),
+
+  listInventory: () =>
+    apiRequest<ApiResponseEnvelope<InventoryItem[]>>('/api/v1/inventory/me'),
+
+  createInventory: (payload: { businessProductId: string; quantityOnHand: number; lowStockThreshold: number }) =>
+    apiRequest<ApiResponseEnvelope<InventoryItem>>('/api/v1/inventory/me', { method: 'POST', body: payload }),
+
+  updateInventory: (inventoryId: string, payload: { quantityOnHand?: number; lowStockThreshold?: number }) =>
+    apiRequest<ApiResponseEnvelope<InventoryItem>>(`/api/v1/inventory/me/${inventoryId}`, { method: 'PUT', body: payload }),
 };
 

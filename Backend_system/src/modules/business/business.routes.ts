@@ -26,6 +26,7 @@ import {
   createOperatingExceptionForOwner,
   deleteOperatingExceptionForOwner,
   getBusinessForOwner,
+  getBusinessApplicationForCustomer,
   getBusinessReadinessForOwner,
   getBusinessReadinessHistoryForOwner,
   getOperatingExceptionsForOwner,
@@ -118,6 +119,15 @@ export async function businessRoutes(
         )
       );
     }
+  );
+
+  app.get(
+    "/application",
+    { preHandler: [authenticate, authorize("CUSTOMER", "BUSINESS_USER")] },
+    async (request) => successResponse(
+      await getBusinessApplicationForCustomer(request.user.id),
+      request.id
+    )
   );
 
   /**

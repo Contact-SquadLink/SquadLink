@@ -430,24 +430,6 @@ export async function createBusiness(
       [business.id]
     );
 
-    const roleResult = await client.query(
-      `
-        UPDATE public.users
-        SET
-          role = 'BUSINESS_USER',
-          updated_at = NOW()
-        WHERE id = $1
-          AND role = 'CUSTOMER'
-      `,
-      [ownerUserId]
-    );
-
-    if ((roleResult.rowCount ?? 0) !== 1) {
-      throw new Error(
-        "BUSINESS_REGISTRATION_ROLE_REQUIRED"
-      );
-    }
-
     await client.query("COMMIT");
 
     return mapBusiness(business);

@@ -407,3 +407,23 @@ export async function updateProduct(
     ? mapProduct(result.rows[0])
     : null;
 }
+
+export async function listPlatformProducts(): Promise<ProductRecord[]> {
+  const result = await db.query<ProductRow>(`
+    SELECT
+      p.id,
+      p.category_id,
+      c.name AS category_name,
+      p.name,
+      p.description,
+      p.is_active,
+      p.created_at,
+      p.updated_at
+    FROM public.products p
+    INNER JOIN public.categories c ON c.id = p.category_id
+    WHERE p.is_active = TRUE AND c.is_active = TRUE
+    ORDER BY c.name ASC, p.name ASC
+  `);
+
+  return result.rows.map(mapProduct);
+}

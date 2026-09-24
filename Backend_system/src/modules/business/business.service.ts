@@ -440,3 +440,18 @@ export async function deleteBusinessCatalogForOwner(
     throw error;
   }
 }
+
+export async function getBusinessApplicationForCustomer(ownerUserId: string) {
+  const business = await findBusinessByOwnerUserId(ownerUserId);
+  if (!business) {
+    return { status: "NONE" as const, business: null, verification: null };
+  }
+
+  const { findBusinessVerificationByBusinessId } = await import("../business-verification/business-verification.repository");
+  const verification = await findBusinessVerificationByBusinessId(business.id);
+  return {
+    status: verification?.status ?? "PENDING",
+    business,
+    verification
+  };
+}

@@ -135,6 +135,7 @@ export async function findBusinessVerifications(
           bv.verified_at,
           bv.created_at,
           bv.updated_at
+          ,b.owner_user_id
         FROM public.business_verifications bv
         INNER JOIN public.businesses b
           ON b.id = bv.business_id
@@ -185,6 +186,7 @@ export async function findBusinessVerificationByBusinessId(
           bv.verified_at,
           bv.created_at,
           bv.updated_at
+          ,b.owner_user_id
         FROM public.business_verifications bv
         INNER JOIN public.businesses b
           ON b.id = bv.business_id
@@ -239,6 +241,7 @@ export async function updateBusinessVerification(
       await client.query<{
         id: string;
         business_id: string;
+        owner_user_id: string;
         status: BusinessVerificationStatus;
         verification_notes: string | null;
       }>(
@@ -246,9 +249,11 @@ export async function updateBusinessVerification(
           SELECT
             id,
             business_id,
+            b.owner_user_id,
             status,
             verification_notes
-          FROM public.business_verifications
+          FROM public.business_verifications bv
+          INNER JOIN public.businesses b ON b.id = bv.business_id
           WHERE business_id = $1
           FOR UPDATE
         `,
@@ -302,6 +307,43 @@ export async function updateBusinessVerification(
         businessId
       ]
     );
+
+    await client.query(
+      `
+        UPDATE public.users
+        SET role = CASE WHEN $1::public.business_verification_status = 'VERIFIED'
+                        THEN 'BUSINESS_USER'::public.user_role
+                        ELSE 'CUSTOMER'::public.user_role
+                   END,
+            updated_at = NOW()
+        WHERE id = $2
+      `,
+      [status, current.owner_user_id]
+    );
+
+    const notificationType = status === "VERIFIED"
+      ? "BUSINESS_APPLICATION_APPROVED"
+      : status === "REJECTED"
+        ? "BUSINESS_APPLICATION_REJECTED"
+        : null;
+    if (notificationType) {
+      const title = status === "VERIFIED"
+        ? "Business application approved"
+        : "Business application rejected";
+      const message = status === "VERIFIED"
+        ? "Congratulations! Your business application has been approved. You can now access your business workspace."
+        : `Your business application was rejected.${notes ? ` Reason: ${notes}` : " Please review the application details and contact support."}`;
+      await client.query(
+        `
+          INSERT INTO public.notifications (
+            user_id, type, channel, status, title, message, event_key
+          )
+          VALUES ($1, $2::public.notification_type, 'IN_APP', 'SENT', $3, $4, $5)
+          ON CONFLICT (event_key) WHERE event_key IS NOT NULL DO NOTHING
+        `,
+        [current.owner_user_id, notificationType, title, message, `business-verification:${businessId}:${status}`]
+      );
+    }
 
     await client.query(
       `

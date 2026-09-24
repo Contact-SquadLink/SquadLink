@@ -74,11 +74,7 @@ export default function App() {
               <Route path="/register" element={<RegisterPage />} />
               <Route
                 path="/business/register"
-                element={
-                  <ProtectedRoute allowedRoles={['CUSTOMER', 'BUSINESS_USER', 'ADMIN']}>
-                    <BusinessRegisterPage />
-                  </ProtectedRoute>
-                }
+                element={<BusinessRegisterPage />}
               />
               <Route path="/unauthorized" element={<UnauthorizedPage />} />
 

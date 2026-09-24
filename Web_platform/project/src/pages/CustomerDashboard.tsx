@@ -7,14 +7,13 @@ import {
   Bell,
   ArrowRight,
   Sparkles,
-  TrendingUp,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useCart } from '@/hooks/useCart';
 import { catalogService } from '@/services/catalogService';
-import { ProductCard } from '@/components/catalog/ProductCard';
-import { formatPrice, cn } from '@/utils/format';
+import { cn } from '@/utils/format';
 import { getCategoryIcon } from '@/utils/icons';
+import { businessApi } from '@/api/business';
 
 function getGreeting(): string {
   const hour = new Date().getHours();
@@ -24,16 +23,22 @@ function getGreeting(): string {
 }
 
 export function CustomerDashboard() {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const { itemCount } = useCart();
 
   const { data: categories = [] } = useQuery({
     queryKey: ['customer-dashboard-categories'],
     queryFn: () => catalogService.getCategories(),
   });
-  const popularProducts: never[] = [];
-  const activeOrder = null;
-
+  const { data: applicationData } = useQuery({
+    queryKey: ['business-application'],
+    queryFn: businessApi.getApplication,
+  });
+  const application = applicationData?.data;
+  const openApprovedBusiness = async () => {
+    await refreshUser();
+    window.location.assign('/business');
+  };
   const fullName = [user?.firstName, user?.lastName].filter(Boolean).join(' ').trim();
   const greeting = fullName ? `${getGreeting()}, ${fullName}` : 'Welcome back';
 
@@ -85,6 +90,22 @@ export function CustomerDashboard() {
       </div>
 
       <div className="mt-8 grid lg:grid-cols-3 gap-6">
+        {application && application.status !== 'NONE' && (
+          <div className="lg:col-span-3 rounded-2xl border border-secondary-200 bg-secondary-50 p-5">
+            <h2 className="font-display text-lg font-bold text-gray-900">Business application</h2>
+            <p className="mt-2 text-sm text-gray-700">
+              {application.status === 'PENDING' && 'Your business application is pending admin approval. We will notify you when a decision is made.'}
+              {application.status === 'VERIFIED' && 'Your business application is approved. You can now access your business workspace.'}
+              {application.status === 'REJECTED' && `Your business application was rejected.${application.verification?.verificationNotes ? ` Reason: ${application.verification.verificationNotes}` : ''}`}
+              {application.status === 'SUSPENDED' && 'Your business application is currently suspended. Please contact support.'}
+            </p>
+            {application.status === 'VERIFIED' && (
+              <button type="button" onClick={() => void openApprovedBusiness()} className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-primary-700">
+                Open business workspace <ArrowRight className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+        )}
         <div className="lg:col-span-1">
           <h2 className="font-display text-lg font-bold text-gray-900 mb-4">Active Order</h2>
           <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 p-6 text-center">

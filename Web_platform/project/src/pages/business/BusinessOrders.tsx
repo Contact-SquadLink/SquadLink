@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/States';
-import { formatPrice, formatDate } from '@/utils/format';
+import { formatDate } from '@/utils/format';
 import { businessApi } from '@/api/business';
 import type { BusinessOrderSummary, OrderStatus } from '@/types';
 
@@ -30,7 +30,10 @@ export function BusinessOrdersPage() {
     queryFn: businessApi.listOrders,
   });
 
-  const orders = Array.isArray(data?.data) ? (data.data as unknown as BusinessOrderSummary[]) : [];
+  const orders = useMemo(
+    () => (Array.isArray(data?.data) ? (data.data as BusinessOrderSummary[]) : []),
+    [data],
+  );
 
   return (
     <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 py-8">
@@ -88,7 +91,10 @@ export function BusinessOrderDetailPage() {
     queryFn: businessApi.listOrders,
   });
 
-  const orders = Array.isArray(data?.data) ? (data.data as unknown as BusinessOrderSummary[]) : [];
+  const orders = useMemo(
+    () => (Array.isArray(data?.data) ? (data.data as BusinessOrderSummary[]) : []),
+    [data],
+  );
   const order = useMemo(() => orders.find((entry) => entry.orderId === orderId), [orders, orderId]);
 
   const acceptMutation = useMutation({
