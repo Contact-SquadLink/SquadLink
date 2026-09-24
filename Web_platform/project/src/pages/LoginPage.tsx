@@ -111,7 +111,9 @@ export function LoginPage() {
         return;
       }
 
-      if (user.role === 'BUSINESS_USER' || user.role === 'ADMIN') {
+      if (user.role === 'ADMIN') {
+        navigate('/admin');
+      } else if (user.role === 'BUSINESS_USER') {
         navigate('/business');
       } else if (user.role === 'RIDER') {
         navigate('/rider');

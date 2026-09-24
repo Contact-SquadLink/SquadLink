@@ -201,6 +201,13 @@ export function AdminBusinessDetailPage() {
             </button>
           </div>
         )}
+        {(verifyMutation.error || rejectMutation.error) && (
+          <p className="mt-4 rounded-lg border border-error-200 bg-error-50 p-3 text-sm text-error-700">
+            {(verifyMutation.error ?? rejectMutation.error) instanceof Error
+              ? (verifyMutation.error ?? rejectMutation.error)?.message
+              : 'The business verification update could not be completed.'}
+          </p>
+        )}
       </div>
 
       <div className="mt-6 rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
