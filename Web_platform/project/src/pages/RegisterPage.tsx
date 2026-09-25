@@ -25,6 +25,16 @@ export function RegisterPage() {
       return;
     }
 
+    if (intent === 'business') {
+      if (user.role === 'CUSTOMER') {
+        navigate('/business/register', { replace: true });
+        return;
+      }
+
+      navigate(user.role === 'BUSINESS_USER' ? '/business' : '/dashboard', { replace: true });
+      return;
+    }
+
     if (user.role === 'BUSINESS_USER') {
       navigate('/business', { replace: true });
       return;
@@ -32,11 +42,6 @@ export function RegisterPage() {
 
     if (user.role === 'RIDER') {
       navigate('/rider', { replace: true });
-      return;
-    }
-
-    if (intent === 'business') {
-      navigate('/business/register', { replace: true });
       return;
     }
 
@@ -90,7 +95,11 @@ export function RegisterPage() {
 
     if (user) {
       if (intent === 'business') {
-        navigate('/business/register', { replace: true });
+        if (user.role === 'CUSTOMER') {
+          navigate('/business/register', { replace: true });
+        } else {
+          navigate(user.role === 'BUSINESS_USER' ? '/business' : '/dashboard', { replace: true });
+        }
       } else {
         navigate(redirect || '/dashboard', { replace: true });
       }
@@ -99,7 +108,7 @@ export function RegisterPage() {
     }
 
     try {
-      await register({
+      const registeredUser = await register({
         firstName: firstName.trim() || undefined,
         lastName: lastName.trim() || undefined,
         email: cleanEmail || undefined,
@@ -108,7 +117,8 @@ export function RegisterPage() {
       });
 
       if (intent === 'business') {
-        navigate('/business/register');
+        const nextPath = registeredUser.role === 'BUSINESS_USER' ? '/business' : registeredUser.role === 'RIDER' ? '/rider' : '/business/register';
+        navigate(nextPath);
       } else {
         navigate(safeRedirect(redirect) || '/dashboard');
       }

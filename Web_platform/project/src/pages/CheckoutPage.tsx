@@ -111,9 +111,10 @@ export function CheckoutPage() {
     }
   }, [items.length, orderPlaced, placingOrder, navigate]);
 
-  const deliveryFee = preview?.deliveryFee ?? (items.length > 0 ? DELIVERY_FEE : 0);
-  const vat = preview?.vat ?? Math.round(subtotal * VAT_RATE);
-  const total = preview?.total ?? subtotal + deliveryFee + vat;
+  const deliveryFee = preview?.deliveryFee ?? 0;
+  const platformFee = preview?.platformFee ?? (items.length > 0 ? 150 : 0);
+  const vat = preview?.vat ?? 0;
+  const total = preview?.total ?? subtotal + deliveryFee + platformFee + vat;
 
   const orderItems: OrderItem[] = items.map((i) => ({
     productId: i.productId,
@@ -378,6 +379,10 @@ export function CheckoutPage() {
                 <div className="flex items-center justify-between">
                   <span className="text-gray-600">Delivery fee</span>
                   <span className="text-gray-700">{formatPrice(deliveryFee)}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-600">Platform fee</span>
+                  <span className="text-gray-700">{formatPrice(platformFee)}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-gray-600">VAT (7.5%)</span>

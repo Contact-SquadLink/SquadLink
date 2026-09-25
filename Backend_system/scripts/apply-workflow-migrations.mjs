@@ -100,6 +100,22 @@ try {
     );
     CREATE INDEX IF NOT EXISTS idx_contact_messages_created_at ON public.contact_messages(created_at DESC);
 
+    ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS platform_fee_amount BIGINT NOT NULL DEFAULT 0;
+    DO $$
+    BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_orders_platform_fee') THEN
+        ALTER TABLE public.orders ADD CONSTRAINT chk_orders_platform_fee CHECK (platform_fee_amount >= 0) NOT VALID;
+      END IF;
+    END $$;
+
+    ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS business_fee_amount BIGINT NOT NULL DEFAULT 0;
+    DO $$
+    BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_orders_business_fee') THEN
+        ALTER TABLE public.orders ADD CONSTRAINT chk_orders_business_fee CHECK (business_fee_amount >= 0) NOT VALID;
+      END IF;
+    END $$;
+
     DO $$
     BEGIN
       IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_users_phone_number_ng') THEN
@@ -121,7 +137,9 @@ try {
       ('091', 'add_rider_application_submitted_notification'),
       ('092', 'backfill_assignment_decisions'),
       ('093', 'create_contact_messages'),
-      ('094', 'enforce_nigerian_phone_numbers')
+      ('094', 'enforce_nigerian_phone_numbers'),
+      ('095', 'add_platform_fee_to_orders'),
+      ('096', 'add_business_fee_to_orders')
     ON CONFLICT (version) DO NOTHING
   `);
 

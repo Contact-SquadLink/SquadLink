@@ -188,8 +188,9 @@ export async function catalogRoutes(
       request: FastifyRequest,
       reply: FastifyReply
     ) => {
+      const query = request.query as { search?: string; category?: string };
       const products =
-        await getProducts();
+        await getProducts({ search: query.search, category: query.category });
 
       return reply.status(200).send(
         successResponse(

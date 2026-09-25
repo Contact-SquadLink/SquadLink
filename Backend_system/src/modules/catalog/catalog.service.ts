@@ -92,8 +92,8 @@ export async function modifyCategory(
   return updated;
 }
 
-export async function getProducts() {
-  return listProducts();
+export async function getProducts(options?: { search?: string; category?: string }) {
+  return listProducts(options);
 }
 
 export async function getPublicProductById(productId: string) {

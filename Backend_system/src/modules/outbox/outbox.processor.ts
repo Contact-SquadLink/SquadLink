@@ -2,6 +2,7 @@ import type { PoolClient } from "pg";
 
 import { withTransaction } from "../../db/transaction";
 import { db } from "../../db/database";
+import { expireInventoryReservations } from "../inventory/inventory.maintenance";
 
 const DEFAULT_BATCH_SIZE = 10;
 const MAX_ATTEMPTS = 5;
@@ -271,6 +272,22 @@ async function notificationJobs(
     case "PAYMENT_FAILED":
       addCustomer("ORDER_CANCELLED", "Order cancelled", "Your order was cancelled because payment was not completed.");
       break;
+    case "ORDER_CANCELLED":
+      addCustomer(
+        "ORDER_CANCELLED",
+        "Order cancelled",
+        typeof event.payload.reason === "string"
+          ? event.payload.reason
+          : "Your order was cancelled."
+      );
+      addBusiness(
+        "FULFILLMENT_FAILED",
+        "Order cancelled",
+        typeof event.payload.reason === "string"
+          ? event.payload.reason
+          : "The order was cancelled."
+      );
+      break;
     case "ORDER_ACCEPTED":
       addCustomer("ORDER_PREPARING", "Order accepted", "Your order is being prepared.");
       break;
@@ -535,6 +552,7 @@ export async function runOutboxWorker(): Promise<void> {
   const intervalMs = Number(process.env.OUTBOX_INTERVAL_MS ?? 1000);
 
   while (true) {
+    await expireInventoryReservations();
     const processed = await processOutboxBatch(batchSize);
     if (processed === 0) {
       await new Promise((resolve) => setTimeout(resolve, intervalMs));

@@ -17,6 +17,8 @@ function serializeOrderRow(row: {
   created_at: string;
   subtotal_amount: number | string;
   delivery_fee_amount: number | string;
+  platform_fee_amount: number | string;
+  business_fee_amount: number | string;
   total_amount: number | string;
   delivery_contact_phone: string | null;
   delivery_id: string | null;
@@ -35,6 +37,8 @@ function serializeOrderRow(row: {
     createdAt: row.created_at,
     subtotal: Number(row.subtotal_amount),
     deliveryFee: Number(row.delivery_fee_amount),
+    platformFee: Number(row.platform_fee_amount),
+    businessFee: Number(row.business_fee_amount ?? 0),
     vat: 0,
     total: Number(row.total_amount),
     deliveryContactPhone: row.delivery_contact_phone,
@@ -56,6 +60,8 @@ export async function listOrdersForUser(userId: string) {
     created_at: string;
     subtotal_amount: number | string;
     delivery_fee_amount: number | string;
+    platform_fee_amount: number | string;
+    business_fee_amount: number | string;
     total_amount: number | string;
     delivery_contact_phone: string | null;
     delivery_id: string | null;
@@ -73,6 +79,8 @@ export async function listOrdersForUser(userId: string) {
            o.created_at,
            o.subtotal_amount,
            o.delivery_fee_amount,
+           o.platform_fee_amount,
+           o.business_fee_amount,
            o.total_amount,
            o.delivery_contact_phone,
            d.id AS delivery_id,
@@ -93,7 +101,7 @@ export async function listOrdersForUser(userId: string) {
     LEFT JOIN public.order_items oi ON oi.order_id = o.id
     LEFT JOIN public.deliveries d ON d.order_id = o.id
     WHERE o.user_id = $1
-    GROUP BY o.id, o.status, o.created_at, o.subtotal_amount, o.delivery_fee_amount, o.total_amount, o.delivery_contact_phone, d.id, d.status
+    GROUP BY o.id, o.status, o.created_at, o.subtotal_amount, o.delivery_fee_amount, o.platform_fee_amount, o.business_fee_amount, o.total_amount, o.delivery_contact_phone, d.id, d.status
     ORDER BY o.created_at DESC
   `, [userId]);
 
@@ -107,6 +115,8 @@ export async function getOrderForUser(userId: string, orderId: string) {
     created_at: string;
     subtotal_amount: number | string;
     delivery_fee_amount: number | string;
+    platform_fee_amount: number | string;
+    business_fee_amount: number | string;
     total_amount: number | string;
     delivery_contact_phone: string | null;
     delivery_id: string | null;
@@ -124,6 +134,8 @@ export async function getOrderForUser(userId: string, orderId: string) {
            o.created_at,
            o.subtotal_amount,
            o.delivery_fee_amount,
+           o.platform_fee_amount,
+           o.business_fee_amount,
            o.total_amount,
            o.delivery_contact_phone,
            d.id AS delivery_id,
@@ -144,7 +156,7 @@ export async function getOrderForUser(userId: string, orderId: string) {
     LEFT JOIN public.order_items oi ON oi.order_id = o.id
     LEFT JOIN public.deliveries d ON d.order_id = o.id
     WHERE o.user_id = $1 AND o.id = $2
-    GROUP BY o.id, o.status, o.created_at, o.subtotal_amount, o.delivery_fee_amount, o.total_amount, o.delivery_contact_phone, d.id, d.status
+    GROUP BY o.id, o.status, o.created_at, o.subtotal_amount, o.delivery_fee_amount, o.platform_fee_amount, o.business_fee_amount, o.total_amount, o.delivery_contact_phone, d.id, d.status
   `, [userId, orderId]);
 
   if (result.rows.length === 0) {
@@ -349,6 +361,10 @@ export async function placeOrder(
       }
     );
 
+    const platformFeeAmount = 150;
+    const deliveryFeeAmount = 0;
+    const totalAmount = orderTotals.subtotal + deliveryFeeAmount + platformFeeAmount;
+
     const orderResult = await client.query<{ id: string }>(
       `
         INSERT INTO public.orders (
@@ -361,6 +377,8 @@ export async function placeOrder(
           delivery_location,
           subtotal_amount,
           delivery_fee_amount,
+          platform_fee_amount,
+          business_fee_amount,
           total_amount,
           currency
         )
@@ -374,7 +392,9 @@ export async function placeOrder(
           ST_SetSRID(ST_MakePoint($7, $6), 4326)::geography,
           $8,
           0,
-          $8,
+          150,
+          150,
+          $9,
           'NGN'
         )
         RETURNING id
@@ -387,7 +407,8 @@ export async function placeOrder(
         input.deliveryContactPhone,
         input.latitude,
         input.longitude,
-        orderTotals.subtotal
+        orderTotals.subtotal,
+        totalAmount
       ]
     );
     const orderId = orderResult.rows[0].id;
@@ -563,7 +584,7 @@ export async function placeOrder(
         VALUES ($1, 'PENDING', $2, 'NGN')
         RETURNING id
       `,
-      [orderId, orderTotals.subtotal]
+      [orderId, totalAmount]
     );
     const paymentId = paymentResult.rows[0].id;
 
@@ -578,7 +599,7 @@ export async function placeOrder(
         VALUES ($1, 'INITIATED', $2, 'NGN')
         RETURNING id
       `,
-      [paymentId, orderTotals.subtotal]
+      [paymentId, totalAmount]
     );
 
     await client.query(
@@ -652,14 +673,15 @@ export async function placeOrder(
         paymentId,
         paymentAttemptId: attemptResult.rows[0].id,
         status: "PENDING",
-        amount: orderTotals.subtotal,
+        amount: totalAmount,
         charged: false
       },
       pricing: {
         currency: "NGN",
         subtotalAmount: orderTotals.subtotal,
-        deliveryFeeAmount: 0,
-        totalAmount: orderTotals.subtotal
+        deliveryFeeAmount,
+        platformFeeAmount,
+        totalAmount
       },
       items: orderTotals.items
     };

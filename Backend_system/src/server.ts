@@ -2,6 +2,7 @@ import Fastify from "fastify";
 import { buildApp } from "./app-builder";
 import { env } from "./config/env";
 import { db } from "./db/database";
+import { runOutboxWorker } from "./modules/outbox/outbox.processor";
 
 async function start() {
   console.log("[STARTUP] Before buildApp");
@@ -38,6 +39,9 @@ async function start() {
       host: "0.0.0.0"
     });
     console.log("[STARTUP] After app.listen");
+    void runOutboxWorker().catch((error) => {
+      app.log.error(error, "Outbox worker stopped unexpectedly.");
+    });
 
     console.log(
       `Delivery System API running on http://localhost:${env.PORT}`

@@ -28,6 +28,7 @@ export function BusinessOrdersPage() {
   const { data, isLoading } = useQuery({
     queryKey: ['business-orders'],
     queryFn: businessApi.listOrders,
+    refetchInterval: 15000,
   });
 
   const orders = useMemo(

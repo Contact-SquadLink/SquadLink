@@ -304,7 +304,7 @@ export async function findProductByCategoryAndName(
     : null;
 }
 
-export async function listProducts(): Promise<
+export async function listProducts(options?: { search?: string; category?: string }): Promise<
   ProductRecord[]
 > {
   const result = await db.query<ProductRow>(
@@ -351,8 +351,20 @@ export async function listProducts(): Promise<
         LIMIT 1
       ) bp ON TRUE
       WHERE p.is_active = TRUE
+        AND c.is_active = TRUE
+        AND (
+          $1::text IS NULL
+          OR p.name ILIKE '%' || $1 || '%'
+          OR COALESCE(p.description, '') ILIKE '%' || $1 || '%'
+          OR c.name ILIKE '%' || $1 || '%'
+        )
+        AND (
+          $2::text IS NULL
+          OR LOWER(REGEXP_REPLACE(c.name, '[^a-zA-Z0-9]+', '-', 'g')) = LOWER($2)
+        )
       ORDER BY c.name ASC, p.name ASC
-    `
+    `,
+    [options?.search?.trim() || null, options?.category?.trim() || null]
   );
 
   return result.rows.map(mapProduct);

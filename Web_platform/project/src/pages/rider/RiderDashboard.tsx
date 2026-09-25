@@ -18,10 +18,11 @@ const statusVariants: Record<DeliveryStatus, 'default' | 'success' | 'warning' |
 
 export function RiderDashboard() {
   const queryClient = useQueryClient();
-  const profileQuery = useQuery({ queryKey: ['rider-profile'], queryFn: riderApi.getProfile });
+  const profileQuery = useQuery({ queryKey: ['rider-profile'], queryFn: riderApi.getProfile, refetchInterval: 15000 });
   const { data, isLoading } = useQuery({
     queryKey: ['rider-deliveries'],
     queryFn: riderApi.listDeliveries,
+    refetchInterval: 15000,
   });
 
   const deliveries = (data?.data ?? []) as Delivery[];
@@ -29,7 +30,10 @@ export function RiderDashboard() {
   const completedDeliveries = deliveries.filter((d) => d.status === 'DELIVERED');
   const availabilityMutation = useMutation({
     mutationFn: (available: boolean) => riderApi.setAvailable(available),
-    onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ['rider-profile'] }); },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['rider-profile'] });
+      void queryClient.invalidateQueries({ queryKey: ['rider-deliveries'] });
+    },
   });
   const locationMutation = useMutation({
     mutationFn: ({ latitude, longitude }: { latitude: number; longitude: number }) => riderApi.setLocation(latitude, longitude),

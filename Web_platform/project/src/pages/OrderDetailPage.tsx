@@ -15,6 +15,7 @@ const orderStages: Record<string, string[]> = {
   READY_FOR_PICKUP: ['Order created', 'Business confirmed', 'Preparing', 'Ready for pickup'],
   OUT_FOR_DELIVERY: ['Order created', 'Business confirmed', 'Preparing', 'Ready for pickup', 'Out for delivery'],
   DELIVERED: ['Order created', 'Business confirmed', 'Preparing', 'Ready for pickup', 'Out for delivery', 'Delivered'],
+  CANCELLED: ['Order created', 'Cancelled'],
 };
 
 export function OrderDetailPage() {
@@ -24,6 +25,7 @@ export function OrderDetailPage() {
     queryKey: ['customer-order', orderId],
     queryFn: () => ordersApi.getById(orderId as string),
     enabled: Boolean(orderId),
+    refetchInterval: 15000,
   });
   const [deliveryOtp, setDeliveryOtp] = useState<string | null>(null);
   const [otpMessage, setOtpMessage] = useState<string | null>(null);
@@ -166,6 +168,7 @@ export function OrderDetailPage() {
               <div className="mt-3 space-y-2 text-sm text-gray-600">
                 <div className="flex items-center justify-between"><span>Subtotal</span><span>{formatPrice(order.subtotal)}</span></div>
                 <div className="flex items-center justify-between"><span>Delivery fee</span><span>{formatPrice(order.deliveryFee)}</span></div>
+                <div className="flex items-center justify-between"><span>Platform fee</span><span>{formatPrice(order.platformFee ?? 0)}</span></div>
                 <div className="flex items-center justify-between"><span>VAT</span><span>{formatPrice(order.vat ?? 0)}</span></div>
                 <div className="border-t border-gray-200 pt-2 flex items-center justify-between font-semibold text-gray-900"><span>Total</span><span>{formatPrice(order.total)}</span></div>
               </div>

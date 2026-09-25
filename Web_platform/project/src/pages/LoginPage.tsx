@@ -126,6 +126,19 @@ export function LoginPage() {
         return;
       }
 
+      if (roleParam === 'RIDER') {
+        if (user.role === 'RIDER') {
+          navigate('/rider');
+        } else if (user.role === 'CUSTOMER') {
+          navigate('/rider/register');
+        } else if (user.role === 'BUSINESS_USER') {
+          navigate('/business');
+        } else {
+          navigate('/rider');
+        }
+        return;
+      }
+
       navigate(defaultPathForRole(user.role));
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Login failed. Please check your credentials.';

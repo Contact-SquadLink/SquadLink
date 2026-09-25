@@ -12,6 +12,7 @@ export function NotificationsPage() {
   const { data, isLoading, error } = useQuery({
     queryKey: ['customer-notifications'],
     queryFn: notificationsApi.list,
+    refetchInterval: 15000,
   });
   const notifications = (data?.data ?? []) as Notification[];
 

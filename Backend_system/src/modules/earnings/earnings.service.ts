@@ -51,9 +51,9 @@ export async function reviewWithdrawal(request: FastifyRequest, withdrawalId: st
   return result.rows[0];
 }
 
-export async function creditDeliveryEarnings(client: { query: (text: string, values?: unknown[]) => Promise<{ rows: any[] }> }, deliveryId: string, orderId: string, riderUserId: string | null, businessUserId: string | null, subtotal: number) {
+export async function creditDeliveryEarnings(client: { query: (text: string, values?: unknown[]) => Promise<{ rows: any[] }> }, deliveryId: string, orderId: string, riderUserId: string | null, businessUserId: string | null, subtotal: number, businessFee = 150) {
   const riderPayout = Math.max(250, Math.round(subtotal * 0.1));
-  const businessPayout = Math.max(0, subtotal - riderPayout);
+  const businessPayout = Math.max(0, subtotal - riderPayout - businessFee);
   if (riderUserId && riderPayout > 0) await client.query(`INSERT INTO public.earning_transactions (recipient_user_id, recipient_type, delivery_id, order_id, amount, description) VALUES ($1, 'RIDER', $2, $3, $4, 'Delivery rider earnings') ON CONFLICT DO NOTHING`, [riderUserId, deliveryId, orderId, riderPayout]);
   if (businessUserId && businessPayout > 0) await client.query(`INSERT INTO public.earning_transactions (recipient_user_id, recipient_type, delivery_id, order_id, amount, description) VALUES ($1, 'BUSINESS', $2, $3, $4, 'Business fulfillment earnings') ON CONFLICT DO NOTHING`, [businessUserId, deliveryId, orderId, businessPayout]);
 }

@@ -46,9 +46,12 @@ export function BrowsePage() {
 
   const handleSearch = useCallback((value: string) => {
     setSearch(value);
-    const timer = setTimeout(() => setDebouncedSearch(value), 400);
-    return () => clearTimeout(timer);
   }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearch(search.trim()), 400);
+    return () => window.clearTimeout(timer);
+  }, [search]);
 
   const handleCategoryChange = (slug: string) => {
     setCategory(slug);

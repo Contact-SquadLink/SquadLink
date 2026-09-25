@@ -5,6 +5,7 @@ import {
   ShoppingCart,
   Package,
   Bell,
+  Bike,
   ArrowRight,
   Sparkles,
 } from 'lucide-react';
@@ -56,6 +57,7 @@ export function CustomerDashboard() {
     { label: 'View Cart', desc: `${itemCount} item${itemCount !== 1 ? 's' : ''}`, icon: ShoppingCart, path: '/cart', color: 'bg-accent-600' },
     { label: 'Track Orders', desc: 'Your order history', icon: Package, path: '/orders', color: 'bg-secondary-600' },
     { label: 'Notifications', desc: 'Latest updates', icon: Bell, path: '/notifications', color: 'bg-success-600' },
+    { label: 'Become a Rider', desc: 'Apply for rider access', icon: Bike, path: '/rider/register', color: 'bg-accent-600' },
   ];
 
   return (

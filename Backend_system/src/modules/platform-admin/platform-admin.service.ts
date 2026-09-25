@@ -45,6 +45,8 @@ export async function getPlatformSummary(request: FastifyRequest) {
     other_transactions: string;
     gross_completed_value: string;
     recipient_earnings: string;
+    platform_fee_earnings: string;
+    business_fee_earnings: string;
   }>(`
     SELECT
       COUNT(*) FILTER (WHERE o.status = 'DELIVERED')::text AS completed_transactions,
@@ -53,7 +55,9 @@ export async function getPlatformSummary(request: FastifyRequest) {
       COUNT(*) FILTER (WHERE d.status = 'ASSIGNED')::text AS assigned_transactions,
       COUNT(*) FILTER (WHERE o.status NOT IN ('DELIVERED', 'PENDING', 'CONFIRMED', 'PREPARING', 'READY_FOR_PICKUP', 'OUT_FOR_DELIVERY', 'CANCELLED'))::text AS other_transactions,
       COALESCE(SUM(o.total_amount) FILTER (WHERE o.status = 'DELIVERED'), 0)::text AS gross_completed_value,
-      COALESCE(SUM(et.amount) FILTER (WHERE o.status = 'DELIVERED'), 0)::text AS recipient_earnings
+      COALESCE(SUM(et.amount) FILTER (WHERE o.status = 'DELIVERED'), 0)::text AS recipient_earnings,
+      COALESCE(SUM(o.platform_fee_amount) FILTER (WHERE o.status = 'DELIVERED'), 0)::text AS platform_fee_earnings,
+      COALESCE(SUM(o.business_fee_amount) FILTER (WHERE o.status = 'DELIVERED'), 0)::text AS business_fee_earnings
     FROM public.orders o
     LEFT JOIN public.deliveries d ON d.order_id = o.id
     LEFT JOIN (
@@ -63,7 +67,7 @@ export async function getPlatformSummary(request: FastifyRequest) {
     ) et ON et.order_id = o.id
   `);
   const transactionRow = transactionResult.rows[0];
-  const platformEarnings = Math.max(0, Number(transactionRow.gross_completed_value) - Number(transactionRow.recipient_earnings));
+  const platformEarnings = Number(transactionRow.platform_fee_earnings) + Number(transactionRow.business_fee_earnings);
   return Object.fromEntries(Object.entries({
     ...row,
     ...transactionRow,

@@ -62,6 +62,7 @@ export interface CheckoutPreview {
   items: CheckoutPreviewItem[];
   subtotal: number;
   deliveryFee: number;
+  platformFee: number;
   vat: number;
   total: number;
   fulfillingBusiness?: {
@@ -94,6 +95,8 @@ export interface Order {
   items: OrderItem[];
   subtotal: number;
   deliveryFee: number;
+  platformFee?: number;
+  businessFee?: number;
   vat: number;
   total: number;
   deliveryContactPhone?: string | null;

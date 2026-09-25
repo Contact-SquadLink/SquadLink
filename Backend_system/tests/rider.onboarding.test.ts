@@ -26,7 +26,7 @@ async function ensureCustomerUser(userId: string) {
         last_name = EXCLUDED.last_name,
         updated_at = NOW()
     `,
-    [userId, `customer-${userId.slice(0, 8)}@example.com`, `+1555000${userId.slice(0, 6)}`, "hashed-password"]
+    [userId, `customer-${userId.slice(0, 8)}@example.com`, '+2348000001001', "hashed-password"]
   );
 }
 

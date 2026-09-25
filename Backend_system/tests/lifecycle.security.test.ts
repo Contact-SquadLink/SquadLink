@@ -270,6 +270,13 @@ describe("lifecycle database invariants", () => {
 describe("rider allocation concurrency", () => {
   it("assigns one available rider to at most one concurrent delivery", async () => {
     await db.query(
+      `UPDATE public.deliveries
+       SET rider_id = NULL, vehicle_id = NULL, status = 'SEARCHING_RIDER', assigned_at = NULL, updated_at = NOW()
+       WHERE rider_id = (SELECT id FROM public.riders WHERE user_id = $1)
+         AND status IN ('ASSIGNED', 'PICKED_UP', 'IN_TRANSIT', 'ARRIVED')`,
+      [RIDER_USER_ID]
+    );
+    await db.query(
       `UPDATE public.riders SET is_available = TRUE, updated_at = NOW() WHERE user_id = $1`,
       [RIDER_USER_ID]
     );

@@ -937,6 +937,13 @@ export async function retryRiderAssignment(userId: string, orderId: string) {
     }
     const delivery = await assignRider(client, orderId, userId);
     await writeOutbox(client, "ORDER_READY_FOR_PICKUP", "ORDER", orderId, { orderId, deliveryId: delivery.deliveryId, pickupCredential: delivery.pickupCredential ?? null });
+    if (delivery.status === "ASSIGNED" && !delivery.isNewAssignment) {
+      await writeOutbox(client, "RIDER_ASSIGNED", "DELIVERY", delivery.deliveryId, {
+        deliveryId: delivery.deliveryId,
+        riderId: delivery.riderId ?? null,
+        pickupCredential: null
+      });
+    }
     return { orderId, status: order.order_status, delivery };
   });
 }
@@ -956,7 +963,7 @@ async function assignRider(
   }
   const delivery = deliveryResult.rows[0];
   if (delivery.status === "ASSIGNED") {
-    const assignmentResult = await client.query<{ rider_id: string; status: string }>(
+    const assignmentResult = await client.query<{ rider_id: string; status: string; expires_at: Date }>(
       `
         SELECT rider_id, status
         FROM public.delivery_assignment_decisions
@@ -976,7 +983,23 @@ async function assignRider(
         [delivery.delivery_id, delivery.rider_id]
       );
     }
-    return { deliveryId: delivery.delivery_id, status: delivery.status };
+    const currentDecision = assignmentResult.rows[0];
+    if (currentDecision?.status === "PENDING" && currentDecision.expires_at <= new Date()) {
+      await client.query(
+        `UPDATE public.delivery_assignment_decisions SET status = 'EXPIRED', decided_at = NOW(), updated_at = NOW() WHERE delivery_id = $1 AND rider_id = $2`,
+        [delivery.delivery_id, delivery.rider_id]
+      );
+      await client.query(
+        `UPDATE public.deliveries SET rider_id = NULL, vehicle_id = NULL, status = 'SEARCHING_RIDER', assigned_at = NULL, updated_at = NOW() WHERE id = $1`,
+        [delivery.delivery_id]
+      );
+      await client.query(
+        `UPDATE public.riders SET is_available = TRUE, updated_at = NOW() WHERE id = $1`,
+        [delivery.rider_id]
+      );
+      return assignRider(client, orderId, actorUserId, delivery.rider_id ? [delivery.rider_id] : []);
+    }
+    return { deliveryId: delivery.delivery_id, riderId: delivery.rider_id ?? undefined, status: delivery.status, isNewAssignment: false };
   }
   const riderResult = await client.query<{ rider_id: string; vehicle_id: string }>(
     `
@@ -988,16 +1011,35 @@ async function assignRider(
       INNER JOIN public.rider_verifications rv ON rv.rider_id = r.id AND rv.status = 'VERIFIED'
       WHERE r.is_active = TRUE
         AND r.is_available = TRUE
-        AND r.current_location IS NOT NULL
         AND NOT (r.id = ANY($2::uuid[]))
-      ORDER BY ST_Distance(r.current_location, d.pickup_location) ASC, r.id
+        AND NOT EXISTS (
+          SELECT 1
+          FROM public.deliveries active_delivery
+          INNER JOIN public.delivery_assignment_decisions active_decision
+            ON active_decision.delivery_id = active_delivery.id
+           AND active_decision.status IN ('PENDING', 'ACCEPTED')
+          WHERE active_delivery.rider_id = r.id
+            AND active_delivery.status IN ('ASSIGNED', 'PICKED_UP', 'IN_TRANSIT', 'ARRIVED')
+        )
+        AND NOT EXISTS (
+          SELECT 1
+          FROM public.delivery_assignment_decisions rejected
+          WHERE rejected.delivery_id = d.id
+            AND rejected.rider_id = r.id
+            AND rejected.status = 'REJECTED'
+        )
+      ORDER BY
+        CASE WHEN r.current_location IS NULL THEN 1 ELSE 0 END,
+        ST_Distance(r.current_location, d.pickup_location) ASC NULLS LAST,
+        r.updated_at ASC,
+        r.id
       FOR UPDATE OF r SKIP LOCKED
       LIMIT 1
     `,
     [delivery.delivery_id, excludedRiderIds]
   );
   if (riderResult.rows.length === 0) {
-    return { deliveryId: delivery.delivery_id, status: "SEARCHING_RIDER", pickupCredential: undefined };
+    return { deliveryId: delivery.delivery_id, status: "SEARCHING_RIDER", pickupCredential: undefined, isNewAssignment: false };
   }
   const rider = riderResult.rows[0];
   await client.query(`UPDATE public.riders SET is_available = FALSE, updated_at = NOW() WHERE id = $1`, [rider.rider_id]);
@@ -1016,7 +1058,7 @@ async function assignRider(
   );
   await writeDeliveryHistory(client, delivery.delivery_id, "SEARCHING_RIDER", "ASSIGNED", actorUserId, "Rider automatically assigned.");
   await writeOutbox(client, "RIDER_ASSIGNED", "DELIVERY", delivery.delivery_id, { deliveryId: delivery.delivery_id, riderId: rider.rider_id, pickupCredential: credential });
-  return { deliveryId: delivery.delivery_id, riderId: rider.rider_id, status: "ASSIGNED", pickupCredential: credential };
+  return { deliveryId: delivery.delivery_id, riderId: rider.rider_id, status: "ASSIGNED", pickupCredential: credential, isNewAssignment: true };
 }
 
 async function loadRiderDelivery(client: PoolClient, deliveryId: string, userId: string) {
@@ -1194,11 +1236,84 @@ export async function rejectRiderAssignment(
     await writeDeliveryHistory(client, deliveryId, "ASSIGNED", "SEARCHING_RIDER", userId, "Rider rejected the assignment.");
     const reassigned = await assignRider(client, delivery.order_id, userId, [delivery.rider_id]);
     if (reassigned.status === "SEARCHING_RIDER") {
-      await writeOutbox(client, "RIDER_REASSIGNMENT_UNAVAILABLE", "DELIVERY", deliveryId, {
-        deliveryId,
-        orderId: delivery.order_id,
-        reason: reason ?? "The assigned rider rejected the delivery and no replacement rider is currently available."
-      });
+      const riderPool = await client.query<{ total_riders: string; rejected_riders: string }>(
+        `
+          SELECT
+            COUNT(*)::text AS total_riders,
+            COUNT(*) FILTER (
+              WHERE EXISTS (
+                SELECT 1
+                FROM public.delivery_assignment_decisions rejected
+                WHERE rejected.delivery_id = $1
+                  AND rejected.rider_id = r.id
+                  AND rejected.status = 'REJECTED'
+              )
+            )::text AS rejected_riders
+          FROM public.riders r
+          INNER JOIN public.rider_verifications rv
+            ON rv.rider_id = r.id
+           AND rv.status = 'VERIFIED'
+          WHERE r.is_active = TRUE
+            AND EXISTS (
+              SELECT 1
+              FROM public.vehicles v
+              INNER JOIN public.vehicle_types vt
+                ON vt.id = v.vehicle_type_id
+               AND vt.code IN ('MOTORCYCLE', 'KEKE')
+              WHERE v.rider_id = r.id
+                AND v.is_active = TRUE
+            )
+        `,
+        [deliveryId]
+      );
+      const totalRiders = Number(riderPool.rows[0]?.total_riders ?? 0);
+      const rejectedRiders = Number(riderPool.rows[0]?.rejected_riders ?? 0);
+
+      if (totalRiders > 0 && rejectedRiders >= totalRiders) {
+        await releaseReservations(
+          client,
+          delivery.order_id,
+          userId,
+          "All currently verified riders rejected the delivery."
+        );
+        await client.query(
+          `UPDATE public.deliveries SET status = 'CANCELLED', updated_at = NOW() WHERE id = $1`,
+          [deliveryId]
+        );
+        await client.query(
+          `UPDATE public.orders
+           SET status = 'CANCELLED',
+               cancellation_reason = 'NO_RIDER_AVAILABLE',
+               cancelled_by = 'SYSTEM',
+               cancelled_at = NOW(),
+               updated_at = NOW()
+           WHERE id = $1 AND status = 'READY_FOR_PICKUP'`,
+          [delivery.order_id]
+        );
+        const fulfillment = await client.query<{ id: string; status: string }>(
+          `SELECT id, status FROM public.fulfillments WHERE order_id = $1 FOR UPDATE`,
+          [delivery.order_id]
+        );
+        if (fulfillment.rows.length > 0 && fulfillment.rows[0].status !== "FAILED") {
+          await client.query(
+            `UPDATE public.fulfillments SET status = 'FAILED', failed_at = NOW(), updated_at = NOW() WHERE id = $1`,
+            [fulfillment.rows[0].id]
+          );
+          await writeFulfillmentHistory(client, fulfillment.rows[0].id, fulfillment.rows[0].status, "FAILED", userId, "All currently verified riders rejected the delivery.");
+        }
+        await writeDeliveryHistory(client, deliveryId, "SEARCHING_RIDER", "CANCELLED", userId, "All currently verified riders rejected the delivery.");
+        await writeOrderHistory(client, delivery.order_id, "READY_FOR_PICKUP", "CANCELLED", userId, "Order cancelled because all currently verified riders rejected the delivery.");
+        await writeOutbox(client, "ORDER_CANCELLED", "ORDER", delivery.order_id, {
+          orderId: delivery.order_id,
+          reason: "Your order was cancelled because all currently verified riders rejected the delivery."
+        });
+      } else {
+        await writeOutbox(client, "RIDER_REASSIGNMENT_UNAVAILABLE", "DELIVERY", deliveryId, {
+          deliveryId,
+          orderId: delivery.order_id,
+          reason: reason ?? "No replacement rider is currently available."
+        });
+      }
     }
     await writeAudit(client, userId, "DELIVERY_ASSIGNMENT_REJECTED", "DELIVERY", deliveryId, reason ?? "Rider rejected the delivery assignment.");
     return { deliveryId, status: reassigned.status };
@@ -1358,8 +1473,8 @@ export async function confirmDelivery(userId: string, deliveryId: string, otp: s
     await client.query(`UPDATE public.orders SET status = 'DELIVERED', updated_at = NOW() WHERE id = $1`, [delivery.order_id]);
     await commitReservations(client, delivery.order_id, userId);
     if (delivery.rider_id) {
-      const orderResult = await client.query<{ subtotal_amount: number | string }>(
-        `SELECT subtotal_amount FROM public.orders WHERE id = $1`,
+      const orderResult = await client.query<{ subtotal_amount: number | string; business_fee_amount: number | string }>(
+        `SELECT subtotal_amount, business_fee_amount FROM public.orders WHERE id = $1`,
         [delivery.order_id]
       );
       const subtotal = Number(orderResult.rows[0]?.subtotal_amount ?? 0);
@@ -1370,7 +1485,8 @@ export async function confirmDelivery(userId: string, deliveryId: string, otp: s
         delivery.order_id,
         delivery.rider_user_id,
         delivery.business_owner_user_id,
-        subtotal
+        subtotal,
+        Number(orderResult.rows[0]?.business_fee_amount ?? 150)
       );
       await client.query(
         `INSERT INTO public.rider_wallets (rider_id, current_balance_amount, currency)

@@ -10,6 +10,7 @@ import {
 import type {
   CheckoutPreviewInput
 } from "./checkout.schemas";
+import { expireInventoryReservations } from "../inventory/inventory.maintenance";
 
 const SEARCH_RADIUS_BANDS_METERS = [
   2000,
@@ -40,6 +41,7 @@ export async function previewCheckout(
   userId: string,
   input: CheckoutPreviewInput
 ) {
+  await expireInventoryReservations();
   const cartItems =
     await findActiveCartItems(userId);
 
@@ -215,7 +217,15 @@ export async function previewCheckout(
     );
   }
 
+  const platformFeeAmount = 150;
+  const totalAmount = qualifyingBusiness.subtotalAmount + platformFeeAmount;
+
   return {
+    subtotal: qualifyingBusiness.subtotalAmount,
+    deliveryFee: 0,
+    platformFee: platformFeeAmount,
+    vat: 0,
+    total: totalAmount,
     cart: {
       itemCount: cartItems.length
     },
@@ -249,8 +259,8 @@ export async function previewCheckout(
       subtotalAmount:
         qualifyingBusiness.subtotalAmount,
       deliveryFeeAmount: 0,
-      totalAmount:
-        qualifyingBusiness.subtotalAmount
+      platformFeeAmount,
+      totalAmount
     },
 
     items:
