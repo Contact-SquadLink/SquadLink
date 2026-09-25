@@ -65,7 +65,7 @@ export function BrowsePage() {
     setShowMobileFilters(false);
   };
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error } = useQuery({
     queryKey: ['catalog', debouncedSearch, category, sort, availability],
     queryFn: () =>
       catalogService.list({
@@ -296,6 +296,11 @@ export function BrowsePage() {
 
           {/* Product grid */}
           <div className="flex-1 min-w-0">
+            {error && (
+              <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                We could not load the catalogue right now. Please try again.
+              </div>
+            )}
             {/* Result count */}
             {!isLoading && products.length > 0 && (
               <p className="mb-4 text-sm text-gray-500">

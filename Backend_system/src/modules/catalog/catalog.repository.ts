@@ -334,6 +334,8 @@ export async function listProducts(options?: { search?: string; category?: strin
           bp_candidate.description,
           bp_candidate.image_url
         FROM public.business_products bp_candidate
+        INNER JOIN public.inventory i_candidate
+          ON i_candidate.business_product_id = bp_candidate.id
         INNER JOIN public.businesses b_candidate
           ON b_candidate.id = bp_candidate.business_id
          AND b_candidate.is_active = TRUE
@@ -347,6 +349,7 @@ export async function listProducts(options?: { search?: string; category?: strin
          AND b_candidate.inventory_configured = TRUE
         WHERE bp_candidate.product_id = p.id
           AND bp_candidate.is_available = TRUE
+          AND i_candidate.quantity_on_hand - i_candidate.quantity_reserved > 0
         ORDER BY bp_candidate.updated_at DESC, bp_candidate.business_id
         LIMIT 1
       ) bp ON TRUE

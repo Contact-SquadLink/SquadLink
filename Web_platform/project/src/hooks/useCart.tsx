@@ -16,6 +16,7 @@ const GUEST_CART_KEY = 'squadlink_guest_cart';
 
 interface CartContextValue {
   items: CartItem[];
+  isSyncing: boolean;
   itemCount: number;
   subtotal: number;
   addItem: (product: Product, quantity: number) => void;
@@ -41,6 +42,7 @@ function loadGuestCart(): CartItem[] {
 
 export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>(loadGuestCart);
+  const [isSyncing, setIsSyncing] = useState(false);
   const { user } = useAuth();
   const syncedUserIdRef = useRef<string | null>(null);
   const cartOperationRef = useRef(0);
@@ -91,6 +93,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
 
     let active = true;
+    setIsSyncing(true);
 
     const syncCart = async () => {
       const syncOperation = cartOperationRef.current;
@@ -122,6 +125,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
         }
       } catch {
         syncedUserIdRef.current = user.id;
+      } finally {
+        if (active) setIsSyncing(false);
       }
     };
 
@@ -277,6 +282,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     <CartContext.Provider
       value={{
         items,
+        isSyncing,
         itemCount,
         subtotal,
         addItem,

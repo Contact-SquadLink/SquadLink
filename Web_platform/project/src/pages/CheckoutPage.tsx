@@ -21,7 +21,7 @@ const VAT_RATE = 0.075;
 
 export function CheckoutPage() {
   const navigate = useNavigate();
-  const { items, subtotal, clearCart } = useCart();
+  const { items, subtotal, clearCart, isSyncing } = useCart();
   const { user } = useAuth();
 
   const [preview, setPreview] = useState<CheckoutPreview | null>(null);
@@ -65,7 +65,7 @@ export function CheckoutPage() {
     hasValidLocation;
 
   useEffect(() => {
-    if (items.length === 0 || !hasValidDeliveryDetails) {
+    if (isSyncing || items.length === 0 || !hasValidDeliveryDetails) {
       setPreview(null);
       return;
     }
@@ -103,7 +103,7 @@ export function CheckoutPage() {
     return () => {
       isMounted = false;
     };
-  }, [deliveryAddressLine, deliveryCity, deliveryState, hasValidDeliveryDetails, items, latitudeValue, longitudeValue, normalizedContactPhone]);
+  }, [deliveryAddressLine, deliveryCity, deliveryState, hasValidDeliveryDetails, isSyncing, items, latitudeValue, longitudeValue, normalizedContactPhone]);
 
   useEffect(() => {
     if (items.length === 0 && !orderPlaced && !placingOrder) {
@@ -125,7 +125,7 @@ export function CheckoutPage() {
   }));
 
   const handlePlaceOrder = useCallback(async () => {
-    if (placingOrder || items.length === 0 || !hasValidDeliveryDetails) {
+    if (isSyncing || placingOrder || items.length === 0 || !hasValidDeliveryDetails) {
       setPreviewError('Enter a valid delivery address and location before placing the order.');
       return;
     }
@@ -174,7 +174,7 @@ export function CheckoutPage() {
       setPlacingOrder(false);
       setShowSandboxPayment(false);
     }
-  }, [clearCart, deliveryAddressLine, deliveryCity, deliveryState, hasValidDeliveryDetails, items, latitudeValue, longitudeValue, navigate, normalizedContactPhone, placingOrder]);
+  }, [clearCart, deliveryAddressLine, deliveryCity, deliveryState, hasValidDeliveryDetails, isSyncing, items, latitudeValue, longitudeValue, navigate, normalizedContactPhone, placingOrder]);
 
   if (items.length === 0 && !orderPlaced) {
     return null;
