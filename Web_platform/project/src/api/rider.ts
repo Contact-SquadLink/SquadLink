@@ -17,6 +17,12 @@ export const riderApi = {
   acceptAssignment: (deliveryId: string) =>
     apiRequest<ApiSingleResponse<Delivery>>(`/api/v1/rider/deliveries/${deliveryId}/accept`, { method: 'POST' }),
 
+  reissuePickupCredential: (deliveryId: string) =>
+    apiRequest<ApiSingleResponse<{ deliveryId: string; credential: string; expiresInHours: number }>>(
+      `/api/v1/rider/deliveries/${deliveryId}/pickup-credential/reissue`,
+      { method: 'POST' }
+    ),
+
   rejectAssignment: (deliveryId: string, reason?: string) =>
     apiRequest<ApiSingleResponse<Delivery>>(`/api/v1/rider/deliveries/${deliveryId}/reject`, { method: 'POST', body: { reason } }),
 
