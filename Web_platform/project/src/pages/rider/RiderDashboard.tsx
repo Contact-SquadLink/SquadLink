@@ -25,7 +25,7 @@ export function RiderDashboard() {
   });
 
   const deliveries = (data?.data ?? []) as Delivery[];
-  const activeDeliveries = deliveries.filter((d) => d.status !== 'DELIVERED');
+  const activeDeliveries = deliveries.filter((d) => ['ASSIGNED', 'PICKED_UP', 'IN_TRANSIT', 'ARRIVED'].includes(d.status));
   const completedDeliveries = deliveries.filter((d) => d.status === 'DELIVERED');
   const availabilityMutation = useMutation({
     mutationFn: (available: boolean) => riderApi.setAvailable(available),
@@ -81,7 +81,7 @@ export function RiderDashboard() {
             <Bike className="h-5 w-5" />
           </div>
           <p className="mt-3 font-display text-2xl font-bold text-gray-900">{deliveries.length}</p>
-          <p className="text-xs text-gray-500">Assigned Today</p>
+          <p className="text-xs text-gray-500">Total deliveries</p>
         </div>
       </div>
 

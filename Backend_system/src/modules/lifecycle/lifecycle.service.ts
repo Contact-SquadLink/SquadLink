@@ -832,6 +832,7 @@ export async function listRiderDeliveries(userId: string) {
       LEFT JOIN public.fulfillments f ON f.order_id = o.id
       LEFT JOIN public.businesses b ON b.id = f.business_id
       WHERE r.user_id = $1
+        AND d.status IN ('ASSIGNED', 'PICKED_UP', 'IN_TRANSIT', 'ARRIVED', 'DELIVERED')
       ORDER BY d.updated_at DESC
     `,
     [userId]
@@ -1028,7 +1029,7 @@ async function loadRiderDelivery(client: PoolClient, deliveryId: string, userId:
     rider_user_id: string;
     business_owner_user_id: string | null;
   }>(
-    `SELECT d.id AS delivery_id, d.status AS delivery_status, d.order_id, o.status AS order_status, r.id AS rider_id, r.user_id AS rider_user_id, b.owner_user_id AS business_owner_user_id FROM public.deliveries d INNER JOIN public.orders o ON o.id = d.order_id INNER JOIN public.riders r ON r.id = d.rider_id INNER JOIN public.fulfillments f ON f.order_id = o.id INNER JOIN public.businesses b ON b.id = f.business_id WHERE d.id = $1 AND r.user_id = $2 FOR UPDATE OF d, o`,
+    `SELECT d.id AS delivery_id, d.status AS delivery_status, d.order_id, o.status AS order_status, r.id AS rider_id, r.user_id AS rider_user_id, b.owner_user_id AS business_owner_user_id FROM public.deliveries d INNER JOIN public.orders o ON o.id = d.order_id INNER JOIN public.riders r ON r.id = d.rider_id LEFT JOIN public.fulfillments f ON f.order_id = o.id LEFT JOIN public.businesses b ON b.id = f.business_id WHERE d.id = $1 AND r.user_id = $2 FOR UPDATE OF d, o`,
     [deliveryId, userId]
   );
   if (result.rows.length === 0) {

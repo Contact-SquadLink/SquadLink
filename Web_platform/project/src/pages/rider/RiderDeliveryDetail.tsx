@@ -50,7 +50,7 @@ export function RiderDeliveryDetailPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [credentialMessage, setCredentialMessage] = useState<string | null>(null);
   const [isActing, setIsActing] = useState(false);
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error } = useQuery({
     queryKey: ['rider-delivery', deliveryId],
     queryFn: () => riderApi.getDelivery(deliveryId as string),
     enabled: Boolean(deliveryId),
@@ -59,6 +59,20 @@ export function RiderDeliveryDetailPage() {
 
   if (isLoading) {
     return <p className="mx-auto max-w-3xl px-4 py-8 text-sm text-gray-600">Loading delivery...</p>;
+  }
+
+  if (isError) {
+    return (
+      <div className="mx-auto max-w-3xl px-4 py-8">
+        <Link to="/rider" className="inline-flex items-center gap-2 text-sm font-semibold text-gray-600 hover:text-primary-700 mb-6">
+          <ArrowLeft className="h-4 w-4" />
+          Back to Deliveries
+        </Link>
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          {error instanceof Error ? error.message : 'This delivery could not be loaded. Please refresh and try again.'}
+        </div>
+      </div>
+    );
   }
 
   if (!delivery || !deliveryId) {
