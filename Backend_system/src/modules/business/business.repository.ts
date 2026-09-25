@@ -455,8 +455,8 @@ export async function findOperatingHours(
           id,
           business_id,
           day_of_week,
-          opens_at::text AS opens_at,
-          closes_at::text AS closes_at,
+          to_char(opens_at, 'HH24:MI') AS opens_at,
+          to_char(closes_at, 'HH24:MI') AS closes_at,
           is_closed,
           created_at,
           updated_at

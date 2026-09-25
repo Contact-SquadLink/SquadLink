@@ -16,6 +16,12 @@ const envSchema = z.object({
 
   CORS_ORIGIN: z.string().min(1),
 
+  VAPID_PUBLIC_KEY: z.string().optional(),
+
+  VAPID_PRIVATE_KEY: z.string().optional(),
+
+  VAPID_SUBJECT: z.string().default("mailto:support@squadlink.app"),
+
   SANDBOX_PAYMENTS_ENABLED: z
     .enum(["true", "false"])
     .default("true")

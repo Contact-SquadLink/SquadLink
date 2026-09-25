@@ -37,7 +37,7 @@ export function CustomerDashboard() {
     queryKey: ['business-application'],
     queryFn: businessApi.getApplication,
   });
-  const { data: ordersData } = useQuery({
+  const { data: ordersData, isLoading: ordersLoading, error: ordersError } = useQuery({
     queryKey: ['customer-dashboard-orders'],
     queryFn: ordersApi.list,
   });
@@ -120,7 +120,7 @@ export function CustomerDashboard() {
         <div className="lg:col-span-1">
           <h2 className="font-display text-lg font-bold text-gray-900 mb-4">Active Order</h2>
           <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 p-6 text-center">
-            {activeOrders.length > 0 ? (
+            {ordersLoading ? <p className="text-sm text-gray-600">Loading your orders...</p> : ordersError ? <p role="alert" className="text-sm text-red-700">We could not load your orders. Refresh the page to try again.</p> : activeOrders.length > 0 ? (
               <div className="space-y-3 text-left">
                 {activeOrders.slice(0, 3).map((order) => (
                   <Link key={order.id} to={`/orders/${order.id}`} className="block rounded-xl border border-gray-200 bg-white p-3 hover:border-primary-300">

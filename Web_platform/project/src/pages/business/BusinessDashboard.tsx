@@ -26,12 +26,12 @@ const statusVariants: Record<OrderStatus, 'default' | 'success' | 'warning' | 'e
 };
 
 export function BusinessDashboard() {
-  const { data: ordersData, isLoading: ordersLoading } = useQuery({
+  const { data: ordersData, isLoading: ordersLoading, error: ordersError } = useQuery({
     queryKey: ['business-orders'],
     queryFn: businessApi.listOrders,
   });
 
-  const { data: businessData } = useQuery({
+  const { data: businessData, error: businessError } = useQuery({
     queryKey: ['business-profile'],
     queryFn: businessApi.getMyBusiness,
   });
@@ -54,6 +54,8 @@ export function BusinessDashboard() {
       <p className="text-sm text-gray-500 mb-6">
         {business?.name ? `Managing ${business.name}` : 'Manage your orders and business operations.'}
       </p>
+
+      {(ordersError || businessError) && <p role="alert" className="mb-5 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{ordersError && businessError ? 'We could not load your business profile or orders.' : ordersError ? 'We could not load your orders.' : 'We could not load your business profile.'} Please refresh to try again.</p>}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <StatCard icon={Clock} label="Pending" value={stats.pending} color="bg-warning-100 text-warning-700" />
@@ -103,6 +105,8 @@ export function BusinessDashboard() {
 
         {ordersLoading ? (
           <p className="text-sm text-gray-600">Loading orders…</p>
+        ) : ordersError ? (
+          <p role="alert" className="text-sm text-red-700">Recent orders are unavailable. Please refresh to try again.</p>
         ) : recentOrders.length === 0 ? (
           <EmptyState
             icon={<ClipboardList className="h-7 w-7" />}

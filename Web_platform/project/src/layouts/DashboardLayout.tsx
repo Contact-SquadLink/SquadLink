@@ -10,6 +10,7 @@ import {
   User as UserIcon,
   LayoutDashboard,
   Package,
+  Plus,
   Store,
   Bike,
   Shield,
@@ -42,6 +43,7 @@ const allNavLinks: NavLink[] = [
   { label: 'Dashboard', path: '/business', icon: LayoutDashboard, roles: ['BUSINESS_USER'] },
   { label: 'Orders', path: '/business/orders', icon: ClipboardList, roles: ['BUSINESS_USER'] },
   { label: 'Catalog', path: '/business/catalog', icon: Store, roles: ['BUSINESS_USER'] },
+  { label: 'Enroll products', path: '/business/catalog/setup', icon: Plus, roles: ['BUSINESS_USER'] },
   { label: 'Earnings', path: '/earnings', icon: Repeat, roles: ['BUSINESS_USER'] },
   // Rider
   { label: 'Deliveries', path: '/rider', icon: Bike, roles: ['RIDER'] },

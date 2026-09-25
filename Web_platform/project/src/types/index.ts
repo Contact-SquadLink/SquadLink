@@ -246,6 +246,7 @@ export interface Notification {
   message: string;
   read: boolean;
   orderId?: string | null;
+  deliveryId?: string | null;
   createdAt: string;
 }
 

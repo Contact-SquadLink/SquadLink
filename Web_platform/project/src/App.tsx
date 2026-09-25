@@ -168,6 +168,14 @@ export default function App() {
                     </ProtectedRoute>
                   }
                 />
+                <Route
+                  path="/business/catalog/setup"
+                  element={
+                    <ProtectedRoute allowedRoles={['BUSINESS_USER', 'ADMIN']}>
+                      <BusinessCatalogPage mode="setup" />
+                    </ProtectedRoute>
+                  }
+                />
 
                 {/* Rider routes */}
                 <Route

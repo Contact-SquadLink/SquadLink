@@ -3,6 +3,7 @@ import type { PoolClient } from "pg";
 import { withTransaction } from "../../db/transaction";
 import { db } from "../../db/database";
 import { expireInventoryReservations } from "../inventory/inventory.maintenance";
+import { processPushDeliveryBatch } from "../notification/push.processor";
 
 const DEFAULT_BATCH_SIZE = 10;
 const MAX_ATTEMPTS = 5;
@@ -554,7 +555,8 @@ export async function runOutboxWorker(): Promise<void> {
   while (true) {
     await expireInventoryReservations();
     const processed = await processOutboxBatch(batchSize);
-    if (processed === 0) {
+    const pushed = await processPushDeliveryBatch();
+    if (processed === 0 && pushed === 0) {
       await new Promise((resolve) => setTimeout(resolve, intervalMs));
     }
   }

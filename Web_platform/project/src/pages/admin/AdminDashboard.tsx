@@ -87,9 +87,11 @@ export function AdminDashboard() {
 
       {summaryQuery.error ? (
         <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-          We could not load platform earnings and transaction metrics. The backend database may need its latest workflow migrations applied.
+          Platform earnings and transaction metrics are unavailable. This account may not have access to the main-admin reporting endpoints.
         </div>
       ) : null}
+
+      {accountsQuery.error && <div role="alert" className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">Platform account management is unavailable for this admin account.</div>}
 
       {summaryQuery.data?.data && <div className="mb-8 grid grid-cols-2 gap-4 lg:grid-cols-4"><div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm"><Users className="h-5 w-5 text-primary-600" /><p className="mt-3 text-2xl font-bold text-gray-900">{summaryQuery.data.data.customers}</p><p className="text-xs text-gray-500">Customer accounts</p></div><div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm"><Store className="h-5 w-5 text-primary-600" /><p className="mt-3 text-2xl font-bold text-gray-900">{summaryQuery.data.data.businesses}</p><p className="text-xs text-gray-500">Business accounts</p></div><div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm"><Bike className="h-5 w-5 text-primary-600" /><p className="mt-3 text-2xl font-bold text-gray-900">{summaryQuery.data.data.riders}</p><p className="text-xs text-gray-500">Rider accounts</p></div><div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm"><UserCog className="h-5 w-5 text-primary-600" /><p className="mt-3 text-2xl font-bold text-gray-900">{summaryQuery.data.data.admins}</p><p className="text-xs text-gray-500">Admin accounts</p></div></div>}
 

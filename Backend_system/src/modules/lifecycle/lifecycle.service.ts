@@ -965,7 +965,7 @@ async function assignRider(
   if (delivery.status === "ASSIGNED") {
     const assignmentResult = await client.query<{ rider_id: string; status: string; expires_at: Date }>(
       `
-        SELECT rider_id, status
+        SELECT rider_id, status, expires_at
         FROM public.delivery_assignment_decisions
         WHERE delivery_id = $1
         ORDER BY created_at DESC

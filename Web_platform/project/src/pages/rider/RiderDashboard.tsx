@@ -19,7 +19,7 @@ const statusVariants: Record<DeliveryStatus, 'default' | 'success' | 'warning' |
 export function RiderDashboard() {
   const queryClient = useQueryClient();
   const profileQuery = useQuery({ queryKey: ['rider-profile'], queryFn: riderApi.getProfile, refetchInterval: 15000 });
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error: deliveriesError } = useQuery({
     queryKey: ['rider-deliveries'],
     queryFn: riderApi.listDeliveries,
     refetchInterval: 15000,
@@ -37,6 +37,7 @@ export function RiderDashboard() {
   });
   const locationMutation = useMutation({
     mutationFn: ({ latitude, longitude }: { latitude: number; longitude: number }) => riderApi.setLocation(latitude, longitude),
+    onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ['rider-deliveries'] }); },
   });
   const profile = profileQuery.data?.data;
   const updateLocation = () => {
@@ -59,11 +60,15 @@ export function RiderDashboard() {
           </div>
           <div>
             <h2 className="text-sm font-bold text-primary-900">Availability</h2>
-            <p className="text-xs text-primary-700">{profile?.verificationStatus === 'VERIFIED' ? 'Verified rider account.' : 'Your account is awaiting verification.'}</p>
+            <p className="text-xs text-primary-700">{profileQuery.isLoading ? 'Loading rider profile...' : profileQuery.error ? 'Rider profile is unavailable.' : profile?.verificationStatus === 'VERIFIED' ? 'Verified rider account.' : 'Your account is awaiting verification.'}</p>
           </div>
         </div>
         {profile?.verificationStatus === 'VERIFIED' && <div className="mt-4 flex flex-wrap gap-2"><button type="button" onClick={() => availabilityMutation.mutate(!profile.available)} disabled={availabilityMutation.isPending} className="rounded-lg bg-primary-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50">{profile.available ? 'Go offline' : 'Go online'}</button><button type="button" onClick={updateLocation} disabled={locationMutation.isPending} className="inline-flex items-center gap-2 rounded-lg border border-primary-200 px-3 py-2 text-sm font-semibold text-primary-700 disabled:opacity-50"><LocateFixed className="h-4 w-4" /> Update location</button></div>}
+        {(availabilityMutation.error || locationMutation.error) && <p className="mt-3 text-sm text-red-700">{(availabilityMutation.error ?? locationMutation.error) instanceof Error ? (availabilityMutation.error ?? locationMutation.error)?.message : 'Unable to update rider availability or location.'}</p>}
       </div>
+
+      {profileQuery.error && <p role="alert" className="mb-5 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">We could not load your rider profile. Please refresh to try again.</p>}
+      {deliveriesError && <p role="alert" className="mb-5 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">We could not load your deliveries. Please refresh to try again.</p>}
 
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-8">
         <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
@@ -91,7 +96,7 @@ export function RiderDashboard() {
 
       {isLoading ? (
         <p className="text-sm text-gray-600">Loading rider deliveries…</p>
-      ) : deliveries.length === 0 ? (
+      ) : deliveriesError ? null : deliveries.length === 0 ? (
         <EmptyState
           icon={<Package className="h-7 w-7" />}
           title="No deliveries assigned"

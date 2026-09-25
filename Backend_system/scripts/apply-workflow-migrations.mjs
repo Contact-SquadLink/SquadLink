@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { Client } from 'pg';
+import { readFile } from 'node:fs/promises';
 
 const client = new Client({ connectionString: process.env.DATABASE_URL });
 
@@ -143,6 +144,20 @@ try {
       ('096', 'add_business_fee_to_orders')
     ON CONFLICT (version) DO NOTHING
   `);
+
+  const pushMigration = await client.query(
+    "SELECT 1 FROM public.schema_migrations WHERE version = '097'"
+  );
+  if (pushMigration.rowCount === 0) {
+    const pushMigrationSql = await readFile(
+      new URL('../database/migrations/097_create_web_push_notifications.sql', import.meta.url),
+      'utf8'
+    );
+    await client.query(pushMigrationSql);
+    await client.query(
+      "INSERT INTO public.schema_migrations (version, name) VALUES ('097', 'create_web_push_notifications')"
+    );
+  }
 
   await client.query('COMMIT');
   console.log('Workflow migrations applied successfully.');
