@@ -34,6 +34,7 @@ import {
   acceptRiderAssignment,
   rejectRiderAssignment,
   reissuePickupCredential,
+  reissuePickupCredentialForBusiness,
   verifyPickup
 } from "./lifecycle.service";
 
@@ -78,6 +79,18 @@ export async function lifecycleRoutes(app: FastifyInstance): Promise<void> {
       const { orderId } = orderIdParamsSchema.parse(request.params);
       return successResponse(
         await retryRiderAssignment(request.user.id, orderId),
+        request.id
+      );
+    }
+  );
+
+  app.post(
+    "/business/orders/:orderId/pickup-credential/reissue",
+    { preHandler: [authenticate, authorize("BUSINESS_USER")] },
+    async (request) => {
+      const { orderId } = orderIdParamsSchema.parse(request.params);
+      return successResponse(
+        await reissuePickupCredentialForBusiness(request.user.id, orderId),
         request.id
       );
     }

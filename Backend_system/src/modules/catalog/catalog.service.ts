@@ -93,7 +93,10 @@ export async function modifyCategory(
 }
 
 export async function getProducts(options?: { search?: string; category?: string }) {
-  return listProducts(options);
+  return listProducts({
+    ...options,
+    category: options?.category === 'all' ? undefined : options?.category,
+  });
 }
 
 export async function getPublicProductById(productId: string) {

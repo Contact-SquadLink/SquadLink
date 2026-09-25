@@ -1103,7 +1103,31 @@ export async function acceptRiderAssignment(
       fail("This delivery assignment is no longer pending.", 409, "ASSIGNMENT_NOT_PENDING");
     }
     if (result.rows[0].expires_at < new Date()) {
-      fail("This delivery assignment has expired.", 409, "ASSIGNMENT_EXPIRED");
+      await client.query(
+        `UPDATE public.delivery_assignment_decisions SET status = 'EXPIRED', decided_at = NOW(), updated_at = NOW() WHERE delivery_id = $1 AND rider_id = $2`,
+        [deliveryId, delivery.rider_id]
+      );
+      await client.query(
+        `UPDATE public.pickup_verifications SET status = 'INVALIDATED', updated_at = NOW() WHERE delivery_id = $1 AND status = 'ACTIVE'`,
+        [deliveryId]
+      );
+      await client.query(
+        `UPDATE public.deliveries SET rider_id = NULL, vehicle_id = NULL, status = 'SEARCHING_RIDER', assigned_at = NULL, updated_at = NOW() WHERE id = $1`,
+        [deliveryId]
+      );
+      await client.query(
+        `UPDATE public.riders SET is_available = TRUE, updated_at = NOW() WHERE id = $1`,
+        [delivery.rider_id]
+      );
+      const reassigned = await assignRider(client, delivery.order_id, userId, [delivery.rider_id]);
+      if (reassigned.status === "SEARCHING_RIDER") {
+        await writeOutbox(client, "RIDER_REASSIGNMENT_UNAVAILABLE", "DELIVERY", deliveryId, {
+          deliveryId,
+          orderId: delivery.order_id,
+          reason: "The rider assignment expired and no replacement rider is currently available."
+        });
+      }
+      return { deliveryId, status: reassigned.status, reassigned: true };
     }
 
     await client.query(
@@ -1186,6 +1210,61 @@ export async function reissuePickupCredential(userId: string, deliveryId: string
     await writeAudit(client, userId, "PICKUP_CREDENTIAL_REISSUED", "DELIVERY", deliveryId, "Pickup credential reissued to the assigned rider.");
 
     return { deliveryId, credential, expiresInHours: 2 };
+  });
+}
+
+export async function reissuePickupCredentialForBusiness(userId: string, orderId: string) {
+  return withTransaction(async (client) => {
+    const deliveryResult = await client.query<{
+      delivery_id: string;
+      rider_id: string;
+      delivery_status: string;
+      pickup_verification_id: string;
+      pickup_status: string;
+      business_id: string;
+    }>(
+      `
+        SELECT d.id AS delivery_id, d.rider_id, d.status AS delivery_status,
+               pv.id AS pickup_verification_id, pv.status AS pickup_status,
+               b.id AS business_id
+        FROM public.deliveries d
+        INNER JOIN public.orders o ON o.id = d.order_id
+        INNER JOIN public.fulfillments f ON f.order_id = o.id
+        INNER JOIN public.businesses b ON b.id = f.business_id
+        INNER JOIN public.pickup_verifications pv ON pv.delivery_id = d.id
+        WHERE d.order_id = $1 AND b.owner_user_id = $2
+        FOR UPDATE OF d, pv
+      `,
+      [orderId, userId]
+    );
+    if (deliveryResult.rows.length === 0) {
+      fail("Delivery not found for this business.", 404, "DELIVERY_NOT_FOUND");
+    }
+    const delivery = deliveryResult.rows[0];
+    if (delivery.delivery_status !== "ASSIGNED") {
+      fail("A pickup credential can only be reissued before pickup.", 409, "PICKUP_CREDENTIAL_NOT_AVAILABLE");
+    }
+
+    const assignment = await client.query<{ status: string }>(
+      `SELECT status FROM public.delivery_assignment_decisions WHERE delivery_id = $1 AND rider_id = $2 ORDER BY created_at DESC LIMIT 1 FOR UPDATE`,
+      [delivery.delivery_id, delivery.rider_id]
+    );
+    if (assignment.rows.length === 0 || assignment.rows[0].status !== "ACCEPTED") {
+      fail("The rider must accept the assignment before a pickup credential can be reissued.", 409, "ASSIGNMENT_NOT_ACCEPTED");
+    }
+
+    const credential = sixDigitCode() + sixDigitCode();
+    const credentialHash = await bcrypt.hash(credential, 12);
+    await client.query(
+      `UPDATE public.pickup_verifications SET credential_hash = $1, status = 'ACTIVE', expires_at = NOW() + INTERVAL '2 hours', verified_at = NULL, attempt_count = 0, updated_at = NOW() WHERE id = $2`,
+      [credentialHash, delivery.pickup_verification_id]
+    );
+    await client.query(
+      `INSERT INTO public.pickup_verification_history (pickup_verification_id, previous_status, new_status, rider_id, business_id, changed_by, reason) VALUES ($1, $2::pickup_verification_status, 'ACTIVE', $3, $4, $5, 'Replacement pickup credential issued by business.')`,
+      [delivery.pickup_verification_id, delivery.pickup_status, delivery.rider_id, delivery.business_id, userId]
+    );
+    await writeAudit(client, userId, "PICKUP_CREDENTIAL_REISSUED", "DELIVERY", delivery.delivery_id, "Pickup credential reissued by the business.");
+    return { deliveryId: delivery.delivery_id, credential, expiresInHours: 2 };
   });
 }
 

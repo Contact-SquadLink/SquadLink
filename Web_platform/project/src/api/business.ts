@@ -98,6 +98,9 @@ export const businessApi = {
   retryRiderAssignment: (orderId: string) =>
     apiRequest<ApiSingleResponse<BusinessOrderReadyResponse>>(`/api/v1/business/orders/${orderId}/retry-rider`, { method: 'POST' }),
 
+  reissuePickupCredential: (orderId: string) =>
+    apiRequest<ApiSingleResponse<{ deliveryId: string; credential: string; expiresInHours: number }>>(`/api/v1/business/orders/${orderId}/pickup-credential/reissue`, { method: 'POST' }),
+
   createBusiness: (payload: CreateBusinessPayload) =>
     apiRequest<ApiResponseEnvelope<Business>>('/api/v1/businesses/', {
       method: 'POST',

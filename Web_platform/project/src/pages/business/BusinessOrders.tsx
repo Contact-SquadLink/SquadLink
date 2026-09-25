@@ -120,6 +120,11 @@ export function BusinessOrderDetailPage() {
     },
   });
 
+  const reissueCredentialMutation = useMutation({
+    mutationFn: () => businessApi.reissuePickupCredential(orderId as string),
+    onSuccess: (response) => setPickupCredential(response.data.credential),
+  });
+
   if (isLoading) {
     return <div className="mx-auto max-w-3xl px-4 py-8 text-sm text-gray-600">Loading order details…</div>;
   }
@@ -180,6 +185,8 @@ export function BusinessOrderDetailPage() {
         )}
 
         {order.status === 'READY_FOR_PICKUP' && <button type="button" onClick={() => retryRiderMutation.mutate()} disabled={retryRiderMutation.isPending} className="mb-3 inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-primary-200 px-5 text-sm font-semibold text-primary-700 disabled:opacity-50">{retryRiderMutation.isPending ? 'Searching...' : 'Retry rider assignment'}</button>}
+
+        {order.status === 'READY_FOR_PICKUP' && <button type="button" onClick={() => reissueCredentialMutation.mutate()} disabled={reissueCredentialMutation.isPending} className="mb-3 ml-2 inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-amber-200 px-5 text-sm font-semibold text-amber-800 disabled:opacity-50">{reissueCredentialMutation.isPending ? 'Issuing...' : 'Reissue pickup code'}</button>}
 
         {(order.status === 'READY_FOR_PICKUP' || order.status === 'OUT_FOR_DELIVERY' || order.status === 'DELIVERED') && (
           <div className="flex items-center gap-2 rounded-xl bg-success-50 border border-success-200 p-4">
