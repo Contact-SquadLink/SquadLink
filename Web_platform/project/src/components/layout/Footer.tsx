@@ -8,14 +8,14 @@ const footerSections = [
       { label: 'Browse Products', path: '/browse' },
       { label: 'How It Works', path: '/#how-it-works' },
       { label: 'Create Account', path: '/register' },
-      { label: 'Track Order', path: '/login' },
+      { label: 'Track Order', path: '/login?role=CUSTOMER&redirect=%2Forders' },
     ],
   },
   {
     title: 'Businesses',
     links: [
       { label: 'Partner With Us', path: '/register?intent=business' },
-      { label: 'Business Dashboard', path: '/login' },
+      { label: 'Business Dashboard', path: '/login?role=BUSINESS_USER' },
       { label: 'How It Works', path: '/#how-it-works' },
       { label: 'FAQ', path: '/faq' },
     ],
@@ -23,8 +23,8 @@ const footerSections = [
   {
     title: 'Riders',
     links: [
-      { label: 'Become a Rider', path: '/contact' },
-      { label: 'Rider Dashboard', path: '/login' },
+      { label: 'Become a Rider', path: '/rider/register' },
+      { label: 'Rider Dashboard', path: '/login?role=RIDER' },
       { label: 'How It Works', path: '/#how-it-works' },
       { label: 'FAQ', path: '/faq' },
     ],
@@ -63,15 +63,15 @@ export function Footer() {
             <div className="mt-5 space-y-2 text-sm">
               <div className="flex items-center gap-2 text-gray-400">
                 <Mail className="h-4 w-4 text-primary-400" />
-                <span>hello@squadlink.example</span>
+                <span>contact.sqadlink@gmail.com</span>
               </div>
               <div className="flex items-center gap-2 text-gray-400">
                 <Phone className="h-4 w-4 text-primary-400" />
-                <span>+234 800 SQUADLINK</span>
+                <span>+2349011390588</span>
               </div>
               <div className="flex items-center gap-2 text-gray-400">
                 <MapPin className="h-4 w-4 text-primary-400" />
-                <span>Nigeria</span>
+                <span>Yelwa, Bauchi L.G.A Bauchi state</span>
               </div>
             </div>
           </div>

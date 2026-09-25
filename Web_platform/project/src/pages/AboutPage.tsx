@@ -120,6 +120,20 @@ export function AboutPage() {
         </div>
       </section>
 
+      <section id="privacy" className="scroll-mt-16 py-12 bg-gray-50">
+        <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
+          <h2 className="font-display text-2xl font-bold text-gray-900">Privacy Policy</h2>
+          <p className="mt-3 text-sm leading-relaxed text-gray-600">SQUADLINK uses account, order, location, and delivery information only to operate the platform, coordinate fulfilment, and protect delivery transactions.</p>
+        </div>
+      </section>
+
+      <section id="terms" className="scroll-mt-16 py-12">
+        <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
+          <h2 className="font-display text-2xl font-bold text-gray-900">Terms of Service</h2>
+          <p className="mt-3 text-sm leading-relaxed text-gray-600">Customers, businesses, riders, and administrators must use their accounts honestly and follow the platform workflow, verification, payment, pickup, and delivery requirements.</p>
+        </div>
+      </section>
+
       {/* Note */}
       <section className="py-12 bg-gray-50">
         <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8 text-center">

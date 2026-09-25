@@ -1,4 +1,5 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
+import { useEffect } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from '@/hooks/useAuth';
 import { CartProvider } from '@/hooks/useCart';
@@ -65,12 +66,31 @@ function PublicPagesLayout({ children }: { children: React.ReactNode }) {
   );
 }
 
+function ScrollManager() {
+  const location = useLocation();
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      if (location.hash) {
+        document.getElementById(location.hash.slice(1))?.scrollIntoView({ block: 'start' });
+      } else {
+        window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+      }
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [location.pathname, location.hash]);
+
+  return null;
+}
+
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <CartProvider>
           <BrowserRouter>
+            <ScrollManager />
             <Routes>
               {/* Auth pages — no public header/footer */}
               <Route path="/login" element={<LoginPage />} />
@@ -79,7 +99,14 @@ export default function App() {
                 path="/business/register"
                 element={<BusinessRegisterPage />}
               />
-              <Route path="/rider/register" element={<RiderRegisterPage />} />
+              <Route
+                path="/rider/register"
+                element={
+                  <ProtectedRoute allowedRoles={['CUSTOMER']}>
+                    <RiderRegisterPage />
+                  </ProtectedRoute>
+                }
+              />
               <Route path="/unauthorized" element={<UnauthorizedPage />} />
 
               {/* Public pages — with header and footer */}

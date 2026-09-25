@@ -30,6 +30,21 @@ function auth(userId: string, role: string) {
 }
 
 before(async () => {
+  await db.query(
+    `UPDATE public.users
+     SET role = 'ADMIN', is_active = TRUE, admin_approved = TRUE, updated_at = NOW()
+     WHERE id = $1`,
+    [ADMIN_ID]
+  );
+  await db.query(
+    `INSERT INTO public.rider_verifications (rider_id, status, verified_at)
+     SELECT r.id, 'VERIFIED', NOW()
+     FROM public.riders r
+     WHERE r.user_id = $1
+     ON CONFLICT (rider_id) DO UPDATE
+       SET status = 'VERIFIED', verified_at = COALESCE(public.rider_verifications.verified_at, NOW()), updated_at = NOW()`,
+    [RIDER_USER_ID]
+  );
   app = await buildApp();
 });
 
@@ -185,7 +200,7 @@ describe("lifecycle authorization and replay protection", () => {
     const response = await app.inject({
       method: "POST",
       url: `/api/v1/deliveries/${DELIVERY_ID}/confirm`,
-      headers: auth(CUSTOMER_ID, "CUSTOMER"),
+      headers: auth(RIDER_USER_ID, "RIDER"),
       payload: { otp: "000000" }
     });
 
@@ -334,6 +349,7 @@ describe("rider allocation concurrency", () => {
       for (const temporary of temporaryOrders) {
         await db.query(`DELETE FROM public.pickup_verification_history WHERE pickup_verification_id IN (SELECT id FROM public.pickup_verifications WHERE delivery_id = $1)`, [temporary.deliveryId]);
         await db.query(`DELETE FROM public.pickup_verifications WHERE delivery_id = $1`, [temporary.deliveryId]);
+        await db.query(`DELETE FROM public.delivery_assignment_decisions WHERE delivery_id = $1`, [temporary.deliveryId]);
         await db.query(`DELETE FROM public.delivery_assignment_history WHERE delivery_id = $1`, [temporary.deliveryId]);
         await db.query(`DELETE FROM public.delivery_status_history WHERE delivery_id = $1`, [temporary.deliveryId]);
         await db.query(`DELETE FROM public.outbox_events WHERE aggregate_id = $1`, [temporary.deliveryId]);

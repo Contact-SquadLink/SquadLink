@@ -1,27 +1,56 @@
+import { FormEvent, useState } from 'react';
 import { Mail, Phone, MapPin, Building2, Bike, LifeBuoy } from 'lucide-react';
+import { contactApi } from '@/api/contact';
+
+const CONTACT_EMAIL = 'contact.sqadlink@gmail.com';
+const CONTACT_PHONE = '+2349011390588';
+const CONTACT_LOCATION = 'Yelwa, Bauchi L.G.A Bauchi state';
 
 const contactChannels = [
   {
     icon: LifeBuoy,
     label: 'General Support',
-    email: 'support@squadlink.example',
+    email: CONTACT_EMAIL,
     description: 'Questions about using SQUADLINK',
   },
   {
     icon: Building2,
     label: 'Business Enquiries',
-    email: 'business@squadlink.example',
+    email: CONTACT_EMAIL,
     description: 'Partner with SQUADLINK as a business',
   },
   {
     icon: Bike,
     label: 'Rider Enquiries',
-    email: 'riders@squadlink.example',
+    email: CONTACT_EMAIL,
     description: 'Join SQUADLINK as a delivery rider',
   },
 ];
 
 export function ContactPage() {
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [message, setMessage] = useState('');
+  const [status, setStatus] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    setSubmitting(true);
+    setStatus(null);
+    try {
+      await contactApi.submit({ name, email, message });
+      setName('');
+      setEmail('');
+      setMessage('');
+      setStatus('Your message has been submitted successfully.');
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'Unable to submit your message.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
     <div className="bg-white min-h-screen">
       <section className="bg-gradient-to-b from-primary-50 to-white py-16">
@@ -68,41 +97,41 @@ export function ContactPage() {
                 <Mail className="h-5 w-5 text-primary-600 shrink-0" />
                 <div>
                   <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">Email</p>
-                  <p className="text-sm font-semibold text-gray-900">hello@squadlink.example</p>
+                  <p className="text-sm font-semibold text-gray-900">{CONTACT_EMAIL}</p>
                 </div>
               </div>
               <div className="flex flex-col sm:flex-row items-center gap-3">
                 <Phone className="h-5 w-5 text-primary-600 shrink-0" />
                 <div>
                   <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">Phone</p>
-                  <p className="text-sm font-semibold text-gray-900">+234 800 SQUADLINK</p>
+                  <p className="text-sm font-semibold text-gray-900">{CONTACT_PHONE}</p>
                 </div>
               </div>
               <div className="flex flex-col sm:flex-row items-center gap-3">
                 <MapPin className="h-5 w-5 text-primary-600 shrink-0" />
                 <div>
                   <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">Location</p>
-                  <p className="text-sm font-semibold text-gray-900">Nigeria</p>
+                  <p className="text-sm font-semibold text-gray-900">{CONTACT_LOCATION}</p>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Backend dependency notice */}
-          <div className="mt-8 rounded-xl border border-gray-200 bg-white p-6">
-            <h3 className="text-sm font-bold text-gray-900">Contact Form</h3>
-            <p className="mt-2 text-sm text-gray-600">
-              A contact form will be available once a backend endpoint for
-              handling contact submissions is implemented. For now, please
-              reach out via email.
-            </p>
-            {/* TODO: Backend dependency — POST /api/v1/contact or equivalent endpoint
-                is required to handle contact form submissions. Do not create a
-                fake form that appears to send messages without a real backend endpoint. */}
-          </div>
+          <form onSubmit={submit} className="mt-8 rounded-xl border border-gray-200 bg-white p-6">
+            <h3 className="text-sm font-bold text-gray-900">Send a message</h3>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <input required value={name} onChange={(event) => setName(event.target.value)} placeholder="Your name" className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+              <input required type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Your email" className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+            </div>
+            <textarea required minLength={10} maxLength={5000} value={message} onChange={(event) => setMessage(event.target.value)} placeholder="How can we help?" rows={5} className="mt-4 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+            <button type="submit" disabled={submitting} className="mt-4 rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50">
+              {submitting ? 'Sending...' : 'Send message'}
+            </button>
+            {status && <p className="mt-3 text-sm text-gray-600">{status}</p>}
+          </form>
 
           <p className="mt-6 text-center text-xs text-gray-400">
-            Contact details shown are placeholders and will be updated with finalized information.
+            We respond through the contact details above.
           </p>
         </div>
       </section>

@@ -39,7 +39,8 @@ interface NotificationJob {
     | "RIDER_APPROACHING"
     | "ORDER_PICKED_UP"
     | "DELIVERY_ASSIGNMENT"
-    | "PICKUP_INSTRUCTIONS";
+    | "PICKUP_INSTRUCTIONS"
+    | "FULFILLMENT_FAILED";
   title: string;
   message: string;
   recipientKey: string;
@@ -283,6 +284,18 @@ async function notificationJobs(
         "RIDER_ASSIGNED",
         "Delivery assigned",
         `Pickup: ${context.pickup_address}. Drop-off: ${context.delivery_address}. Pickup pin: ${typeof event.payload.pickupCredential === "string" ? event.payload.pickupCredential : "available in delivery details"}.`
+      );
+      break;
+    case "RIDER_REASSIGNMENT_UNAVAILABLE":
+      addCustomer(
+        "FULFILLMENT_FAILED",
+        "Rider reassignment pending",
+        "Your assigned rider could not take this delivery, and no replacement rider is currently available. We will continue searching."
+      );
+      addBusiness(
+        "FULFILLMENT_FAILED",
+        "Rider reassignment pending",
+        "The assigned rider rejected this delivery and no replacement rider is currently available. The order remains ready while the platform continues searching."
       );
       break;
     case "ORDER_PICKED_UP":

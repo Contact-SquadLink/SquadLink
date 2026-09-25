@@ -7,6 +7,7 @@
   "dev": "tsx watch src/server.ts",
   "build": "tsc",
   "test": "tsx --test tests/lifecycle.security.test.ts tests/outbox.processor.test.ts tests/rider.onboarding.test.ts",
+  "db:apply-workflow-migrations": "node scripts/apply-workflow-migrations.mjs",
   "worker:outbox": "tsx src/modules/outbox/outbox.processor.ts",
   "start": "node dist/server.js"
 },

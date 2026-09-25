@@ -940,7 +940,12 @@ export async function retryRiderAssignment(userId: string, orderId: string) {
   });
 }
 
-async function assignRider(client: PoolClient, orderId: string, actorUserId: string) {
+async function assignRider(
+  client: PoolClient,
+  orderId: string,
+  actorUserId: string,
+  excludedRiderIds: string[] = []
+) {
   const deliveryResult = await client.query<{ delivery_id: string; rider_id: string | null; status: string }>(
     `SELECT id AS delivery_id, rider_id, status FROM public.deliveries WHERE order_id = $1 FOR UPDATE`,
     [orderId]
@@ -977,15 +982,18 @@ async function assignRider(client: PoolClient, orderId: string, actorUserId: str
       SELECT r.id AS rider_id, v.id AS vehicle_id
       FROM public.riders r
       INNER JOIN public.vehicles v ON v.rider_id = r.id AND v.is_active = TRUE
-      INNER JOIN public.vehicle_types vt ON vt.id = v.vehicle_type_id AND vt.code = 'MOTORCYCLE'
+      INNER JOIN public.vehicle_types vt ON vt.id = v.vehicle_type_id AND vt.code IN ('MOTORCYCLE', 'KEKE')
       INNER JOIN public.deliveries d ON d.id = $1
       INNER JOIN public.rider_verifications rv ON rv.rider_id = r.id AND rv.status = 'VERIFIED'
-      WHERE r.is_active = TRUE AND r.is_available = TRUE AND r.current_location IS NOT NULL
+      WHERE r.is_active = TRUE
+        AND r.is_available = TRUE
+        AND r.current_location IS NOT NULL
+        AND NOT (r.id = ANY($2::uuid[]))
       ORDER BY ST_Distance(r.current_location, d.pickup_location) ASC, r.id
       FOR UPDATE OF r SKIP LOCKED
       LIMIT 1
     `,
-    [delivery.delivery_id]
+    [delivery.delivery_id, excludedRiderIds]
   );
   if (riderResult.rows.length === 0) {
     return { deliveryId: delivery.delivery_id, status: "SEARCHING_RIDER", pickupCredential: undefined };
@@ -1109,8 +1117,16 @@ export async function rejectRiderAssignment(
       [deliveryId, delivery.rider_id, userId, reason ?? "Rider rejected the assignment."]
     );
     await writeDeliveryHistory(client, deliveryId, "ASSIGNED", "SEARCHING_RIDER", userId, "Rider rejected the assignment.");
+    const reassigned = await assignRider(client, delivery.order_id, userId, [delivery.rider_id]);
+    if (reassigned.status === "SEARCHING_RIDER") {
+      await writeOutbox(client, "RIDER_REASSIGNMENT_UNAVAILABLE", "DELIVERY", deliveryId, {
+        deliveryId,
+        orderId: delivery.order_id,
+        reason: reason ?? "The assigned rider rejected the delivery and no replacement rider is currently available."
+      });
+    }
     await writeAudit(client, userId, "DELIVERY_ASSIGNMENT_REJECTED", "DELIVERY", deliveryId, reason ?? "Rider rejected the delivery assignment.");
-    return { deliveryId, status: "SEARCHING_RIDER" };
+    return { deliveryId, status: reassigned.status };
   });
 }
 

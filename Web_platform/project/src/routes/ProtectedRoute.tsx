@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
+import { useEffect, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import type { Role } from '@/types';
 import { Spinner } from '@/components/ui/States';
@@ -10,8 +11,19 @@ interface ProtectedRouteProps {
 }
 
 export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading, refreshUser } = useAuth();
   const location = useLocation();
+  const [refreshKey, setRefreshKey] = useState<string | null>(null);
+  const roleKey = `${location.pathname}:${allowedRoles?.join(',') ?? ''}`;
+
+  useEffect(() => {
+    if (!user || !allowedRoles || allowedRoles.includes(user.role) || refreshKey === roleKey) {
+      return;
+    }
+
+    setRefreshKey(roleKey);
+    void refreshUser();
+  }, [allowedRoles, refreshKey, refreshUser, roleKey, user]);
 
   if (isLoading) {
     return (
@@ -27,6 +39,13 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
   }
 
   if (allowedRoles && !allowedRoles.includes(user.role)) {
+    if (refreshKey === roleKey) {
+      return (
+        <div className="flex min-h-screen items-center justify-center">
+          <Spinner size="lg" />
+        </div>
+      );
+    }
     return <Navigate to="/unauthorized" replace />;
   }
 

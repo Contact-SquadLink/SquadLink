@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { businessApi } from '@/api/business';
 import { useAuth } from '@/hooks/useAuth';
+import { formatNigerianPhone, isCompleteNigerianPhone, phoneDigits } from '@/utils/nigerian-phone';
 
 interface BusinessFormState {
   name: string;
@@ -133,8 +134,8 @@ export function BusinessRegisterPage() {
       return 'Minimum order amount must be zero or greater.';
     }
 
-    if (form.phoneNumber.trim() && form.phoneNumber.trim().length < 7) {
-      return 'Business phone number must be at least 7 characters long when provided.';
+    if (form.phoneNumber.trim() && !isCompleteNigerianPhone(form.phoneNumber.trim())) {
+      return 'Business phone number must contain exactly 10 digits after +234.';
     }
 
     if (form.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
@@ -279,15 +280,20 @@ export function BusinessRegisterPage() {
                   </label>
                   <div className="relative">
                     <Phone className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                    <input
-                      id="phoneNumber"
-                      name="phoneNumber"
-                      type="tel"
-                      value={form.phoneNumber}
-                      onChange={handleChange('phoneNumber')}
-                      className="w-full rounded-xl border border-gray-300 bg-white py-2.5 pl-9 pr-3 text-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
-                      placeholder="+234 800 000 0000"
-                    />
+                    <div className="flex rounded-xl border border-gray-300 bg-white">
+                      <span className="flex items-center border-r border-gray-200 bg-gray-50 px-3 text-sm font-semibold text-gray-600">+234</span>
+                      <input
+                        id="phoneNumber"
+                        name="phoneNumber"
+                        type="tel"
+                        value={phoneDigits(form.phoneNumber)}
+                        onChange={(event) => setForm((current) => ({ ...current, phoneNumber: formatNigerianPhone(event.target.value) }))}
+                        className="min-w-0 flex-1 rounded-r-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary-100"
+                        placeholder="9011390588"
+                        inputMode="numeric"
+                        maxLength={10}
+                      />
+                    </div>
                   </div>
                 </div>
 

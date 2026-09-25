@@ -23,6 +23,7 @@ import { adminAccessRoutes } from "./modules/admin-access/admin-access.routes";
 import { notificationRoutes } from "./modules/notification/notification.routes";
 import { platformAdminRoutes } from "./modules/platform-admin/platform-admin.routes";
 import { earningsRoutes } from "./modules/earnings/earnings.routes";
+import { contactRoutes } from "./modules/contact/contact.routes";
 
 export async function buildApp() {
   console.log("[STARTUP] buildApp entered");
@@ -119,6 +120,10 @@ export async function buildApp() {
 
   await app.register(earningsRoutes, {
     prefix: "/api/v1/earnings"
+  });
+
+  await app.register(contactRoutes, {
+    prefix: "/api/v1/contact"
   });
 
   app.get("/health", async (_request, reply) => {

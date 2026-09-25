@@ -66,6 +66,21 @@ function safeRedirect(value: string | null): string | null {
   return value && value.startsWith('/') && !value.startsWith('//') ? value : null;
 }
 
+function roleCanOpenPath(role: Role, path: string): boolean {
+  if (path.startsWith('/business')) return role === 'BUSINESS_USER' || role === 'ADMIN';
+  if (path.startsWith('/rider')) return role === 'RIDER' || role === 'ADMIN';
+  if (path.startsWith('/admin')) return role === 'ADMIN';
+  if (path.startsWith('/earnings')) return role === 'BUSINESS_USER' || role === 'RIDER';
+  return true;
+}
+
+function defaultPathForRole(role: Role): string {
+  if (role === 'ADMIN') return '/admin';
+  if (role === 'BUSINESS_USER') return '/business';
+  if (role === 'RIDER') return '/rider';
+  return '/dashboard';
+}
+
 export function LoginPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -93,7 +108,7 @@ export function LoginPage() {
       const user = await login(identifier, password);
 
       const destination = safeRedirect(redirect);
-      if (destination) {
+      if (destination && roleCanOpenPath(user.role, destination)) {
         navigate(destination);
         return;
       }
@@ -111,15 +126,7 @@ export function LoginPage() {
         return;
       }
 
-      if (user.role === 'ADMIN') {
-        navigate('/admin');
-      } else if (user.role === 'BUSINESS_USER') {
-        navigate('/business');
-      } else if (user.role === 'RIDER') {
-        navigate('/rider');
-      } else {
-        navigate('/dashboard');
-      }
+      navigate(defaultPathForRole(user.role));
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Login failed. Please check your credentials.';
       setError(message);

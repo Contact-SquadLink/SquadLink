@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -85,6 +85,7 @@ export function BusinessOrdersPage() {
 export function BusinessOrderDetailPage() {
   const { orderId } = useParams<{ orderId: string }>();
   const queryClient = useQueryClient();
+  const [pickupCredential, setPickupCredential] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ['business-orders'],
@@ -104,12 +105,18 @@ export function BusinessOrderDetailPage() {
 
   const readyMutation = useMutation({
     mutationFn: () => businessApi.markOrderReady(orderId as string),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['business-orders'] }),
+    onSuccess: (response) => {
+      setPickupCredential(response.data.delivery.pickupCredential ?? null);
+      return queryClient.invalidateQueries({ queryKey: ['business-orders'] });
+    },
   });
 
   const retryRiderMutation = useMutation({
     mutationFn: () => businessApi.retryRiderAssignment(orderId as string),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['business-orders'] }),
+    onSuccess: (response) => {
+      setPickupCredential(response.data.delivery.pickupCredential ?? null);
+      return queryClient.invalidateQueries({ queryKey: ['business-orders'] });
+    },
   });
 
   if (isLoading) {
@@ -178,6 +185,18 @@ export function BusinessOrderDetailPage() {
             <CheckCircle2 className="h-5 w-5 text-success-600" />
             <p className="text-sm font-semibold text-success-800">
               {order.status === 'READY_FOR_PICKUP' ? 'Order is ready for rider pickup.' : order.status === 'OUT_FOR_DELIVERY' ? 'Order is out for delivery.' : 'Order has been delivered.'}
+            </p>
+          </div>
+        )}
+
+        {pickupCredential && (
+          <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
+            <p className="text-sm font-semibold text-amber-950">Pickup code for the assigned rider</p>
+            <p className="mt-2 font-mono text-2xl font-bold tracking-[0.25em] text-amber-950">
+              {pickupCredential}
+            </p>
+            <p className="mt-2 text-xs text-amber-800">
+              Give this code to the assigned rider at pickup. It is only shown after a rider is assigned.
             </p>
           </div>
         )}

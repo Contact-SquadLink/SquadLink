@@ -66,7 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(null);
       return null;
     }
-  }, [user]);
+  }, []);
 
   useEffect(() => {
     let mounted = true;

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { normalizePhoneNumber } from "../../utils/phone";
 
 export const orderIdParamsSchema = z.object({
   orderId: z.string().uuid()
@@ -36,7 +37,14 @@ export const deliveryOtpSchema = z.object({
 export const riderRegistrationSchema = z.object({
   vehicleType: z.enum(["MOTORCYCLE", "KEKE"]).default("MOTORCYCLE"),
   vehicleRegistration: z.string().trim().min(2).max(50),
-  phoneNumber: z.string().trim().min(7).max(30).optional(),
+  phoneNumber: z.string().trim().min(10).max(30).transform((value, context) => {
+    const normalized = normalizePhoneNumber(value);
+    if (!normalized) {
+      context.addIssue({ code: "custom", message: "Phone number must be a valid Nigerian number with +234 and 10 digits." });
+      return z.NEVER;
+    }
+    return normalized;
+  }).optional(),
   firstName: z.string().trim().min(1).max(100).optional(),
   lastName: z.string().trim().min(1).max(100).optional()
 });

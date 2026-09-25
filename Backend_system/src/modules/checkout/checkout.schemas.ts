@@ -4,14 +4,14 @@ import { normalizePhoneNumber } from "../../utils/phone";
 const deliveryContactPhone = z
   .string()
   .trim()
-  .min(7)
+  .min(10)
   .max(30)
   .transform((value, context) => {
     const normalized = normalizePhoneNumber(value);
     if (!normalized) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "Enter a valid Nigerian or international phone number."
+        message: "Enter a valid Nigerian phone number with +234 and 10 digits."
       });
       return z.NEVER;
     }

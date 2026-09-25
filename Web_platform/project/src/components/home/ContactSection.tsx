@@ -1,22 +1,26 @@
 import { Mail, Phone, MapPin, Building2, Bike, LifeBuoy } from 'lucide-react';
 
+const CONTACT_EMAIL = 'contact.sqadlink@gmail.com';
+const CONTACT_PHONE = '+2349011390588';
+const CONTACT_LOCATION = 'Yelwa, Bauchi L.G.A Bauchi state';
+
 const contactChannels = [
   {
     icon: LifeBuoy,
     label: 'General Support',
-    email: 'support@squadlink.example',
+    email: CONTACT_EMAIL,
     description: 'Questions about using SQUADLINK',
   },
   {
     icon: Building2,
     label: 'Business Enquiries',
-    email: 'business@squadlink.example',
+    email: CONTACT_EMAIL,
     description: 'Partner with SQUADLINK as a business',
   },
   {
     icon: Bike,
     label: 'Rider Enquiries',
-    email: 'riders@squadlink.example',
+    email: CONTACT_EMAIL,
     description: 'Join SQUADLINK as a delivery rider',
   },
 ];
@@ -69,28 +73,28 @@ export function ContactSection() {
               <Mail className="h-5 w-5 text-primary-600 shrink-0" />
               <div>
                 <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">Email</p>
-                <p className="text-sm font-semibold text-gray-900">hello@squadlink.example</p>
+                <p className="text-sm font-semibold text-gray-900">{CONTACT_EMAIL}</p>
               </div>
             </div>
             <div className="flex flex-col sm:flex-row items-center gap-3">
               <Phone className="h-5 w-5 text-primary-600 shrink-0" />
               <div>
                 <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">Phone</p>
-                <p className="text-sm font-semibold text-gray-900">+234 800 SQUADLINK</p>
+                <p className="text-sm font-semibold text-gray-900">{CONTACT_PHONE}</p>
               </div>
             </div>
             <div className="flex flex-col sm:flex-row items-center gap-3">
               <MapPin className="h-5 w-5 text-primary-600 shrink-0" />
               <div>
                 <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">Location</p>
-                <p className="text-sm font-semibold text-gray-900">Nigeria</p>
+                <p className="text-sm font-semibold text-gray-900">{CONTACT_LOCATION}</p>
               </div>
             </div>
           </div>
         </div>
 
         <p className="mt-6 text-center text-xs text-gray-400">
-          Contact details shown are placeholders and will be updated with finalized information.
+          Send a message through the contact page and our team will respond.
         </p>
       </div>
     </section>

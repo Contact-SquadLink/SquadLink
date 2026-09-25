@@ -58,6 +58,17 @@ export interface OperatingHour {
   isClosed: boolean;
 }
 
+export interface BusinessOrderReadyResponse {
+  orderId: string;
+  status: string;
+  delivery: {
+    deliveryId: string;
+    riderId?: string;
+    status: string;
+    pickupCredential?: string;
+  };
+}
+
 export const businessApi = {
   getApplication: () =>
     apiRequest<ApiResponseEnvelope<{
@@ -79,13 +90,13 @@ export const businessApi = {
     ),
 
   markOrderReady: (orderId: string) =>
-    apiRequest<ApiSingleResponse<Order>>(
+    apiRequest<ApiSingleResponse<BusinessOrderReadyResponse>>(
       `/api/v1/business/orders/${orderId}/ready`,
       { method: 'POST' }
     ),
 
   retryRiderAssignment: (orderId: string) =>
-    apiRequest<ApiSingleResponse<{ orderId: string; status: string }>>(`/api/v1/business/orders/${orderId}/retry-rider`, { method: 'POST' }),
+    apiRequest<ApiSingleResponse<BusinessOrderReadyResponse>>(`/api/v1/business/orders/${orderId}/retry-rider`, { method: 'POST' }),
 
   createBusiness: (payload: CreateBusinessPayload) =>
     apiRequest<ApiResponseEnvelope<Business>>('/api/v1/businesses/', {

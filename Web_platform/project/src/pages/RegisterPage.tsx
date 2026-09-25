@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { Eye, EyeOff, ShoppingBag, Loader2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { formatNigerianPhone, isCompleteNigerianPhone, phoneDigits } from '@/utils/nigerian-phone';
 
 function safeRedirect(value: string | null): string | null {
   return value && value.startsWith('/') && !value.startsWith('//') ? value : null;
@@ -67,6 +68,11 @@ export function RegisterPage() {
 
     if (!cleanEmail && !cleanPhone) {
       setError('Please provide either an email address or a phone number.');
+      return;
+    }
+
+    if (cleanPhone && !isCompleteNigerianPhone(cleanPhone)) {
+      setError('Phone number must contain exactly 10 digits after +234.');
       return;
     }
 
@@ -207,14 +213,19 @@ export function RegisterPage() {
                 <label htmlFor="phoneNumber" className="block text-sm font-medium text-gray-700 mb-1">
                   Phone Number
                 </label>
-                <input
-                  id="phoneNumber"
-                  type="tel"
-                  value={phoneNumber}
-                  onChange={(e) => setPhoneNumber(e.target.value)}
-                  className="w-full px-3.5 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-all text-sm"
-                  placeholder="+1234567890"
-                />
+                <div className="flex w-full rounded-lg border border-gray-300">
+                  <span className="flex items-center border-r border-gray-200 bg-gray-50 px-3 text-sm font-semibold text-gray-600">+234</span>
+                  <input
+                    id="phoneNumber"
+                    type="tel"
+                    value={phoneDigits(phoneNumber)}
+                    onChange={(e) => setPhoneNumber(formatNigerianPhone(e.target.value))}
+                    className="min-w-0 flex-1 rounded-r-lg px-3.5 py-2 text-sm outline-none focus:ring-2 focus:ring-primary-500"
+                    placeholder="9011390588"
+                    inputMode="numeric"
+                    maxLength={10}
+                  />
+                </div>
               </div>
 
               <div>

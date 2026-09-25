@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { normalizePhoneNumber } from "../../utils/phone";
 
 export const registerSchema = z
   .object({
@@ -13,8 +14,16 @@ export const registerSchema = z
     phoneNumber: z
       .string()
       .trim()
-      .min(7)
+      .min(10)
       .max(30)
+      .transform((value, context) => {
+        const normalized = normalizePhoneNumber(value);
+        if (!normalized) {
+          context.addIssue({ code: "custom", message: "Phone number must be a valid Nigerian number with +234 and 10 digits." });
+          return z.NEVER;
+        }
+        return normalized;
+      })
       .optional(),
 
     password: z

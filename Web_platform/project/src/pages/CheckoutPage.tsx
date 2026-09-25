@@ -13,6 +13,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { checkoutApi, ordersApi } from '@/api/orders';
 import { formatPrice, cn } from '@/utils/format';
 import { normalizePhoneNumber } from '@/utils/phone';
+import { formatNigerianPhone, phoneDigits } from '@/utils/nigerian-phone';
 import type { CheckoutPreview, OrderItem } from '@/types';
 
 const DELIVERY_FEE = 500;
@@ -40,7 +41,7 @@ export function CheckoutPage() {
 
   useEffect(() => {
     if (!phoneEdited && profilePhone) {
-      setDeliveryContactPhone(profilePhone);
+      setDeliveryContactPhone(formatNigerianPhone(profilePhone));
     }
   }, [phoneEdited, profilePhone]);
 
@@ -257,20 +258,24 @@ export function CheckoutPage() {
                   <label htmlFor="deliveryContactPhone" className="block text-sm font-medium text-gray-700 mb-1">
                     Delivery contact phone
                   </label>
-                  <input
-                    id="deliveryContactPhone"
-                    type="tel"
-                    value={deliveryContactPhone}
+                    <div className="flex w-full rounded-lg border border-gray-300">
+                      <span className="flex items-center border-r border-gray-200 bg-gray-50 px-3 text-sm font-semibold text-gray-600">+234</span>
+                      <input
+                      id="deliveryContactPhone"
+                      type="tel"
+                      value={phoneDigits(deliveryContactPhone)}
                     onChange={(event) => {
                       setPhoneEdited(true);
-                      setDeliveryContactPhone(event.target.value);
+                      setDeliveryContactPhone(formatNigerianPhone(event.target.value));
                     }}
                     className="w-full rounded-lg border border-gray-300 px-3.5 py-2 focus:border-primary-500 focus:ring-2 focus:ring-primary-500 outline-none"
-                    placeholder="08031234567 or +2348031234567"
-                    minLength={7}
-                    maxLength={30}
+                    placeholder="9011390588"
+                    inputMode="numeric"
+                    minLength={10}
+                    maxLength={10}
                     required
-                  />
+                      />
+                    </div>
                   <p className="mt-1 text-xs text-gray-500">
                     Nigerian local numbers and international country-code formats are accepted.
                   </p>
