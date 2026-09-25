@@ -6,6 +6,7 @@ import rateLimit from "@fastify/rate-limit";
 
 import { env } from "./config/env";
 import { db } from "./db/database";
+import { ensureWorkflowSchema } from "./db/ensure-workflow-schema";
 import { requestIdMiddleware } from "./utils/request-id";
 import { registerErrorHandler } from "./middleware/error-handler";
 import { registerNotFoundHandler } from "./middleware/not-found";
@@ -27,6 +28,8 @@ import { contactRoutes } from "./modules/contact/contact.routes";
 
 export async function buildApp() {
   console.log("[STARTUP] buildApp entered");
+  await ensureWorkflowSchema();
+  console.log("[STARTUP] Workflow schema verified");
 
   const app = Fastify({
     logger: true
