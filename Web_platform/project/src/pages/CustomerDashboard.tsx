@@ -14,6 +14,8 @@ import { catalogService } from '@/services/catalogService';
 import { cn } from '@/utils/format';
 import { getCategoryIcon } from '@/utils/icons';
 import { businessApi } from '@/api/business';
+import { ordersApi } from '@/api/orders';
+import type { Order } from '@/types';
 
 function getGreeting(): string {
   const hour = new Date().getHours();
@@ -34,6 +36,13 @@ export function CustomerDashboard() {
     queryKey: ['business-application'],
     queryFn: businessApi.getApplication,
   });
+  const { data: ordersData } = useQuery({
+    queryKey: ['customer-dashboard-orders'],
+    queryFn: ordersApi.list,
+  });
+  const activeOrders = ((ordersData?.data ?? []) as Order[]).filter(
+    (order) => !['DELIVERED', 'CANCELLED'].includes(order.status)
+  );
   const application = applicationData?.data;
   const openApprovedBusiness = async () => {
     await refreshUser();
@@ -109,6 +118,20 @@ export function CustomerDashboard() {
         <div className="lg:col-span-1">
           <h2 className="font-display text-lg font-bold text-gray-900 mb-4">Active Order</h2>
           <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 p-6 text-center">
+            {activeOrders.length > 0 ? (
+              <div className="space-y-3 text-left">
+                {activeOrders.slice(0, 3).map((order) => (
+                  <Link key={order.id} to={`/orders/${order.id}`} className="block rounded-xl border border-gray-200 bg-white p-3 hover:border-primary-300">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-sm font-semibold text-gray-900">Order #{order.id.slice(-8)}</span>
+                      <span className="rounded-full bg-primary-50 px-2 py-1 text-xs font-semibold text-primary-700">{order.status.replace(/_/g, ' ')}</span>
+                    </div>
+                    <p className="mt-1 text-xs text-gray-500">{order.items.length} item{order.items.length !== 1 ? 's' : ''}</p>
+                  </Link>
+                ))}
+                <Link to="/orders" className="inline-flex items-center gap-1 text-sm font-semibold text-primary-700">View all orders <ArrowRight className="h-3.5 w-3.5" /></Link>
+              </div>
+            ) : <>
             <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-gray-100">
               <Package className="h-6 w-6 text-gray-400" />
             </div>
@@ -120,6 +143,7 @@ export function CustomerDashboard() {
             >
               Browse products <ArrowRight className="h-3.5 w-3.5" />
             </Link>
+            </>}
           </div>
         </div>
 

@@ -37,7 +37,38 @@ export async function getPlatformSummary(request: FastifyRequest) {
     FROM public.users
   `);
   const row = result.rows[0];
-  return Object.fromEntries(Object.entries(row).map(([key, value]) => [key, Number(value)]));
+  const transactionResult = await db.query<{
+    completed_transactions: string;
+    pending_transactions: string;
+    in_transit_transactions: string;
+    assigned_transactions: string;
+    other_transactions: string;
+    gross_completed_value: string;
+    recipient_earnings: string;
+  }>(`
+    SELECT
+      COUNT(*) FILTER (WHERE o.status = 'DELIVERED')::text AS completed_transactions,
+      COUNT(*) FILTER (WHERE o.status IN ('PENDING', 'CONFIRMED', 'PREPARING', 'READY_FOR_PICKUP'))::text AS pending_transactions,
+      COUNT(*) FILTER (WHERE o.status = 'OUT_FOR_DELIVERY' OR d.status IN ('IN_TRANSIT', 'ARRIVED'))::text AS in_transit_transactions,
+      COUNT(*) FILTER (WHERE d.status = 'ASSIGNED')::text AS assigned_transactions,
+      COUNT(*) FILTER (WHERE o.status NOT IN ('DELIVERED', 'PENDING', 'CONFIRMED', 'PREPARING', 'READY_FOR_PICKUP', 'OUT_FOR_DELIVERY', 'CANCELLED'))::text AS other_transactions,
+      COALESCE(SUM(o.total_amount) FILTER (WHERE o.status = 'DELIVERED'), 0)::text AS gross_completed_value,
+      COALESCE(SUM(et.amount) FILTER (WHERE o.status = 'DELIVERED'), 0)::text AS recipient_earnings
+    FROM public.orders o
+    LEFT JOIN public.deliveries d ON d.order_id = o.id
+    LEFT JOIN (
+      SELECT order_id, SUM(amount) AS amount
+      FROM public.earning_transactions
+      GROUP BY order_id
+    ) et ON et.order_id = o.id
+  `);
+  const transactionRow = transactionResult.rows[0];
+  const platformEarnings = Math.max(0, Number(transactionRow.gross_completed_value) - Number(transactionRow.recipient_earnings));
+  return Object.fromEntries(Object.entries({
+    ...row,
+    ...transactionRow,
+    platform_earnings: platformEarnings
+  }).map(([key, value]) => [key, Number(value)]));
 }
 
 export async function listAccounts(request: FastifyRequest) {

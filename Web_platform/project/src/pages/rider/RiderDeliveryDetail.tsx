@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   ArrowLeft,
@@ -44,6 +44,7 @@ function getStepIndex(status: DeliveryStatus): number {
 
 export function RiderDeliveryDetailPage() {
   const { deliveryId } = useParams<{ deliveryId: string }>();
+  const navigate = useNavigate();
   const [credential, setCredential] = useState('');
   const [deliveryOtp, setDeliveryOtp] = useState('');
   const [rejectionReason, setRejectionReason] = useState('');
@@ -110,7 +111,7 @@ export function RiderDeliveryDetailPage() {
         }
         await riderApi.confirmDelivery(delivery.id, deliveryOtp);
       }
-      window.location.reload();
+      navigate('/rider', { replace: true });
     } catch (error) {
       setActionError(error instanceof Error ? error.message : 'Unable to update delivery status.');
     } finally {
@@ -124,7 +125,7 @@ export function RiderDeliveryDetailPage() {
     try {
       if (accepted) await riderApi.acceptAssignment(delivery.id);
       else await riderApi.rejectAssignment(delivery.id, rejectionReason.trim() || undefined);
-      window.location.reload();
+      navigate('/rider', { replace: true });
     } catch (error) {
       setActionError(error instanceof Error ? error.message : 'Unable to update assignment.');
     } finally {
