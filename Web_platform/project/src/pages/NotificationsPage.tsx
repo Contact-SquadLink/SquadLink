@@ -25,12 +25,17 @@ export function NotificationsPage() {
   const [pushError, setPushError] = useState<string | null>(null);
   const [browserSubscribed, setBrowserSubscribed] = useState(false);
   const handledPushNotification = useRef<string | null>(null);
-  const pushConfigQuery = useQuery({ queryKey: ['push-config'], queryFn: notificationsApi.pushConfig });
-  const pushStatusQuery = useQuery({ queryKey: ['push-subscription'], queryFn: notificationsApi.pushSubscription });
+  const pushConfigQuery = useQuery({ queryKey: ['push-config'], queryFn: notificationsApi.pushConfig, enabled: Boolean(user), retry: false });
+  const pushStatusQuery = useQuery({ queryKey: ['push-subscription', user?.id], queryFn: notificationsApi.pushSubscription, enabled: Boolean(user), retry: false });
   const { data, isLoading, error } = useQuery({
-    queryKey: ['customer-notifications'],
+    queryKey: ['customer-notifications', user?.id],
     queryFn: notificationsApi.list,
-    refetchInterval: 15000,
+    enabled: Boolean(user),
+    retry: false,
+    refetchInterval: (query) => query.state.error instanceof ApiRequestError
+      && [401, 403, 404].includes(query.state.error.statusCode)
+      ? false
+      : 15000,
   });
   const notifications = (data?.data ?? []) as Notification[];
 
@@ -92,7 +97,7 @@ export function NotificationsPage() {
     if (!notification.read) {
       try {
         await notificationsApi.markRead(notification.id);
-        await queryClient.invalidateQueries({ queryKey: ['customer-notifications'] });
+        await queryClient.invalidateQueries({ queryKey: ['customer-notifications', user?.id] });
       } catch {
         setActionError('We could not update this notification as read. You can still open its destination.');
       }
@@ -107,7 +112,7 @@ export function NotificationsPage() {
     if (notification.type.startsWith('BUSINESS_APPLICATION_')) navigate(user?.role === 'CUSTOMER' ? '/business/register' : '/business');
     else if (notification.type.startsWith('RIDER_APPLICATION_')) navigate(user?.role === 'CUSTOMER' ? '/rider/register' : '/rider');
     else navigate(user?.role === 'BUSINESS_USER' ? '/business' : user?.role === 'RIDER' ? '/rider' : user?.role === 'ADMIN' ? '/admin' : '/dashboard');
-  }, [navigate, queryClient, user?.role]);
+  }, [navigate, queryClient, user?.id, user?.role]);
 
   useEffect(() => {
     const notificationId = new URLSearchParams(location.search).get('open');

@@ -1,4 +1,6 @@
 import { Search, ShoppingCart, CreditCard, Package, Bike, CheckCircle2, Store, ClipboardList } from 'lucide-react';
+import { Reveal } from '@/components/ui/Reveal';
+import { revealStagger } from '@/utils/reveal';
 
 const customerSteps = [
   { icon: Search, label: 'Browse', description: 'Find products in the unified catalogue' },
@@ -74,7 +76,7 @@ export function HowItWorksSection() {
   return (
     <section id="how-it-works" className="py-20 bg-gray-50 scroll-mt-16">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="text-center max-w-2xl mx-auto">
+        <Reveal className="text-center max-w-2xl mx-auto">
           <p className="text-sm font-semibold text-primary-600 uppercase tracking-wider">How It Works</p>
           <h2 className="mt-2 font-display text-3xl font-bold text-gray-900 sm:text-4xl">
             One platform, three participants
@@ -83,32 +85,32 @@ export function HowItWorksSection() {
             SQUADLINK coordinates customers, businesses, and riders through a
             structured workflow — from browsing to delivery confirmation.
           </p>
-        </div>
+        </Reveal>
 
         <div className="mt-14 grid grid-cols-1 gap-6 lg:grid-cols-3">
-          <FlowCard
+          <Reveal delay={revealStagger(0)}><FlowCard
             title="For Customers"
             icon={ShoppingCart}
             steps={customerSteps}
             accent="bg-primary-100 text-primary-700"
-          />
-          <FlowCard
+          /></Reveal>
+          <Reveal delay={revealStagger(1)}><FlowCard
             title="For Businesses"
             icon={Store}
             steps={businessSteps}
             accent="bg-secondary-100 text-secondary-700"
-          />
-          <FlowCard
+          /></Reveal>
+          <Reveal delay={revealStagger(2)}><FlowCard
             title="For Riders"
             icon={Bike}
             steps={riderSteps}
             accent="bg-accent-100 text-accent-700"
-          />
+          /></Reveal>
         </div>
 
-        <p className="mt-8 text-center text-sm text-gray-400">
+        <Reveal delay={150} className="mt-8 text-center text-sm text-gray-400">
           These diagrams are explanatory only. The backend manages all state transitions.
-        </p>
+        </Reveal>
       </div>
     </section>
   );

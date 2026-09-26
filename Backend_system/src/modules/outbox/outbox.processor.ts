@@ -84,8 +84,8 @@ async function claimNextEvent(
               < (oe.created_at, oe.id)
         )
       ORDER BY oe.created_at ASC, oe.id ASC
-      FOR UPDATE OF oe SKIP LOCKED
       LIMIT 1
+      FOR UPDATE OF oe SKIP LOCKED
     `,
     [STALE_PROCESSING_MINUTES]
   );
@@ -160,6 +160,7 @@ async function notificationJobs(
     order_id: string;
     customer_user_id: string;
     business_owner_user_id: string | null;
+    rider_id: string | null;
     rider_user_id: string | null;
     pickup_address: string;
     delivery_address: string;
@@ -169,6 +170,7 @@ async function notificationJobs(
         o.id AS order_id,
         o.user_id AS customer_user_id,
         b.owner_user_id AS business_owner_user_id,
+        rider.id AS rider_id,
         rider_user.id AS rider_user_id,
         CONCAT_WS(', ', b.address_line, b.city, b.state) AS pickup_address,
         CONCAT_WS(', ', o.delivery_address_line, o.delivery_city, o.delivery_state) AS delivery_address
@@ -188,6 +190,7 @@ async function notificationJobs(
         order_id: string;
         customer_user_id: string;
         business_owner_user_id: string | null;
+        rider_id: string | null;
         rider_user_id: string | null;
         pickup_address: string;
         delivery_address: string;
@@ -197,6 +200,7 @@ async function notificationJobs(
             o.id AS order_id,
             o.user_id AS customer_user_id,
             b.owner_user_id AS business_owner_user_id,
+            rider.id AS rider_id,
             rider_user.id AS rider_user_id,
             CONCAT_WS(', ', b.address_line, b.city, b.state) AS pickup_address,
             CONCAT_WS(', ', o.delivery_address_line, o.delivery_city, o.delivery_state) AS delivery_address
@@ -251,6 +255,15 @@ async function notificationJobs(
     title: string,
     message: string
   ) => {
+    const eventRiderId = typeof event.payload.riderId === "string"
+      ? event.payload.riderId
+      : null;
+    if (
+      event.event_type === "RIDER_ASSIGNED" &&
+      (!eventRiderId || context.rider_id !== eventRiderId)
+    ) {
+      return;
+    }
     if (context.rider_user_id) {
       jobs.push({
         userId: context.rider_user_id,

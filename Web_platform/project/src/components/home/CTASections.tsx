@@ -1,5 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Store, TrendingUp, Package, ClipboardList, ArrowRight, Bike, MapPin, Bell, Route, ShieldCheck } from 'lucide-react';
+import { Reveal } from '@/components/ui/Reveal';
+import { revealStagger } from '@/utils/reveal';
 
 const businessBenefits = [
   { icon: MapPin, title: 'Reach Nearby Customers', description: 'Get discovered by local shoppers browsing the unified catalogue.' },
@@ -20,7 +22,7 @@ export function BusinessCTASection() {
     <section className="py-20 bg-secondary-50/50">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16 items-center">
-          <div>
+          <Reveal>
             <div className="inline-flex items-center gap-2 rounded-full bg-secondary-100 px-4 py-1.5 text-sm font-medium text-secondary-800">
               <Store className="h-4 w-4" />
               For Businesses
@@ -38,7 +40,7 @@ export function BusinessCTASection() {
               {businessBenefits.map((b) => {
                 const Icon = b.icon;
                 return (
-                  <div key={b.title} className="flex items-start gap-3">
+                  <Reveal key={b.title} delay={revealStagger(businessBenefits.indexOf(b))} className="flex items-start gap-3">
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white shadow-sm">
                       <Icon className="h-5 w-5 text-secondary-600" />
                     </div>
@@ -46,7 +48,7 @@ export function BusinessCTASection() {
                       <h3 className="text-sm font-bold text-gray-900">{b.title}</h3>
                       <p className="mt-1 text-sm text-gray-600">{b.description}</p>
                     </div>
-                  </div>
+                  </Reveal>
                 );
               })}
             </div>
@@ -61,9 +63,9 @@ export function BusinessCTASection() {
             <p className="mt-3 text-xs text-gray-400">
               Business onboarding and verification follow the backend's actual workflow.
             </p>
-          </div>
+          </Reveal>
 
-          <div className="relative">
+          <Reveal delay={120} className="relative">
             <div className="rounded-2xl overflow-hidden shadow-xl">
               <img
                 src="https://images.pexels.com/photos/8476594/pexels-photo-8476594.jpeg?auto=compress&cs=tinysrgb&h=650&w=940"
@@ -72,7 +74,7 @@ export function BusinessCTASection() {
                 loading="lazy"
               />
             </div>
-          </div>
+          </Reveal>
         </div>
       </div>
     </section>
@@ -84,7 +86,7 @@ export function RiderCTASection() {
     <section className="py-20 bg-white">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16 items-center">
-          <div className="relative order-2 lg:order-1">
+          <Reveal delay={120} className="relative order-2 lg:order-1">
             <div className="rounded-2xl overflow-hidden shadow-xl">
               <img
                 src="https://images.pexels.com/photos/37059837/pexels-photo-37059837.jpeg?auto=compress&cs=tinysrgb&h=650&w=940"
@@ -93,9 +95,9 @@ export function RiderCTASection() {
                 loading="lazy"
               />
             </div>
-          </div>
+          </Reveal>
 
-          <div className="order-1 lg:order-2">
+          <Reveal className="order-1 lg:order-2">
             <div className="inline-flex items-center gap-2 rounded-full bg-accent-100 px-4 py-1.5 text-sm font-medium text-accent-800">
               <Bike className="h-4 w-4" />
               For Riders
@@ -113,7 +115,7 @@ export function RiderCTASection() {
               {riderBenefits.map((b) => {
                 const Icon = b.icon;
                 return (
-                  <div key={b.title} className="flex items-start gap-3">
+                  <Reveal key={b.title} delay={revealStagger(riderBenefits.indexOf(b))} className="flex items-start gap-3">
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent-50 shadow-sm">
                       <Icon className="h-5 w-5 text-accent-600" />
                     </div>
@@ -121,7 +123,7 @@ export function RiderCTASection() {
                       <h3 className="text-sm font-bold text-gray-900">{b.title}</h3>
                       <p className="mt-1 text-sm text-gray-600">{b.description}</p>
                     </div>
-                  </div>
+                  </Reveal>
                 );
               })}
             </div>
@@ -136,7 +138,7 @@ export function RiderCTASection() {
             <p className="mt-3 text-xs text-gray-400">
               Rider onboarding is currently managed by SQUADLINK. Contact the team for rider onboarding details.
             </p>
-          </div>
+          </Reveal>
         </div>
       </div>
     </section>

@@ -25,7 +25,7 @@ const statusVariants: Record<OrderStatus, 'default' | 'success' | 'warning' | 'e
 };
 
 export function BusinessOrdersPage() {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error } = useQuery({
     queryKey: ['business-orders'],
     queryFn: businessApi.listOrders,
     refetchInterval: 15000,
@@ -43,6 +43,8 @@ export function BusinessOrdersPage() {
 
       {isLoading ? (
         <p className="text-sm text-gray-600">Loading business orders…</p>
+      ) : error ? (
+        <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">We could not load business orders. Refresh or sign in again if your session expired.</p>
       ) : orders.length === 0 ? (
         <EmptyState
           icon={<ClipboardList className="h-7 w-7" />}
@@ -74,6 +76,7 @@ export function BusinessOrdersPage() {
                 <Badge variant={statusVariants[(order.status as OrderStatus) ?? 'PENDING']}>
                   {(order.status ?? 'PENDING').replace(/_/g, ' ')}
                 </Badge>
+                {order.status === 'READY_FOR_PICKUP' && <span className={`text-xs font-semibold ${order.riderAssigned ? 'text-success-700' : 'text-amber-800'}`}>{order.riderAssigned ? 'Rider assigned' : 'Searching for rider'}</span>}
               </div>
             </Link>
           ))}
@@ -87,8 +90,10 @@ export function BusinessOrderDetailPage() {
   const { orderId } = useParams<{ orderId: string }>();
   const queryClient = useQueryClient();
   const [pickupCredential, setPickupCredential] = useState<string | null>(null);
+  const [assignmentMessage, setAssignmentMessage] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error } = useQuery({
     queryKey: ['business-orders'],
     queryFn: businessApi.listOrders,
   });
@@ -101,32 +106,49 @@ export function BusinessOrderDetailPage() {
 
   const acceptMutation = useMutation({
     mutationFn: () => businessApi.acceptOrder(orderId as string),
+    onMutate: () => setActionError(null),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['business-orders'] }),
+    onError: (caughtError) => setActionError(caughtError instanceof Error ? caughtError.message : 'Unable to accept order.'),
   });
 
   const readyMutation = useMutation({
     mutationFn: () => businessApi.markOrderReady(orderId as string),
+    onMutate: () => { setActionError(null); setAssignmentMessage(null); },
     onSuccess: (response) => {
       setPickupCredential(response.data.delivery.pickupCredential ?? null);
+      setAssignmentMessage(response.data.delivery.status === 'ASSIGNED'
+        ? 'A rider has been assigned. The rider will see this delivery in their dashboard.'
+        : 'No eligible rider is available right now. The order remains ready and assignment can be retried.');
       return queryClient.invalidateQueries({ queryKey: ['business-orders'] });
     },
+    onError: (caughtError) => setActionError(caughtError instanceof Error ? caughtError.message : 'Unable to mark order ready.'),
   });
 
   const retryRiderMutation = useMutation({
     mutationFn: () => businessApi.retryRiderAssignment(orderId as string),
+    onMutate: () => { setActionError(null); setAssignmentMessage(null); },
     onSuccess: (response) => {
       setPickupCredential(response.data.delivery.pickupCredential ?? null);
+      setAssignmentMessage(response.data.delivery.status === 'ASSIGNED'
+        ? 'A rider has been assigned. The rider will see this delivery in their dashboard.'
+        : 'No eligible rider is available right now. The order remains ready; try again after a verified rider goes online.');
       return queryClient.invalidateQueries({ queryKey: ['business-orders'] });
     },
+    onError: (caughtError) => setActionError(caughtError instanceof Error ? caughtError.message : 'Unable to retry rider assignment.'),
   });
 
   const reissueCredentialMutation = useMutation({
     mutationFn: () => businessApi.reissuePickupCredential(orderId as string),
     onSuccess: (response) => setPickupCredential(response.data.credential),
+    onError: (caughtError) => setActionError(caughtError instanceof Error ? caughtError.message : 'Unable to reissue pickup credential.'),
   });
 
   if (isLoading) {
     return <div className="mx-auto max-w-3xl px-4 py-8 text-sm text-gray-600">Loading order details…</div>;
+  }
+
+  if (error) {
+    return <div className="mx-auto max-w-3xl px-4 py-8"><Link to="/business/orders" className="mb-6 inline-flex items-center gap-2 text-sm font-semibold text-gray-600"><ArrowLeft className="h-4 w-4" /> Back to Orders</Link><p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">We could not load this order. Refresh or sign in again if your session expired.</p></div>;
   }
 
   if (!order) {
@@ -165,11 +187,14 @@ export function BusinessOrderDetailPage() {
 
       <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm mb-6">
         <h2 className="font-display text-lg font-bold text-gray-900 mb-4">Actions</h2>
+        {actionError && <p role="alert" className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{actionError}</p>}
+        {assignmentMessage && <p role="status" className={`mb-4 rounded-lg border p-3 text-sm ${assignmentMessage.startsWith('A rider') ? 'border-success-200 bg-success-50 text-success-800' : 'border-amber-200 bg-amber-50 text-amber-900'}`}>{assignmentMessage}</p>}
 
         {order.status === 'CONFIRMED' && (
           <button
             onClick={() => acceptMutation.mutate()}
-            className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-primary-600 px-6 text-sm font-semibold text-white hover:bg-primary-700 transition-colors"
+            disabled={acceptMutation.isPending}
+            className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-primary-600 px-6 text-sm font-semibold text-white hover:bg-primary-700 transition-colors disabled:opacity-50"
           >
             <CheckCircle2 className="h-4 w-4" /> Accept Order
           </button>
@@ -178,7 +203,8 @@ export function BusinessOrderDetailPage() {
         {order.status === 'PREPARING' && (
           <button
             onClick={() => readyMutation.mutate()}
-            className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-secondary-500 px-6 text-sm font-semibold text-secondary-950 hover:bg-secondary-400 transition-colors"
+            disabled={readyMutation.isPending}
+            className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-secondary-500 px-6 text-sm font-semibold text-secondary-950 hover:bg-secondary-400 transition-colors disabled:opacity-50"
           >
             <Store className="h-4 w-4" /> Mark Ready for Pickup
           </button>

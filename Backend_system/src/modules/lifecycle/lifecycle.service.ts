@@ -795,10 +795,13 @@ async function loadBusinessOrder(client: PoolClient, orderId: string, userId: st
 export async function listBusinessOrders(userId: string) {
   const result = await (await import("../../db/database")).db.query(
     `
-      SELECT o.id AS "orderId", o.status, f.status AS "fulfillmentStatus", o.created_at AS "createdAt"
+            SELECT o.id AS "orderId", o.status, f.status AS "fulfillmentStatus",
+              d.status AS "deliveryStatus", (d.rider_id IS NOT NULL) AS "riderAssigned",
+              o.created_at AS "createdAt"
       FROM public.orders o
       INNER JOIN public.fulfillments f ON f.order_id = o.id
       INNER JOIN public.businesses b ON b.id = f.business_id
+            LEFT JOIN public.deliveries d ON d.order_id = o.id
       WHERE b.owner_user_id = $1
       ORDER BY o.created_at DESC
     `,

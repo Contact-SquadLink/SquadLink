@@ -1,4 +1,6 @@
 import { Search, Store, Bike, ShieldCheck, Truck, Bell, PackageCheck, MapPin } from 'lucide-react';
+import { Reveal } from '@/components/ui/Reveal';
+import { revealStagger } from '@/utils/reveal';
 
 const features = [
   {
@@ -37,7 +39,7 @@ export function WhySquadlinkSection() {
   return (
     <section className="py-20 bg-white">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="text-center max-w-2xl mx-auto">
+        <Reveal className="text-center max-w-2xl mx-auto">
           <p className="text-sm font-semibold text-primary-600 uppercase tracking-wider">Why SQUADLINK</p>
           <h2 className="mt-2 font-display text-3xl font-bold text-gray-900 sm:text-4xl">
             Built for local commerce
@@ -46,16 +48,14 @@ export function WhySquadlinkSection() {
             A structured platform that coordinates customers, businesses, and
             riders with clear workflows and transparent tracking.
           </p>
-        </div>
+        </Reveal>
 
         <div className="mt-14 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {features.map((feature) => {
             const Icon = feature.icon;
-            return (
-              <div
-                key={feature.title}
-                className="group rounded-2xl border border-gray-100 bg-white p-7 shadow-sm hover:shadow-md hover:border-primary-200 transition-all duration-300"
-              >
+              return (
+              <Reveal key={feature.title} delay={revealStagger(features.indexOf(feature))}>
+              <div className="group rounded-2xl border border-gray-100 bg-white p-7 shadow-sm hover:shadow-md hover:border-primary-200 transition-all duration-300">
                 <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary-50 text-primary-600 group-hover:bg-primary-600 group-hover:text-white transition-colors duration-300">
                   <Icon className="h-6 w-6" />
                 </div>
@@ -66,12 +66,13 @@ export function WhySquadlinkSection() {
                   {feature.description}
                 </p>
               </div>
+              </Reveal>
             );
           })}
         </div>
 
         {/* Delivery model banner */}
-        <div className="mt-16 rounded-2xl bg-gradient-to-r from-primary-600 to-primary-700 p-8 lg:p-10 text-white">
+        <Reveal className="mt-16 rounded-2xl bg-gradient-to-r from-primary-600 to-primary-700 p-8 lg:p-10 text-white">
           <div className="flex flex-col lg:flex-row lg:items-center gap-6">
             <div className="flex-1">
               <div className="flex items-center gap-2 text-primary-100">
@@ -103,7 +104,7 @@ export function WhySquadlinkSection() {
               </div>
             </div>
           </div>
-        </div>
+        </Reveal>
       </div>
     </section>
   );

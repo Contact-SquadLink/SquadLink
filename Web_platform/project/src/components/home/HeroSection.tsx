@@ -4,33 +4,29 @@ import { ArrowRight, ShoppingBag, Store, Bike, Search } from 'lucide-react';
 export function HeroSection() {
   return (
     <section className="relative overflow-hidden bg-gradient-to-b from-primary-50 via-white to-white">
-      {/* Decorative blobs */}
-      <div className="pointer-events-none absolute -top-24 -right-24 h-96 w-96 rounded-full bg-primary-100/50 blur-3xl" />
-      <div className="pointer-events-none absolute top-40 -left-24 h-72 w-72 rounded-full bg-secondary-100/40 blur-3xl" />
-
-      <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-16 pb-20 lg:pt-24 lg:pb-28">
-        <div className="grid grid-cols-1 gap-12 lg:grid-cols-2 lg:items-center">
+      <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-10 pb-14 sm:pt-16 sm:pb-20 lg:pt-24 lg:pb-28">
+        <div className="grid grid-cols-1 gap-8 sm:gap-12 lg:grid-cols-2 lg:items-center">
           {/* Left: Copy */}
-          <div className="animate-slide-up">
+          <div className="motion-safe:animate-slide-up">
             <div className="inline-flex items-center gap-2 rounded-full bg-primary-100 px-4 py-1.5 text-sm font-medium text-primary-800">
               <span className="flex h-2 w-2 rounded-full bg-primary-600 animate-pulse" />
               Local commerce, delivered.
             </div>
 
-            <h1 className="mt-6 font-display text-4xl font-bold leading-tight tracking-tight text-gray-900 sm:text-5xl lg:text-6xl">
+            <h1 className="mt-5 font-display text-4xl font-bold leading-tight tracking-tight text-gray-900 sm:mt-6 sm:text-5xl lg:text-6xl">
               Shop local.
               <br />
               <span className="text-primary-600">Get it delivered.</span>
             </h1>
 
-            <p className="mt-5 max-w-lg text-lg leading-relaxed text-gray-600">
+            <p className="mt-4 max-w-lg text-base leading-relaxed text-gray-600 sm:mt-5 sm:text-lg">
               SQUADLINK connects you with local businesses and delivery riders.
               Browse products, place an order, and track your delivery — all in
               one place.
             </p>
 
             {/* Primary CTAs */}
-            <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="mt-6 flex flex-col gap-3 sm:mt-8 sm:flex-row sm:items-center">
               <Link
                 to="/browse"
                 className="inline-flex h-13 items-center justify-center gap-2 rounded-xl bg-primary-600 px-7 text-base font-semibold text-white shadow-lg shadow-primary-600/20 hover:bg-primary-700 transition-all hover:shadow-xl hover:shadow-primary-600/30 py-3.5"
@@ -48,7 +44,7 @@ export function HeroSection() {
             </div>
 
             {/* Secondary CTAs */}
-            <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3 text-sm">
+            <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-3 text-sm sm:mt-8">
               <Link
                 to="/register?intent=business"
                 className="inline-flex items-center gap-2 font-medium text-gray-600 hover:text-primary-700 transition-colors"
@@ -67,19 +63,22 @@ export function HeroSection() {
           </div>
 
           {/* Right: Visual */}
-          <div className="relative animate-fade-in hidden sm:block">
-            <div className="relative rounded-2xl overflow-hidden shadow-2xl">
+          <div className="relative block motion-safe:animate-fade-in">
+            <div className="relative aspect-[16/10] overflow-hidden rounded-xl shadow-xl sm:aspect-[5/4] lg:h-[420px] lg:aspect-auto">
               <img
                 src="https://images.pexels.com/photos/4177708/pexels-photo-4177708.jpeg?auto=compress&cs=tinysrgb&h=650&w=940"
                 alt="Customer shopping for groceries"
-                className="w-full h-[420px] object-cover"
+                className="h-full w-full object-cover transition-transform duration-700 motion-safe:hover:scale-[1.03]"
                 loading="eager"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-gray-900/20 to-transparent" />
+              <div className="absolute bottom-3 left-3 rounded-md border border-white/50 bg-white/95 px-3 py-2 shadow-lg sm:hidden">
+                <p className="text-[11px] font-semibold text-primary-800">Shop nearby. Delivered locally.</p>
+              </div>
             </div>
 
             {/* Floating cards */}
-            <div className="absolute -bottom-5 -left-5 rounded-xl bg-white p-4 shadow-xl border border-gray-100 max-w-[200px]">
+            <div className="absolute -bottom-5 -left-5 hidden max-w-[200px] rounded-lg border border-gray-100 bg-white p-4 shadow-xl md:block">
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary-100">
                   <ShoppingBag className="h-5 w-5 text-secondary-700" />
@@ -91,7 +90,7 @@ export function HeroSection() {
               </div>
             </div>
 
-            <div className="absolute -top-5 -right-5 rounded-xl bg-white p-4 shadow-xl border border-gray-100 max-w-[200px]">
+            <div className="absolute -top-5 -right-5 hidden max-w-[200px] rounded-lg border border-gray-100 bg-white p-4 shadow-xl md:block">
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-100">
                   <Bike className="h-5 w-5 text-primary-700" />
@@ -106,7 +105,7 @@ export function HeroSection() {
         </div>
 
         {/* Stats bar */}
-        <div className="mt-16 grid grid-cols-3 gap-4 rounded-2xl bg-white p-6 shadow-sm border border-gray-100 lg:gap-8">
+        <div className="mt-10 grid grid-cols-3 gap-4 rounded-lg border border-gray-100 bg-white p-4 shadow-sm sm:mt-16 sm:rounded-2xl sm:p-6 lg:gap-8">
           <div className="text-center">
             <p className="font-display text-2xl font-bold text-gray-900 sm:text-3xl">3</p>
             <p className="mt-1 text-xs font-medium text-gray-500 sm:text-sm">Participant Roles</p>

@@ -9,15 +9,16 @@ import {
   Star,
   Package,
   Check,
-  Info,
   ChevronRight,
 } from 'lucide-react';
 import { catalogService } from '@/services/catalogService';
 import { ProductCard } from '@/components/catalog/ProductCard';
 import { Badge } from '@/components/ui/Badge';
-import { Spinner, EmptyState } from '@/components/ui/States';
+import { EmptyState } from '@/components/ui/States';
 import { useCart } from '@/hooks/useCart';
 import { formatPrice, cn } from '@/utils/format';
+import { Reveal } from '@/components/ui/Reveal';
+import { revealStagger } from '@/utils/reveal';
 
 export function ProductDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -88,7 +89,7 @@ export function ProductDetailPage() {
     );
   }
 
-  const { product, source, related } = data;
+  const { product, related } = data;
   const inStock = product.inStock !== false && product.available !== false;
   const inCart = getItemQuantity(product.id);
 
@@ -284,10 +285,12 @@ export function ProductDetailPage() {
         {/* Related products */}
         {related.length > 0 && (
           <div className="mt-16">
-            <h2 className="font-display text-xl font-bold text-gray-900 mb-6">Related Products</h2>
+            <Reveal><h2 className="font-display text-xl font-bold text-gray-900 mb-6">Related Products</h2></Reveal>
             <div className="grid grid-cols-2 gap-4 sm:gap-6 lg:grid-cols-4">
-              {related.map((p) => (
-                <ProductCard key={p.id} product={p} />
+              {related.map((p, index) => (
+                <Reveal key={p.id} delay={revealStagger(index)}>
+                  <ProductCard product={p} />
+                </Reveal>
               ))}
             </div>
           </div>

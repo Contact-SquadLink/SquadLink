@@ -127,10 +127,10 @@ export default function App() {
                 }
               >
                 {/* Customer routes */}
-                <Route path="/dashboard" element={<CustomerDashboard />} />
-                <Route path="/checkout" element={<CheckoutPage />} />
-                <Route path="/orders" element={<OrdersPage />} />
-                <Route path="/orders/:orderId" element={<OrderDetailPage />} />
+                <Route path="/dashboard" element={<ProtectedRoute allowedRoles={['CUSTOMER']}><CustomerDashboard /></ProtectedRoute>} />
+                <Route path="/checkout" element={<ProtectedRoute allowedRoles={['CUSTOMER']}><CheckoutPage /></ProtectedRoute>} />
+                <Route path="/orders" element={<ProtectedRoute allowedRoles={['CUSTOMER']}><OrdersPage /></ProtectedRoute>} />
+                <Route path="/orders/:orderId" element={<ProtectedRoute allowedRoles={['CUSTOMER']}><OrderDetailPage /></ProtectedRoute>} />
                 <Route path="/notifications" element={<NotificationsPage />} />
                 <Route path="/profile" element={<ProfilePage />} />
                 <Route path="/earnings" element={<ProtectedRoute allowedRoles={['BUSINESS_USER', 'RIDER']}><EarningsPage /></ProtectedRoute>} />

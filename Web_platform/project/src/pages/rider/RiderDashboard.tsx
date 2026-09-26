@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { Bike, Package, ArrowRight, Clock, MapPin, CheckCircle2, LocateFixed, LoaderCircle } from 'lucide-react';
+import { Bike, Package, ArrowRight, Clock, MapPin, CheckCircle2, LocateFixed, LoaderCircle, RefreshCw } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/States';
 import { formatDate } from '@/utils/format';
@@ -83,15 +83,17 @@ export function RiderDashboard() {
           </div>
           <div>
             <h2 className="text-sm font-bold text-primary-900">Availability</h2>
-            <p className="text-xs text-primary-700">{profileQuery.isLoading ? 'Loading rider profile...' : profileQuery.error ? 'Rider profile is unavailable.' : profile?.verificationStatus === 'VERIFIED' ? 'Verified rider account.' : profile?.verificationStatus ? `Application status: ${profile.verificationStatus.toLowerCase()}.` : 'Your account is awaiting verification.'}</p>
+            <p className="text-xs text-primary-700">{profileQuery.isLoading ? 'Loading rider profile...' : profileQuery.error ? 'Rider profile is unavailable.' : profile?.verificationStatus === 'VERIFIED' ? profile.active ? 'Verified rider account.' : 'Your verification is complete, but the rider account is inactive.' : profile?.verificationStatus ? `Application status: ${profile.verificationStatus.toLowerCase()}.` : 'Your account is awaiting verification.'}</p>
           </div>
           {profile?.verificationStatus === 'VERIFIED' && <Badge variant={profile.available ? 'success' : 'neutral'}>{profile.available ? 'Online · accepting requests' : 'Offline · not accepting requests'}</Badge>}
         </div>
         {profile?.verificationStatus === 'VERIFIED' && <>
           <p className="mt-3 text-sm text-gray-600">{profile.available ? 'You can receive new delivery requests.' : 'Go online when you are ready to receive delivery requests.'} Updating your location helps prioritize nearby deliveries.</p>
+          {!profile.active && <p role="alert" className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Your rider profile is inactive. Contact the platform administrator before trying to receive assignments.</p>}
+          {profile.active && !profile.vehicleType && <p role="alert" className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">No active vehicle is connected to this rider profile, so the assignment engine cannot assign deliveries yet. Ask the platform administrator to complete vehicle setup.</p>}
           <div className="mt-4 flex flex-wrap gap-2">
-            <button type="button" onClick={() => availabilityMutation.mutate(!profile.available)} disabled={availabilityMutation.isPending || locationMutation.isPending || isLocating} className="rounded-lg bg-primary-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50">{availabilityMutation.isPending ? 'Updating...' : profile.available ? 'Go offline' : 'Go online'}</button>
-            <button type="button" onClick={updateLocation} disabled={locationMutation.isPending || isLocating} className="inline-flex items-center gap-2 rounded-lg border border-primary-200 px-3 py-2 text-sm font-semibold text-primary-700 disabled:opacity-50">
+            <button type="button" onClick={() => availabilityMutation.mutate(!profile.available)} disabled={!profile.active || availabilityMutation.isPending || locationMutation.isPending || isLocating || (!profile.available && !profile.vehicleType)} className="rounded-lg bg-primary-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50">{availabilityMutation.isPending ? 'Updating...' : profile.available ? 'Go offline' : 'Go online'}</button>
+            <button type="button" onClick={updateLocation} disabled={!profile.active || locationMutation.isPending || isLocating} className="inline-flex items-center gap-2 rounded-lg border border-primary-200 px-3 py-2 text-sm font-semibold text-primary-700 disabled:opacity-50">
               {isLocating || locationMutation.isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <LocateFixed className="h-4 w-4" />}
               {isLocating ? 'Getting location...' : locationMutation.isPending ? 'Saving location...' : 'Update location'}
             </button>
@@ -127,13 +129,18 @@ export function RiderDashboard() {
         </div>
       </div>
 
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <h2 className="font-display text-lg font-bold text-gray-900">Your deliveries</h2>
+        <button type="button" onClick={() => { void queryClient.invalidateQueries({ queryKey: ['rider-deliveries'] }); }} disabled={isLoading} aria-label="Refresh deliveries" title="Refresh deliveries" className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-50"><RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} /></button>
+      </div>
+
       {isLoading ? (
         <p className="text-sm text-gray-600">Loading rider deliveries…</p>
       ) : deliveriesError ? null : deliveries.length === 0 ? (
         <EmptyState
           icon={<Package className="h-7 w-7" />}
-          title="No deliveries assigned"
-          description="When deliveries are assigned to you, they will appear here."
+          title={profile?.available ? 'Waiting for delivery requests' : 'No active deliveries'}
+          description={profile?.available ? 'You are online. New assignments will appear here when a ready order matches your availability and active vehicle.' : 'Go online when you are ready to receive assignments.'}
         />
       ) : null}
 

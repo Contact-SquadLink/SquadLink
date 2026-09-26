@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { cn } from '@/utils/format';
+import { Reveal } from '@/components/ui/Reveal';
+import { revealStagger } from '@/utils/reveal';
 
 interface FAQItem {
   category: string;
@@ -108,7 +110,7 @@ export function FAQSection() {
   return (
     <section id="faq" className="py-20 bg-white scroll-mt-16">
       <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
-        <div className="text-center">
+        <Reveal className="text-center">
           <p className="text-sm font-semibold text-primary-600 uppercase tracking-wider">FAQ</p>
           <h2 className="mt-2 font-display text-3xl font-bold text-gray-900 sm:text-4xl">
             Frequently asked questions
@@ -117,7 +119,7 @@ export function FAQSection() {
             Everything you need to know about SQUADLINK — for customers,
             businesses, and riders.
           </p>
-        </div>
+        </Reveal>
 
         {/* Category tabs */}
         <div className="mt-8 flex flex-wrap items-center justify-center gap-2">
@@ -145,10 +147,8 @@ export function FAQSection() {
           {filtered.map((item, idx) => {
             const isOpen = openIndex === idx;
             return (
-              <div
-                key={`${item.category}-${item.question}`}
-                className="rounded-xl border border-gray-200 bg-white overflow-hidden transition-all"
-              >
+              <Reveal key={`${item.category}-${item.question}`} delay={revealStagger(idx)}>
+              <div className="rounded-xl border border-gray-200 bg-white overflow-hidden transition-all">
                 <button
                   onClick={() => setOpenIndex(isOpen ? null : idx)}
                   className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left"
@@ -176,6 +176,7 @@ export function FAQSection() {
                   </div>
                 </div>
               </div>
+              </Reveal>
             );
           })}
         </div>

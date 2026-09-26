@@ -1,4 +1,6 @@
 import { Target, Users, Truck, Sparkles } from 'lucide-react';
+import { Reveal } from '@/components/ui/Reveal';
+import { revealStagger } from '@/utils/reveal';
 
 const pillars = [
   {
@@ -28,7 +30,7 @@ export function AboutSection() {
     <section id="about" className="py-20 bg-gray-50 scroll-mt-16">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
-          <div>
+          <Reveal>
             <p className="text-sm font-semibold text-primary-600 uppercase tracking-wider">About SQUADLINK</p>
             <h2 className="mt-2 font-display text-3xl font-bold text-gray-900 sm:text-4xl">
               Connecting local commerce with reliable delivery
@@ -53,16 +55,14 @@ export function AboutSection() {
                 and real-time tracking.
               </p>
             </div>
-          </div>
+          </Reveal>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             {pillars.map((p) => {
               const Icon = p.icon;
               return (
-                <div
-                  key={p.title}
-                  className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm hover:shadow-md transition-shadow"
-                >
+                <Reveal key={p.title} delay={revealStagger(pillars.indexOf(p))}>
+                <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm hover:shadow-md transition-shadow">
                   <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary-100 text-primary-700">
                     <Icon className="h-5 w-5" />
                   </div>
@@ -73,6 +73,7 @@ export function AboutSection() {
                     {p.description}
                   </p>
                 </div>
+                </Reveal>
               );
             })}
           </div>

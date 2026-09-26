@@ -4,7 +4,8 @@ import { after, before, describe, it } from "node:test";
 
 import { db } from "../src/db/database";
 import {
-  processOutboxEventById
+  processOutboxEventById,
+  processNextOutboxEvent
 } from "../src/modules/outbox/outbox.processor";
 
 const ORDER_ID = "1f43ac8a-11ce-465a-ab80-4a497b0a59e2";
@@ -63,6 +64,24 @@ async function createEvent(eventType: string): Promise<string> {
 }
 
 describe("outbox processor", () => {
+  it("claims and processes the next pending event through the worker path", async (context) => {
+    const outstanding = await db.query<{ count: string }>(`
+      SELECT COUNT(*)::text AS count
+      FROM public.outbox_events
+      WHERE status = 'PENDING'
+         OR (status = 'PROCESSING' AND updated_at < NOW() - INTERVAL '5 minutes')
+    `);
+    if (Number(outstanding.rows[0].count) > 0) {
+      context.skip("Existing outbox work takes priority in this shared test database.");
+      return;
+    }
+
+    const eventId = await createEvent("ORDER_DELIVERED");
+    const result = await processNextOutboxEvent();
+    assert.equal(result?.eventId, eventId);
+    assert.equal(result?.status, "PROCESSED");
+  });
+
   it("processes an event and creates one scoped notification", async () => {
     const eventId = await createEvent("ORDER_DELIVERED");
     const result = await processOutboxEventById(eventId);

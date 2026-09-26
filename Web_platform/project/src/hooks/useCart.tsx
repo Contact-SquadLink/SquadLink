@@ -82,9 +82,21 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (!user || (user.role !== 'CUSTOMER' && user.role !== 'BUSINESS_USER')) {
+    if (!user) {
+      if (syncedUserIdRef.current !== null) {
+        cartOperationRef.current += 1;
+        setItems([]);
+        localStorage.removeItem(GUEST_CART_KEY);
+        syncedUserIdRef.current = null;
+      }
+      return;
+    }
+
+    if (user.role !== 'CUSTOMER' && user.role !== 'BUSINESS_USER') {
+      cartOperationRef.current += 1;
+      setItems([]);
       localStorage.removeItem(GUEST_CART_KEY);
-      syncedUserIdRef.current = null;
+      syncedUserIdRef.current = user.id;
       return;
     }
 
@@ -97,15 +109,13 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
     const syncCart = async () => {
       const syncOperation = cartOperationRef.current;
-      const guestItems = loadGuestCart();
+      const guestItems = syncedUserIdRef.current === null ? loadGuestCart() : [];
+      const switchingAccounts = syncedUserIdRef.current !== null;
+      if (switchingAccounts) setItems([]);
+      localStorage.removeItem(GUEST_CART_KEY);
 
       try {
         let response = await cartApi.get();
-
-        if (guestItems.length > 0 && response.data.items.length > 0) {
-          await cartApi.clear();
-          response = await cartApi.get();
-        }
 
         for (const item of guestItems) {
           try {
@@ -138,13 +148,18 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, [mergeServerCart, user]);
 
   useEffect(() => {
+    if (user) {
+      localStorage.removeItem(GUEST_CART_KEY);
+      return;
+    }
+
     if (items.length === 0) {
       localStorage.removeItem(GUEST_CART_KEY);
       return;
     }
 
     localStorage.setItem(GUEST_CART_KEY, JSON.stringify(items));
-  }, [items]);
+  }, [items, user]);
 
   const addItem = useCallback((product: Product, quantity: number) => {
     cartOperationRef.current += 1;

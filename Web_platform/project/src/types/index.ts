@@ -113,6 +113,8 @@ export interface BusinessOrderSummary {
   orderId: string;
   status: string;
   fulfillmentStatus?: string;
+  deliveryStatus?: string | null;
+  riderAssigned?: boolean;
   createdAt: string;
 }
 

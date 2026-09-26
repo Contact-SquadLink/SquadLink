@@ -13,6 +13,8 @@ import { ProductCard } from '@/components/catalog/ProductCard';
 import { EmptyState } from '@/components/ui/States';
 import { cn } from '@/utils/format';
 import { getCategoryIcon } from '@/utils/icons';
+import { Reveal } from '@/components/ui/Reveal';
+import { revealStagger } from '@/utils/reveal';
 
 const sortOptions = [
   { value: 'recommended', label: 'Recommended' },
@@ -21,6 +23,8 @@ const sortOptions = [
   { value: 'price-high', label: 'Price: High to Low' },
   { value: 'rating', label: 'Highest Rated' },
 ];
+
+const EMPTY_CATEGORIES: Array<{ id: string; name: string; slug: string; icon: string; description: string }> = [];
 
 export function BrowsePage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -77,10 +81,11 @@ export function BrowsePage() {
   });
 
   const products = data?.products ?? [];
-  const categories = useQuery({
+  const categoriesQuery = useQuery({
     queryKey: ['catalog-categories'],
     queryFn: () => catalogService.getCategories(),
-  }).data ?? [];
+  });
+  const categories = categoriesQuery.data ?? EMPTY_CATEGORIES;
 
   const activeCategory = useMemo(
     () => categories.find((c) => c.slug === category),
@@ -92,14 +97,16 @@ export function BrowsePage() {
       {/* Page header */}
       <div className="bg-white border-b border-gray-100">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-          <h1 className="font-display text-2xl font-bold text-gray-900 sm:text-3xl">
-            {activeCategory ? activeCategory.name : 'Browse Products'}
-          </h1>
-          <p className="mt-2 text-sm text-gray-600">
-            {activeCategory
-              ? activeCategory.description
-              : 'Search the unified catalogue across local businesses. No account needed to browse.'}
-          </p>
+          <Reveal>
+            <h1 className="font-display text-2xl font-bold text-gray-900 sm:text-3xl">
+              {activeCategory ? activeCategory.name : 'Browse Products'}
+            </h1>
+            <p className="mt-2 text-sm text-gray-600">
+              {activeCategory
+                ? activeCategory.description
+                : 'Search the unified catalogue across local businesses. No account needed to browse.'}
+            </p>
+          </Reveal>
 
           {/* Search bar */}
           <div className="mt-5 flex flex-col sm:flex-row gap-3">
@@ -329,8 +336,10 @@ export function BrowsePage() {
             {/* Products */}
             {!isLoading && products.length > 0 && (
               <div className="grid grid-cols-2 gap-4 sm:gap-6 lg:grid-cols-3 xl:grid-cols-4">
-                {products.map((product) => (
-                  <ProductCard key={product.id} product={product} />
+                {products.map((product, index) => (
+                  <Reveal key={product.id} delay={revealStagger(index)}>
+                    <ProductCard product={product} />
+                  </Reveal>
                 ))}
               </div>
             )}
