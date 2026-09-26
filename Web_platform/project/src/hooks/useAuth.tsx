@@ -6,6 +6,7 @@ import {
   useCallback,
   type ReactNode,
 } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import type { Role, User } from '@/types';
 import { authApi, type RegisterPayload } from '@/api/auth';
 import { clearToken, getToken, setToken } from '@/api/client';
@@ -34,6 +35,7 @@ function normalizeUser(user: User): User {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient();
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -129,18 +131,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const authenticatedUser = normalizeUser(response.data.user);
 
       if (expectedRole && authenticatedUser.role !== expectedRole) {
+        queryClient.clear();
         clearToken();
+        setUser(null);
         throw new Error(
           `This account is not registered as a ${expectedRole.toLowerCase().replace('_', ' ')} account.`
         );
       }
 
+      queryClient.clear();
       setToken(response.data.accessToken);
       setUser(authenticatedUser);
 
       return authenticatedUser;
     },
-    []
+    [queryClient]
   );
 
   const register = useCallback(
@@ -154,6 +159,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
 
       const authenticatedUser = normalizeUser(loginResponse.data.user);
+      queryClient.clear();
       setToken(loginResponse.data.accessToken);
       setUser(authenticatedUser);
 
@@ -176,13 +182,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return authenticatedUser;
       }
     },
-    []
+    [queryClient]
   );
 
   const logout = useCallback(() => {
+    queryClient.clear();
     clearToken();
     setUser(null);
-  }, []);
+  }, [queryClient]);
 
   return (
     <AuthContext.Provider

@@ -181,7 +181,7 @@ export default function App() {
                 <Route
                   path="/rider"
                   element={
-                    <ProtectedRoute allowedRoles={['RIDER', 'ADMIN']}>
+                    <ProtectedRoute allowedRoles={['RIDER']}>
                       <RiderDashboard />
                     </ProtectedRoute>
                   }
@@ -189,7 +189,7 @@ export default function App() {
                 <Route
                   path="/rider/deliveries/:deliveryId"
                   element={
-                    <ProtectedRoute allowedRoles={['RIDER', 'ADMIN']}>
+                    <ProtectedRoute allowedRoles={['RIDER']}>
                       <RiderDeliveryDetailPage />
                     </ProtectedRoute>
                   }

@@ -105,10 +105,13 @@ export function LoginPage() {
     setIsLoading(true);
 
     try {
-      const user = await login(identifier, password);
+      const user = await login(identifier, password, isAdminRole ? 'ADMIN' : undefined);
 
       const destination = safeRedirect(redirect);
-      if (destination && roleCanOpenPath(user.role, destination)) {
+      const destinationUrl = destination ? new URL(destination, window.location.origin) : null;
+      const isGenericNotificationLanding = destinationUrl?.pathname === '/notifications'
+        && !destinationUrl.searchParams.has('open');
+      if (destination && !isGenericNotificationLanding && roleCanOpenPath(user.role, destination)) {
         navigate(destination);
         return;
       }

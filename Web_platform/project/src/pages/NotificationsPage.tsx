@@ -131,7 +131,9 @@ export function NotificationsPage() {
           <div>
             <h2 className="text-sm font-semibold text-gray-900">Push notifications</h2>
             <p className="mt-1 text-sm text-gray-600">Get account activity on this device, even when SQUADLINK is not open.</p>
-            {!pushConfigQuery.data?.data.available && !pushConfigQuery.isLoading && <p className="mt-1 text-xs text-gray-500">Push delivery is not configured yet. In-app notifications remain available.</p>}
+            {pushConfigQuery.error instanceof ApiRequestError && pushConfigQuery.error.statusCode === 404 && <p role="alert" className="mt-1 text-xs text-red-700">The deployed backend does not have the push setup endpoint yet. Deploy the backend push-notification update; the frontend cannot enable push until then.</p>}
+            {pushConfigQuery.error && !(pushConfigQuery.error instanceof ApiRequestError && pushConfigQuery.error.statusCode === 404) && <p role="alert" className="mt-1 text-xs text-red-700">Push setup could not be reached. Check your connection and backend deployment.</p>}
+            {!pushConfigQuery.data?.data.available && !pushConfigQuery.error && !pushConfigQuery.isLoading && <p className="mt-1 text-xs text-gray-500">Push delivery is not configured on the backend yet. In-app notifications remain available.</p>}
             {pushStatusQuery.data?.data.enabled && !browserSubscribed && <p className="mt-1 text-xs text-gray-500">Push is enabled on another device.</p>}
             {pushError && <p role="alert" className="mt-1 text-xs text-red-700">{pushError}</p>}
           </div>

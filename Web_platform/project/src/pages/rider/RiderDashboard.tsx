@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
 import { Bike, Package, ArrowRight, Clock, MapPin, CheckCircle2, LocateFixed } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/States';
@@ -18,6 +19,7 @@ const statusVariants: Record<DeliveryStatus, 'default' | 'success' | 'warning' |
 
 export function RiderDashboard() {
   const queryClient = useQueryClient();
+  const [locationError, setLocationError] = useState<string | null>(null);
   const profileQuery = useQuery({ queryKey: ['rider-profile'], queryFn: riderApi.getProfile, refetchInterval: 15000 });
   const { data, isLoading, error: deliveriesError } = useQuery({
     queryKey: ['rider-deliveries'],
@@ -41,10 +43,21 @@ export function RiderDashboard() {
   });
   const profile = profileQuery.data?.data;
   const updateLocation = () => {
-    if (!navigator.geolocation) return;
+    setLocationError(null);
+    if (!navigator.geolocation) {
+      setLocationError('This browser does not support location access.');
+      return;
+    }
     navigator.geolocation.getCurrentPosition(
       (position) => locationMutation.mutate({ latitude: position.coords.latitude, longitude: position.coords.longitude }),
-      () => undefined
+      (error) => {
+        setLocationError(error.code === error.PERMISSION_DENIED
+          ? 'Location access is blocked. Allow location access for this site in your browser settings, then try again.'
+          : error.code === error.POSITION_UNAVAILABLE
+            ? 'Your device could not determine its location. Check location services and try again.'
+            : 'Location request timed out. Try again when your device has a clearer location signal.');
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }
     );
   };
 
@@ -64,7 +77,7 @@ export function RiderDashboard() {
           </div>
         </div>
         {profile?.verificationStatus === 'VERIFIED' && <div className="mt-4 flex flex-wrap gap-2"><button type="button" onClick={() => availabilityMutation.mutate(!profile.available)} disabled={availabilityMutation.isPending} className="rounded-lg bg-primary-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50">{profile.available ? 'Go offline' : 'Go online'}</button><button type="button" onClick={updateLocation} disabled={locationMutation.isPending} className="inline-flex items-center gap-2 rounded-lg border border-primary-200 px-3 py-2 text-sm font-semibold text-primary-700 disabled:opacity-50"><LocateFixed className="h-4 w-4" /> Update location</button></div>}
-        {(availabilityMutation.error || locationMutation.error) && <p className="mt-3 text-sm text-red-700">{(availabilityMutation.error ?? locationMutation.error) instanceof Error ? (availabilityMutation.error ?? locationMutation.error)?.message : 'Unable to update rider availability or location.'}</p>}
+        {(locationError || availabilityMutation.error || locationMutation.error) && <p role="alert" className="mt-3 text-sm text-red-700">{locationError ?? (locationMutation.error ? locationMutation.error instanceof Error && 'statusCode' in locationMutation.error && locationMutation.error.statusCode === 500 ? 'The backend could not save your location. Try again later; saved location helps assignment priority, but verified riders can still be considered without it.' : locationMutation.error instanceof Error ? locationMutation.error.message : 'Unable to save your location.' : availabilityMutation.error instanceof Error ? availabilityMutation.error.message : 'Unable to update rider availability.')}</p>}
       </div>
 
       {profileQuery.error && <p role="alert" className="mb-5 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">We could not load your rider profile. Please refresh to try again.</p>}
