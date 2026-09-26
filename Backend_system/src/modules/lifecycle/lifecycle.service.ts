@@ -326,8 +326,8 @@ async function assignWaitingDeliveries(actorUserId: string): Promise<void> {
         WHERE d.status = 'SEARCHING_RIDER'
           AND o.status = 'READY_FOR_PICKUP'
         ORDER BY d.updated_at ASC
-        FOR UPDATE OF d SKIP LOCKED
         LIMIT 10
+        FOR UPDATE OF d SKIP LOCKED
       `
     );
 
@@ -1033,8 +1033,8 @@ async function assignRider(
         ST_Distance(r.current_location, d.pickup_location) ASC NULLS LAST,
         r.updated_at ASC,
         r.id
-      FOR UPDATE OF r SKIP LOCKED
       LIMIT 1
+      FOR UPDATE OF r SKIP LOCKED
     `,
     [delivery.delivery_id, excludedRiderIds]
   );

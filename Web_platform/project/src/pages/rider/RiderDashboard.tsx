@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { Bike, Package, ArrowRight, Clock, MapPin, CheckCircle2, LocateFixed } from 'lucide-react';
+import { Bike, Package, ArrowRight, Clock, MapPin, CheckCircle2, LocateFixed, LoaderCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/States';
 import { formatDate } from '@/utils/format';
@@ -20,6 +20,7 @@ const statusVariants: Record<DeliveryStatus, 'default' | 'success' | 'warning' |
 export function RiderDashboard() {
   const queryClient = useQueryClient();
   const [locationError, setLocationError] = useState<string | null>(null);
+  const [isLocating, setIsLocating] = useState(false);
   const profileQuery = useQuery({ queryKey: ['rider-profile'], queryFn: riderApi.getProfile, refetchInterval: 15000 });
   const { data, isLoading, error: deliveriesError } = useQuery({
     queryKey: ['rider-deliveries'],
@@ -39,18 +40,27 @@ export function RiderDashboard() {
   });
   const locationMutation = useMutation({
     mutationFn: ({ latitude, longitude }: { latitude: number; longitude: number }) => riderApi.setLocation(latitude, longitude),
-    onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ['rider-deliveries'] }); },
+    onSuccess: () => {
+      setIsLocating(false);
+      setLocationError(null);
+      void queryClient.invalidateQueries({ queryKey: ['rider-profile'] });
+      void queryClient.invalidateQueries({ queryKey: ['rider-deliveries'] });
+    },
+    onError: () => setIsLocating(false),
   });
   const profile = profileQuery.data?.data;
   const updateLocation = () => {
     setLocationError(null);
+    setIsLocating(true);
     if (!navigator.geolocation) {
       setLocationError('This browser does not support location access.');
+      setIsLocating(false);
       return;
     }
     navigator.geolocation.getCurrentPosition(
       (position) => locationMutation.mutate({ latitude: position.coords.latitude, longitude: position.coords.longitude }),
       (error) => {
+        setIsLocating(false);
         setLocationError(error.code === error.PERMISSION_DENIED
           ? 'Location access is blocked. Allow location access for this site in your browser settings, then try again.'
           : error.code === error.POSITION_UNAVAILABLE
@@ -73,10 +83,20 @@ export function RiderDashboard() {
           </div>
           <div>
             <h2 className="text-sm font-bold text-primary-900">Availability</h2>
-            <p className="text-xs text-primary-700">{profileQuery.isLoading ? 'Loading rider profile...' : profileQuery.error ? 'Rider profile is unavailable.' : profile?.verificationStatus === 'VERIFIED' ? 'Verified rider account.' : 'Your account is awaiting verification.'}</p>
+            <p className="text-xs text-primary-700">{profileQuery.isLoading ? 'Loading rider profile...' : profileQuery.error ? 'Rider profile is unavailable.' : profile?.verificationStatus === 'VERIFIED' ? 'Verified rider account.' : profile?.verificationStatus ? `Application status: ${profile.verificationStatus.toLowerCase()}.` : 'Your account is awaiting verification.'}</p>
           </div>
+          {profile?.verificationStatus === 'VERIFIED' && <Badge variant={profile.available ? 'success' : 'neutral'}>{profile.available ? 'Online · accepting requests' : 'Offline · not accepting requests'}</Badge>}
         </div>
-        {profile?.verificationStatus === 'VERIFIED' && <div className="mt-4 flex flex-wrap gap-2"><button type="button" onClick={() => availabilityMutation.mutate(!profile.available)} disabled={availabilityMutation.isPending} className="rounded-lg bg-primary-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50">{profile.available ? 'Go offline' : 'Go online'}</button><button type="button" onClick={updateLocation} disabled={locationMutation.isPending} className="inline-flex items-center gap-2 rounded-lg border border-primary-200 px-3 py-2 text-sm font-semibold text-primary-700 disabled:opacity-50"><LocateFixed className="h-4 w-4" /> Update location</button></div>}
+        {profile?.verificationStatus === 'VERIFIED' && <>
+          <p className="mt-3 text-sm text-gray-600">{profile.available ? 'You can receive new delivery requests.' : 'Go online when you are ready to receive delivery requests.'} Updating your location helps prioritize nearby deliveries.</p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button type="button" onClick={() => availabilityMutation.mutate(!profile.available)} disabled={availabilityMutation.isPending || locationMutation.isPending || isLocating} className="rounded-lg bg-primary-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50">{availabilityMutation.isPending ? 'Updating...' : profile.available ? 'Go offline' : 'Go online'}</button>
+            <button type="button" onClick={updateLocation} disabled={locationMutation.isPending || isLocating} className="inline-flex items-center gap-2 rounded-lg border border-primary-200 px-3 py-2 text-sm font-semibold text-primary-700 disabled:opacity-50">
+              {isLocating || locationMutation.isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <LocateFixed className="h-4 w-4" />}
+              {isLocating ? 'Getting location...' : locationMutation.isPending ? 'Saving location...' : 'Update location'}
+            </button>
+          </div>
+        </>}
         {(locationError || availabilityMutation.error || locationMutation.error) && <p role="alert" className="mt-3 text-sm text-red-700">{locationError ?? (locationMutation.error ? locationMutation.error instanceof Error && 'statusCode' in locationMutation.error && locationMutation.error.statusCode === 500 ? 'The backend could not save your location. Try again later; saved location helps assignment priority, but verified riders can still be considered without it.' : locationMutation.error instanceof Error ? locationMutation.error.message : 'Unable to save your location.' : availabilityMutation.error instanceof Error ? availabilityMutation.error.message : 'Unable to update rider availability.')}</p>}
       </div>
 
