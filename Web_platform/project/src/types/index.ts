@@ -285,6 +285,7 @@ export interface Delivery {
   orderId: string;
   status: DeliveryStatus;
   assignmentStatus?: 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'EXPIRED' | null;
+  assignmentExpiresAt?: string | null;
   riderId?: string;
   riderName?: string;
   pickupAddress?: string;

@@ -29,7 +29,12 @@ export function RiderDashboard() {
   });
 
   const deliveries = (data?.data ?? []) as Delivery[];
-  const activeDeliveries = deliveries.filter((d) => ['ASSIGNED', 'PICKED_UP', 'IN_TRANSIT', 'ARRIVED'].includes(d.status));
+  const isPendingAcceptance = (d: Delivery) => d.status === 'ASSIGNED' && d.assignmentStatus === 'PENDING';
+  const pendingDeliveries = deliveries.filter(isPendingAcceptance);
+  const inProgressDeliveries = deliveries.filter((d) => 
+    ['PICKED_UP', 'IN_TRANSIT', 'ARRIVED'].includes(d.status) || 
+    (d.status === 'ASSIGNED' && d.assignmentStatus !== 'PENDING')
+  );
   const completedDeliveries = deliveries.filter((d) => d.status === 'DELIVERED');
   const availabilityMutation = useMutation({
     mutationFn: (available: boolean) => riderApi.setAvailable(available),
@@ -107,25 +112,25 @@ export function RiderDashboard() {
 
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-8">
         <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent-100 text-accent-700">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-100 text-amber-700">
             <Package className="h-5 w-5" />
           </div>
-          <p className="mt-3 font-display text-2xl font-bold text-gray-900">{activeDeliveries.length}</p>
-          <p className="text-xs text-gray-500">Active Deliveries</p>
+          <p className="mt-3 font-display text-2xl font-bold text-gray-900">{pendingDeliveries.length}</p>
+          <p className="text-xs text-gray-500">Pending Offers</p>
         </div>
         <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent-100 text-accent-700">
+            <Bike className="h-5 w-5" />
+          </div>
+          <p className="mt-3 font-display text-2xl font-bold text-gray-900">{inProgressDeliveries.length}</p>
+          <p className="text-xs text-gray-500">In Progress</p>
+        </div>
+        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm col-span-2 sm:col-span-1">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-success-100 text-success-700">
             <CheckCircle2 className="h-5 w-5" />
           </div>
           <p className="mt-3 font-display text-2xl font-bold text-gray-900">{completedDeliveries.length}</p>
           <p className="text-xs text-gray-500">Completed</p>
-        </div>
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm col-span-2 sm:col-span-1">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary-100 text-secondary-700">
-            <Bike className="h-5 w-5" />
-          </div>
-          <p className="mt-3 font-display text-2xl font-bold text-gray-900">{deliveries.length}</p>
-          <p className="text-xs text-gray-500">Total deliveries</p>
         </div>
       </div>
 
@@ -144,11 +149,64 @@ export function RiderDashboard() {
         />
       ) : null}
 
-      {activeDeliveries.length > 0 && (
+      {/* High-priority pending assignment offers */}
+      {pendingDeliveries.length > 0 && (
         <div className="mb-8">
-          <h2 className="font-display text-lg font-bold text-gray-900 mb-4">Active Deliveries</h2>
+          <div className="flex items-center gap-2 mb-4">
+            <span className="relative flex h-3 w-3">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
+            </span>
+            <h2 className="font-display text-lg font-bold text-gray-900">New Assignment Requests (Action Required)</h2>
+          </div>
           <div className="space-y-3">
-            {activeDeliveries.map((delivery) => (
+            {pendingDeliveries.map((delivery) => (
+              <Link
+                key={delivery.id}
+                to={`/rider/deliveries/${delivery.id}`}
+                className="flex items-center gap-4 rounded-2xl border-2 border-amber-300 bg-amber-50/50 p-5 shadow-sm hover:shadow-md hover:border-amber-400 transition-all"
+              >
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-100 text-amber-700">
+                  <Package className="h-6 w-6" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="font-bold text-gray-900 text-sm">
+                      Delivery #{delivery.id.slice(-6).toUpperCase()}
+                    </p>
+                    <Badge variant="warning">AWAITING YOUR ACCEPTANCE</Badge>
+                  </div>
+                  <p className="text-xs text-amber-800 font-medium mt-1">
+                    Click to review pickup and drop-off details, then accept or decline this offer.
+                  </p>
+                  {delivery.pickupAddress && (
+                    <p className="mt-1 text-xs text-gray-600 flex items-center gap-1">
+                      <MapPin className="h-3 w-3 text-gray-400" />
+                      Pickup: {delivery.pickupAddress}
+                    </p>
+                  )}
+                  {delivery.deliveryAddress && (
+                    <p className="text-xs text-gray-600 flex items-center gap-1">
+                      <MapPin className="h-3 w-3 text-gray-400" />
+                      Drop-off: {delivery.deliveryAddress}
+                    </p>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 text-xs font-semibold text-primary-700 bg-white border border-primary-200 px-3 py-1.5 rounded-lg shrink-0">
+                  Review & Accept <ArrowRight className="h-4 w-4" />
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* In-progress accepted deliveries */}
+      {inProgressDeliveries.length > 0 && (
+        <div className="mb-8">
+          <h2 className="font-display text-lg font-bold text-gray-900 mb-4">In-Progress Deliveries</h2>
+          <div className="space-y-3">
+            {inProgressDeliveries.map((delivery) => (
               <Link
                 key={delivery.id}
                 to={`/rider/deliveries/${delivery.id}`}
@@ -162,8 +220,8 @@ export function RiderDashboard() {
                     Delivery #{delivery.id.slice(-6).toUpperCase()}
                   </p>
                   <div className="flex items-center gap-2 mt-1">
-                    <Badge variant={statusVariants[delivery.status]}>
-                      {delivery.status.replace(/_/g, ' ')}
+                    <Badge variant={delivery.status === 'ASSIGNED' ? 'success' : statusVariants[delivery.status]}>
+                      {delivery.status === 'ASSIGNED' ? 'ACCEPTED · READY FOR PICKUP' : delivery.status.replace(/_/g, ' ')}
                     </Badge>
                     {delivery.assignedAt && (
                       <span className="text-xs text-gray-500 flex items-center gap-1">
@@ -172,10 +230,16 @@ export function RiderDashboard() {
                       </span>
                     )}
                   </div>
-                  {delivery.deliveryAddress && (
+                  {delivery.pickupAddress && (
                     <p className="mt-1 text-xs text-gray-500 flex items-center gap-1">
                       <MapPin className="h-3 w-3" />
-                      {delivery.deliveryAddress}
+                      Pickup: {delivery.pickupAddress}
+                    </p>
+                  )}
+                  {delivery.deliveryAddress && (
+                    <p className="text-xs text-gray-500 flex items-center gap-1">
+                      <MapPin className="h-3 w-3" />
+                      Drop-off: {delivery.deliveryAddress}
                     </p>
                   )}
                 </div>

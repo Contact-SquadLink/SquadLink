@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
   Package,
@@ -12,6 +12,7 @@ import {
   ShieldCheck,
   KeyRound,
   Clock,
+  AlertCircle,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/States';
@@ -45,10 +46,12 @@ function getStepIndex(status: DeliveryStatus): number {
 export function RiderDeliveryDetailPage() {
   const { deliveryId } = useParams<{ deliveryId: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [credential, setCredential] = useState('');
   const [deliveryOtp, setDeliveryOtp] = useState('');
   const [rejectionReason, setRejectionReason] = useState('');
   const [actionError, setActionError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [credentialMessage, setCredentialMessage] = useState<string | null>(null);
   const [isActing, setIsActing] = useState(false);
   const { data, isLoading, isError, error } = useQuery({
@@ -122,10 +125,18 @@ export function RiderDeliveryDetailPage() {
   const decideAssignment = async (accepted: boolean) => {
     setIsActing(true);
     setActionError(null);
+    setSuccessMessage(null);
     try {
-      if (accepted) await riderApi.acceptAssignment(delivery.id);
-      else await riderApi.rejectAssignment(delivery.id, rejectionReason.trim() || undefined);
-      navigate('/rider', { replace: true });
+      if (accepted) {
+        await riderApi.acceptAssignment(delivery.id);
+        setSuccessMessage('Delivery assignment accepted! Please proceed to the merchant to collect the package.');
+        await queryClient.invalidateQueries({ queryKey: ['rider-delivery', delivery.id] });
+        await queryClient.invalidateQueries({ queryKey: ['rider-deliveries'] });
+      } else {
+        await riderApi.rejectAssignment(delivery.id, rejectionReason.trim() || undefined);
+        await queryClient.invalidateQueries({ queryKey: ['rider-deliveries'] });
+        navigate('/rider', { replace: true });
+      }
     } catch (error) {
       setActionError(error instanceof Error ? error.message : 'Unable to update assignment.');
     } finally {
@@ -167,8 +178,20 @@ export function RiderDeliveryDetailPage() {
             Order #{delivery.orderId.slice(-6).toUpperCase()}
           </p>
         </div>
-        <Badge variant={statusVariants[delivery.status]}>
-          {delivery.status.replace(/_/g, ' ')}
+        <Badge
+          variant={
+            delivery.status === 'ASSIGNED' && delivery.assignmentStatus === 'PENDING'
+              ? 'warning'
+              : delivery.status === 'ASSIGNED' && delivery.assignmentStatus === 'ACCEPTED'
+              ? 'success'
+              : statusVariants[delivery.status]
+          }
+        >
+          {delivery.status === 'ASSIGNED' && delivery.assignmentStatus === 'PENDING'
+            ? 'AWAITING YOUR ACCEPTANCE'
+            : delivery.status === 'ASSIGNED' && delivery.assignmentStatus === 'ACCEPTED'
+            ? 'ACCEPTED · READY FOR PICKUP'
+            : delivery.status.replace(/_/g, ' ')}
         </Badge>
       </div>
 
@@ -206,7 +229,11 @@ export function RiderDeliveryDetailPage() {
                     isCurrent && 'text-primary-700',
                     isUpcoming && 'text-gray-400'
                   )}>
-                    {step.label}
+                    {step.status === 'ASSIGNED'
+                      ? delivery.assignmentStatus === 'ACCEPTED'
+                        ? 'Assigned & Accepted'
+                        : 'Awaiting Acceptance'
+                      : step.label}
                   </p>
                   {isCurrent && <p className="text-xs text-primary-600 mt-0.5">Current step</p>}
                   {isComplete && <p className="text-xs text-success-600 mt-0.5">Completed</p>}
@@ -222,9 +249,54 @@ export function RiderDeliveryDetailPage() {
         <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm mb-6">
           <h2 className="font-display text-lg font-bold text-gray-900 mb-4">Actions</h2>
 
+          {actionError && (
+            <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700 mb-4 flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-red-600 shrink-0" />
+              <span>{actionError}</span>
+            </div>
+          )}
+
+          {successMessage && (
+            <div role="status" className="rounded-xl border border-success-200 bg-success-50 p-4 text-sm font-medium text-success-800 mb-4 flex items-center gap-2">
+              <CheckCircle2 className="h-5 w-5 text-success-600 shrink-0" />
+              <span>{successMessage}</span>
+            </div>
+          )}
+
           {delivery.status === 'ASSIGNED' && (
-            <div className="space-y-3">
-              {delivery.assignmentStatus !== 'ACCEPTED' ? <><div className="rounded-xl border border-secondary-200 bg-secondary-50 p-4 text-sm text-secondary-800">Review the pickup and drop-off details, then accept this assignment before collecting the order.</div><div className="flex flex-wrap gap-2"><ActionButton onClick={() => void decideAssignment(true)} icon={CheckCircle2} label={isActing ? 'Accepting...' : 'Accept assignment'} color="bg-success-600 hover:bg-success-700" /><ActionButton onClick={() => void decideAssignment(false)} icon={ArrowLeft} label={isActing ? 'Rejecting...' : 'Reject assignment'} color="bg-red-600 hover:bg-red-700" /></div><input value={rejectionReason} onChange={(event) => setRejectionReason(event.target.value)} placeholder="Reason for rejection (optional)" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" /></> : <><div className="rounded-xl border border-secondary-200 bg-secondary-50 p-4 text-sm text-secondary-800">Enter the pickup credential from the business. If the assignment message was missed, issue a replacement credential here.</div><input value={credential} onChange={(event) => setCredential(event.target.value)} placeholder="Pickup credential" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" /><div className="flex flex-wrap gap-2"><ActionButton onClick={advanceStatus} icon={ShieldCheck} label={isActing ? 'Verifying...' : 'Verify Pickup'} color="bg-primary-600 hover:bg-primary-700" /><button type="button" onClick={() => void reissueCredential()} disabled={isActing} className="rounded-lg border border-primary-200 px-3 py-2 text-sm font-semibold text-primary-700 disabled:opacity-50">{isActing ? 'Issuing...' : 'Issue pickup credential'}</button></div>{credentialMessage && <p className="text-sm text-success-700">{credentialMessage}</p>}</>}
+            <div className="space-y-4">
+              {delivery.assignmentStatus !== 'ACCEPTED' ? (
+                <>
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                    <p className="font-semibold">New Delivery Request</p>
+                    <p className="mt-1">Review the pickup and drop-off details below. Accept this assignment to confirm you will collect the order, or decline to let another rider accept.</p>
+                  </div>
+                  <div className="flex flex-wrap gap-3">
+                    <ActionButton onClick={() => void decideAssignment(true)} icon={CheckCircle2} label={isActing ? 'Accepting...' : 'Accept assignment'} color="bg-success-600 hover:bg-success-700" />
+                    <ActionButton onClick={() => void decideAssignment(false)} icon={ArrowLeft} label={isActing ? 'Declining...' : 'Decline assignment'} color="bg-red-600 hover:bg-red-700" />
+                  </div>
+                  <input value={rejectionReason} onChange={(event) => setRejectionReason(event.target.value)} placeholder="Reason for declining (optional)" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+                </>
+              ) : (
+                <>
+                  <div className="rounded-xl border border-success-200 bg-success-50 p-4 text-sm text-success-900">
+                    <p className="font-semibold flex items-center gap-2">
+                      <CheckCircle2 className="h-4 w-4 text-success-600" /> Assignment Confirmed & Accepted
+                    </p>
+                    <p className="mt-1">Enter the 12-character pickup credential provided by the merchant to verify pickup, or generate a replacement credential below if not yet received.</p>
+                  </div>
+                  <div className="space-y-3">
+                    <input value={credential} onChange={(event) => setCredential(event.target.value)} placeholder="Enter 12-character pickup credential" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-mono tracking-wider" />
+                    <div className="flex flex-wrap gap-2">
+                      <ActionButton onClick={advanceStatus} icon={ShieldCheck} label={isActing ? 'Verifying...' : 'Verify Pickup'} color="bg-primary-600 hover:bg-primary-700" />
+                      <button type="button" onClick={() => void reissueCredential()} disabled={isActing} className="rounded-lg border border-primary-200 px-3 py-2 text-sm font-semibold text-primary-700 hover:bg-primary-50 disabled:opacity-50">
+                        {isActing ? 'Issuing...' : 'Issue replacement pickup credential'}
+                      </button>
+                    </div>
+                  </div>
+                  {credentialMessage && <p className="text-sm font-medium text-success-700">{credentialMessage}</p>}
+                </>
+              )}
             </div>
           )}
 
@@ -297,7 +369,6 @@ export function RiderDeliveryDetailPage() {
             </div>
           )}
         </div>
-        {actionError && <p className="mt-3 text-sm text-error-600">{actionError}</p>}
       </div>
     </div>
   );

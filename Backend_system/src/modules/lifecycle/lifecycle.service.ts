@@ -315,7 +315,7 @@ export async function setRiderAvailability(userId: string, available: boolean) {
 
   const rider = checkResult.rows[0];
 
-  if (!rider.is_active) {
+  if (!rider.is_active && available) {
     fail("Rider account is deactivated or inactive.", 403, "RIDER_INACTIVE");
   }
 
@@ -915,6 +915,7 @@ export async function listRiderDeliveries(userId: string) {
              d.picked_up_at AS "pickedUpAt",
              d.delivered_at AS "deliveredAt",
              dad.status AS "assignmentStatus",
+             dad.expires_at AS "assignmentExpiresAt",
              b.address_line AS "pickupAddressLine",
              b.city AS "pickupCity",
              b.state AS "pickupState",
@@ -926,7 +927,13 @@ export async function listRiderDeliveries(userId: string) {
       FROM public.deliveries d
       INNER JOIN public.riders r ON r.id = d.rider_id
       INNER JOIN public.orders o ON o.id = d.order_id
-      LEFT JOIN public.delivery_assignment_decisions dad ON dad.delivery_id = d.id AND dad.status IN ('PENDING', 'ACCEPTED')
+      LEFT JOIN LATERAL (
+        SELECT status, expires_at
+        FROM public.delivery_assignment_decisions
+        WHERE delivery_id = d.id AND rider_id = r.id
+        ORDER BY created_at DESC
+        LIMIT 1
+      ) dad ON TRUE
       LEFT JOIN public.fulfillments f ON f.order_id = o.id
       LEFT JOIN public.businesses b ON b.id = f.business_id
       WHERE r.user_id = $1
@@ -941,6 +948,7 @@ export async function listRiderDeliveries(userId: string) {
     orderId: row.orderId,
     status: row.status,
     assignmentStatus: row.assignmentStatus ?? null,
+    assignmentExpiresAt: row.assignmentExpiresAt ?? null,
     pickupAddress: [row.pickupAddressLine, row.pickupCity, row.pickupState].filter(Boolean).join(", "),
     deliveryAddress: [row.deliveryAddressLine, row.deliveryCity, row.deliveryState].filter(Boolean).join(", "),
     deliveryContactPhone: row.deliveryContactPhone,
@@ -960,6 +968,7 @@ export async function getRiderDelivery(userId: string, deliveryId: string) {
              d.picked_up_at AS "pickedUpAt",
              d.delivered_at AS "deliveredAt",
              dad.status AS "assignmentStatus",
+             dad.expires_at AS "assignmentExpiresAt",
              b.address_line AS "pickupAddressLine",
              b.city AS "pickupCity",
              b.state AS "pickupState",
@@ -971,7 +980,13 @@ export async function getRiderDelivery(userId: string, deliveryId: string) {
       FROM public.deliveries d
       INNER JOIN public.riders r ON r.id = d.rider_id
       INNER JOIN public.orders o ON o.id = d.order_id
-      LEFT JOIN public.delivery_assignment_decisions dad ON dad.delivery_id = d.id AND dad.status IN ('PENDING', 'ACCEPTED')
+      LEFT JOIN LATERAL (
+        SELECT status, expires_at
+        FROM public.delivery_assignment_decisions
+        WHERE delivery_id = d.id AND rider_id = r.id
+        ORDER BY created_at DESC
+        LIMIT 1
+      ) dad ON TRUE
       LEFT JOIN public.fulfillments f ON f.order_id = o.id
       LEFT JOIN public.businesses b ON b.id = f.business_id
       WHERE r.user_id = $1 AND d.id = $2
@@ -989,6 +1004,7 @@ export async function getRiderDelivery(userId: string, deliveryId: string) {
     orderId: row.orderId,
     status: row.status,
     assignmentStatus: row.assignmentStatus ?? null,
+    assignmentExpiresAt: row.assignmentExpiresAt ?? null,
     pickupAddress: [row.pickupAddressLine, row.pickupCity, row.pickupState].filter(Boolean).join(", "),
     deliveryAddress: [row.deliveryAddressLine, row.deliveryCity, row.deliveryState].filter(Boolean).join(", "),
     deliveryContactPhone: row.deliveryContactPhone,
@@ -1161,9 +1177,9 @@ async function assignRider(
   const delivery = deliveryResult.rows[0];
 
   if (delivery.status === "ASSIGNED") {
-    const assignmentResult = await client.query<{ rider_id: string; status: string; expires_at: Date }>(
+    const assignmentResult = await client.query<{ id: string; rider_id: string; status: string; expires_at: Date }>(
       `
-        SELECT rider_id, status, expires_at
+        SELECT id, rider_id, status, expires_at
         FROM public.delivery_assignment_decisions
         WHERE delivery_id = $1
         ORDER BY created_at DESC
@@ -1184,8 +1200,8 @@ async function assignRider(
     const currentDecision = assignmentResult.rows[0];
     if (currentDecision?.status === "PENDING" && currentDecision.expires_at <= new Date()) {
       await client.query(
-        `UPDATE public.delivery_assignment_decisions SET status = 'EXPIRED', decided_at = NOW(), updated_at = NOW() WHERE delivery_id = $1 AND rider_id = $2`,
-        [delivery.delivery_id, delivery.rider_id]
+        `UPDATE public.delivery_assignment_decisions SET status = 'EXPIRED', decided_at = NOW(), updated_at = NOW() WHERE id = $1`,
+        [currentDecision.id]
       );
       await client.query(
         `UPDATE public.deliveries SET rider_id = NULL, vehicle_id = NULL, status = 'SEARCHING_RIDER', assigned_at = NULL, updated_at = NOW() WHERE id = $1`,
@@ -1373,22 +1389,33 @@ export async function acceptRiderAssignment(
       fail("This delivery is no longer awaiting rider acceptance.", 409, "ASSIGNMENT_NOT_PENDING");
     }
 
-    const result = await client.query<{ status: string; expires_at: Date }>(
+    const result = await client.query<{ id: string; status: string; expires_at: Date }>(
       `
-        SELECT status, expires_at
+        SELECT id, status, expires_at
         FROM public.delivery_assignment_decisions
         WHERE delivery_id = $1 AND rider_id = $2
+        ORDER BY created_at DESC
+        LIMIT 1
         FOR UPDATE
       `,
       [deliveryId, delivery.rider_id]
     );
+
+    if (result.rows.length > 0 && result.rows[0].status === "ACCEPTED") {
+      // Idempotent: rider already accepted this assignment
+      return { deliveryId, status: "ASSIGNED", assignmentStatus: "ACCEPTED", alreadyAccepted: true };
+    }
+
     if (result.rows.length === 0 || result.rows[0].status !== "PENDING") {
       fail("This delivery assignment is no longer pending.", 409, "ASSIGNMENT_NOT_PENDING");
     }
-    if (result.rows[0].expires_at < new Date()) {
+
+    const decision = result.rows[0];
+
+    if (decision.expires_at < new Date()) {
       await client.query(
-        `UPDATE public.delivery_assignment_decisions SET status = 'EXPIRED', decided_at = NOW(), updated_at = NOW() WHERE delivery_id = $1 AND rider_id = $2`,
-        [deliveryId, delivery.rider_id]
+        `UPDATE public.delivery_assignment_decisions SET status = 'EXPIRED', decided_at = NOW(), updated_at = NOW() WHERE id = $1`,
+        [decision.id]
       );
       await client.query(
         `UPDATE public.pickup_verifications SET status = 'INVALIDATED', updated_at = NOW() WHERE delivery_id = $1 AND status = 'ACTIVE'`,
@@ -1410,15 +1437,15 @@ export async function acceptRiderAssignment(
           reason: "The rider assignment expired and no replacement rider is currently available."
         });
       }
-      return { deliveryId, status: reassigned.status, reassigned: true };
+      fail("This delivery assignment has expired and was reassigned to another rider.", 410, "ASSIGNMENT_EXPIRED");
     }
 
     await client.query(
-      `UPDATE public.delivery_assignment_decisions SET status = 'ACCEPTED', decided_at = NOW(), updated_at = NOW() WHERE delivery_id = $1 AND rider_id = $2`,
-      [deliveryId, delivery.rider_id]
+      `UPDATE public.delivery_assignment_decisions SET status = 'ACCEPTED', decided_at = NOW(), updated_at = NOW() WHERE id = $1`,
+      [decision.id]
     );
     await writeAudit(client, userId, "DELIVERY_ASSIGNMENT_ACCEPTED", "DELIVERY", deliveryId, "Rider accepted the delivery assignment.");
-    return { deliveryId, status: "ASSIGNED" };
+    return { deliveryId, status: "ASSIGNED", assignmentStatus: "ACCEPTED" };
   });
 }
 
@@ -1562,22 +1589,35 @@ export async function rejectRiderAssignment(
       fail("This delivery is no longer awaiting rider acceptance.", 409, "ASSIGNMENT_NOT_PENDING");
     }
 
-    const result = await client.query<{ status: string }>(
+    const result = await client.query<{ id: string; status: string }>(
       `
-        SELECT status
+        SELECT id, status
         FROM public.delivery_assignment_decisions
         WHERE delivery_id = $1 AND rider_id = $2
+        ORDER BY created_at DESC
+        LIMIT 1
         FOR UPDATE
       `,
       [deliveryId, delivery.rider_id]
     );
+
+    if (result.rows.length > 0 && result.rows[0].status === "REJECTED") {
+      return { deliveryId, status: delivery.delivery_status, assignmentStatus: "REJECTED", alreadyRejected: true };
+    }
+
+    if (result.rows.length > 0 && result.rows[0].status === "ACCEPTED") {
+      fail("You have already accepted this delivery assignment.", 409, "ASSIGNMENT_ALREADY_ACCEPTED");
+    }
+
     if (result.rows.length === 0 || result.rows[0].status !== "PENDING") {
       fail("This delivery assignment is no longer pending.", 409, "ASSIGNMENT_NOT_PENDING");
     }
 
+    const decision = result.rows[0];
+
     await client.query(
-      `UPDATE public.delivery_assignment_decisions SET status = 'REJECTED', reason = $1, decided_at = NOW(), updated_at = NOW() WHERE delivery_id = $2 AND rider_id = $3`,
-      [reason ?? null, deliveryId, delivery.rider_id]
+      `UPDATE public.delivery_assignment_decisions SET status = 'REJECTED', reason = $1, decided_at = NOW(), updated_at = NOW() WHERE id = $2`,
+      [reason ?? null, decision.id]
     );
     await client.query(
       `UPDATE public.pickup_verifications SET status = 'INVALIDATED', updated_at = NOW() WHERE delivery_id = $1 AND status = 'ACTIVE'`,

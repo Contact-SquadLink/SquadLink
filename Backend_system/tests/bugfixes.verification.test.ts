@@ -129,7 +129,7 @@ before(async () => {
   const unverifiedUserRes = await db.query<{ id: string }>(
     `INSERT INTO public.users (email, phone_number, password_hash, role, is_active, first_name, last_name)
      VALUES ('rider.pending.bugfix@squadlink.app', '+2348055555555', $1, 'RIDER', TRUE, 'Aliyu', 'Pending')
-     ON CONFLICT (email) DO UPDATE SET is_active = TRUE
+     ON CONFLICT (email) DO UPDATE SET role = 'RIDER', is_active = TRUE
      RETURNING id`,
     [passwordHash]
   );
@@ -343,3 +343,134 @@ describe("Bug Fix 3: Rider Location Update & Real-Time Tracking Fix", () => {
     assert.equal(onlineRes.json().error.code, "RIDER_NOT_VERIFIED");
   });
 });
+
+describe("Bug Fix 4: Rider Assignment Acceptance, Rejection & Decision Lifecycle", () => {
+  it("fetches rider delivery with LATERAL join returning correct assignmentStatus and expiresAt", async () => {
+    // 1. Create order and delivery assigned to rider
+    const orderRes = await db.query<{ id: string }>(
+      `INSERT INTO public.orders (
+         user_id, status, subtotal_amount, delivery_fee_amount, total_amount,
+         delivery_address_line, delivery_city, delivery_state, delivery_location
+       ) VALUES (
+         $1, 'READY_FOR_PICKUP', 3000, 500, 3500,
+         'Wunti Market', 'Bauchi', 'Bauchi', ST_SetSRID(ST_MakePoint(9.825, 10.315), 4326)
+       ) RETURNING id`,
+      [customerUserId]
+    );
+    const testOrderId = orderRes.rows[0].id;
+
+    await db.query(
+      `INSERT INTO public.fulfillments (order_id, business_id, status)
+       VALUES ($1, $2, 'CONFIRMED')`,
+      [testOrderId, businessId]
+    );
+
+    const delRes = await db.query<{ id: string }>(
+      `INSERT INTO public.deliveries (order_id, rider_id, status, pickup_location, delivery_location)
+       VALUES ($1, $2, 'ASSIGNED', ST_SetSRID(ST_MakePoint(9.824, 10.312), 4326), ST_SetSRID(ST_MakePoint(9.825, 10.315), 4326))
+       RETURNING id`,
+      [testOrderId, riderRowId]
+    );
+    const testDeliveryId = delRes.rows[0].id;
+
+    // 2. Insert older EXPIRED decision and current PENDING decision
+    await db.query(
+      `INSERT INTO public.delivery_assignment_decisions (delivery_id, rider_id, status, expires_at, created_at)
+       VALUES ($1, $2, 'EXPIRED', NOW() - INTERVAL '1 hour', NOW() - INTERVAL '1 hour')`,
+      [testDeliveryId, riderRowId]
+    );
+
+    await db.query(
+      `INSERT INTO public.delivery_assignment_decisions (delivery_id, rider_id, status, expires_at, created_at)
+       VALUES ($1, $2, 'PENDING', NOW() + INTERVAL '15 minutes', NOW())`,
+      [testDeliveryId, riderRowId]
+    );
+
+    // 3. GET /rider/deliveries/:deliveryId returns PENDING status (not expired!)
+    const getRes = await app.inject({
+      method: "GET",
+      url: `/api/v1/rider/deliveries/${testDeliveryId}`,
+      headers: auth(riderUserId, "RIDER")
+    });
+    assert.equal(getRes.statusCode, 200);
+    const body = getRes.json();
+    assert.equal(body.data.id, testDeliveryId);
+    assert.equal(body.data.status, "ASSIGNED");
+    assert.equal(body.data.assignmentStatus, "PENDING");
+    assert.ok(body.data.assignmentExpiresAt);
+
+    // 4. Accept assignment
+    const acceptRes = await app.inject({
+      method: "POST",
+      url: `/api/v1/rider/deliveries/${testDeliveryId}/accept`,
+      headers: auth(riderUserId, "RIDER")
+    });
+    assert.equal(acceptRes.statusCode, 200);
+    const acceptBody = acceptRes.json();
+    assert.equal(acceptBody.data.status, "ASSIGNED");
+    assert.equal(acceptBody.data.assignmentStatus, "ACCEPTED");
+
+    // 5. Accept again (idempotent test)
+    const acceptAgainRes = await app.inject({
+      method: "POST",
+      url: `/api/v1/rider/deliveries/${testDeliveryId}/accept`,
+      headers: auth(riderUserId, "RIDER")
+    });
+    assert.equal(acceptAgainRes.statusCode, 200);
+    assert.equal(acceptAgainRes.json().data.alreadyAccepted, true);
+  });
+
+  it("handles rejection and prevents accepting an already rejected assignment", async () => {
+    // 1. Create new order and delivery assigned to rider
+    const orderRes = await db.query<{ id: string }>(
+      `INSERT INTO public.orders (
+         user_id, status, subtotal_amount, delivery_fee_amount, total_amount,
+         delivery_address_line, delivery_city, delivery_state, delivery_location
+       ) VALUES (
+         $1, 'READY_FOR_PICKUP', 2000, 500, 2500,
+         'Yelwa Tudu', 'Bauchi', 'Bauchi', ST_SetSRID(ST_MakePoint(9.825, 10.315), 4326)
+       ) RETURNING id`,
+      [customerUserId]
+    );
+    const testOrderId = orderRes.rows[0].id;
+
+    await db.query(
+      `INSERT INTO public.fulfillments (order_id, business_id, status)
+       VALUES ($1, $2, 'CONFIRMED')`,
+      [testOrderId, businessId]
+    );
+
+    const delRes = await db.query<{ id: string }>(
+      `INSERT INTO public.deliveries (order_id, rider_id, status, pickup_location, delivery_location)
+       VALUES ($1, $2, 'ASSIGNED', ST_SetSRID(ST_MakePoint(9.824, 10.312), 4326), ST_SetSRID(ST_MakePoint(9.825, 10.315), 4326))
+       RETURNING id`,
+      [testOrderId, riderRowId]
+    );
+    const testDeliveryId = delRes.rows[0].id;
+
+    await db.query(
+      `INSERT INTO public.delivery_assignment_decisions (delivery_id, rider_id, status, expires_at)
+       VALUES ($1, $2, 'PENDING', NOW() + INTERVAL '15 minutes')`,
+      [testDeliveryId, riderRowId]
+    );
+
+    // 2. Reject assignment
+    const rejectRes = await app.inject({
+      method: "POST",
+      url: `/api/v1/rider/deliveries/${testDeliveryId}/reject`,
+      headers: auth(riderUserId, "RIDER"),
+      payload: { reason: "Vehicle mechanical fault" }
+    });
+    assert.equal(rejectRes.statusCode, 200);
+
+    // 3. Verify decision in DB is REJECTED
+    const decRes = await db.query<{ status: string }>(
+      `SELECT status FROM public.delivery_assignment_decisions
+       WHERE delivery_id = $1 AND rider_id = $2
+       ORDER BY created_at DESC LIMIT 1`,
+      [testDeliveryId, riderRowId]
+    );
+    assert.equal(decRes.rows[0].status, "REJECTED");
+  });
+});
+
