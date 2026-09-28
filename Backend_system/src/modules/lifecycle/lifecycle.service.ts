@@ -291,31 +291,62 @@ export async function getRiderProfile(userId: string) {
 
 export async function setRiderAvailability(userId: string, available: boolean) {
   const { db } = await import("../../db/database");
-  const result = await db.query<{ id: string; is_available: boolean }>(
+
+  // 1. Fetch current rider status and verification
+  const checkResult = await db.query<{
+    id: string;
+    is_active: boolean;
+    is_available: boolean;
+    verification_status: string | null;
+  }>(
     `
-      UPDATE public.riders r
-      SET is_available = $1, updated_at = NOW()
-      FROM public.rider_verifications rv
-      WHERE r.user_id = $2
-        AND rv.rider_id = r.id
-        AND rv.status = 'VERIFIED'
-        AND r.is_active = TRUE
-      RETURNING r.id, r.is_available
+      SELECT r.id, r.is_active, r.is_available, rv.status AS verification_status
+      FROM public.riders r
+      LEFT JOIN public.rider_verifications rv ON rv.rider_id = r.id
+      WHERE r.user_id = $1
+      LIMIT 1
     `,
-    [available, userId]
+    [userId]
   );
 
-  if (result.rows.length === 0) {
+  if (checkResult.rows.length === 0) {
     fail("Rider profile not found.", 404, "RIDER_NOT_FOUND");
   }
 
+  const rider = checkResult.rows[0];
+
+  if (!rider.is_active) {
+    fail("Rider account is deactivated or inactive.", 403, "RIDER_INACTIVE");
+  }
+
+  // 2. If attempting to go online, enforce verified status
+  if (available && rider.verification_status !== "VERIFIED") {
+    fail("Your rider application is currently pending verification. You cannot go online until approved.", 403, "RIDER_NOT_VERIFIED");
+  }
+
+  // 3. Update availability (going offline is always permitted for safety)
+  const result = await db.query<{ id: string; is_available: boolean }>(
+    `
+      UPDATE public.riders
+      SET is_available = $1, updated_at = NOW()
+      WHERE id = $2
+      RETURNING id, is_available
+    `,
+    [available, rider.id]
+  );
+
+  // 4. If going online, trigger waiting deliveries in the background safely
   if (available) {
-    await assignWaitingDeliveries(userId);
+    try {
+      await assignWaitingDeliveries(userId);
+    } catch (err) {
+      console.error("[ASSIGN WAITING DELIVERIES BACKGROUND ERROR]", err);
+    }
   }
 
   return {
     userId,
-    available: result.rows[0].is_available,
+    available: Boolean(result.rows[0]?.is_available),
   };
 }
 
@@ -324,50 +355,81 @@ export async function setRiderLocation(
   latitude: number,
   longitude: number
 ) {
+  if (typeof latitude !== "number" || typeof longitude !== "number" || isNaN(latitude) || isNaN(longitude)) {
+    fail("Valid latitude and longitude coordinates are required.", 400, "INVALID_COORDINATES");
+  }
+
+  if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+    fail("Coordinates out of range. Latitude must be between -90 and 90, Longitude between -180 and 180.", 400, "COORDINATES_OUT_OF_RANGE");
+  }
+
   const { db } = await import("../../db/database");
-  const result = await db.query<{ id: string }>(
+
+  // Update current location in PostGIS point geography format (lng, lat, 4326)
+  const result = await db.query<{ id: string; is_available: boolean }>(
     `
       UPDATE public.riders r
       SET current_location = ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography,
           updated_at = NOW()
-      FROM public.rider_verifications rv
       WHERE r.user_id = $3
-        AND rv.rider_id = r.id
-        AND rv.status = 'VERIFIED'
         AND r.is_active = TRUE
-      RETURNING r.id
+      RETURNING r.id, r.is_available
     `,
     [longitude, latitude, userId]
   );
 
   if (result.rows.length === 0) {
-    fail("Verified rider profile not found.", 404, "RIDER_NOT_FOUND");
+    const riderExists = await db.query<{ id: string; is_active: boolean }>(
+      `SELECT id, is_active FROM public.riders WHERE user_id = $1 LIMIT 1`,
+      [userId]
+    );
+
+    if (riderExists.rows.length === 0) {
+      fail("Rider profile not found.", 404, "RIDER_NOT_FOUND");
+    }
+
+    fail("Rider account is inactive.", 403, "RIDER_INACTIVE");
   }
 
-  await assignWaitingDeliveries(userId);
+  // If rider is online and available, attempt waiting deliveries dispatch safely
+  if (result.rows[0].is_available) {
+    try {
+      await assignWaitingDeliveries(userId);
+    } catch (err) {
+      console.error("[ASSIGN WAITING DELIVERIES BACKGROUND ERROR]", err);
+    }
+  }
 
   return { userId, latitude, longitude };
 }
 
 async function assignWaitingDeliveries(actorUserId: string): Promise<void> {
-  await withTransaction(async (client) => {
-    const waiting = await client.query<{ order_id: string }>(
-      `
-        SELECT d.order_id
-        FROM public.deliveries d
-        INNER JOIN public.orders o ON o.id = d.order_id
-        WHERE d.status = 'SEARCHING_RIDER'
-          AND o.status = 'READY_FOR_PICKUP'
-        ORDER BY d.updated_at ASC
-        LIMIT 10
-        FOR UPDATE OF d SKIP LOCKED
-      `
-    );
+  try {
+    await withTransaction(async (client) => {
+      const waiting = await client.query<{ order_id: string }>(
+        `
+          SELECT d.order_id
+          FROM public.deliveries d
+          INNER JOIN public.orders o ON o.id = d.order_id
+          WHERE d.status = 'SEARCHING_RIDER'
+            AND o.status = 'READY_FOR_PICKUP'
+          ORDER BY d.updated_at ASC
+          LIMIT 10
+          FOR UPDATE OF d SKIP LOCKED
+        `
+      );
 
-    for (const delivery of waiting.rows) {
-      await assignRider(client, delivery.order_id, actorUserId);
-    }
-  });
+      for (const delivery of waiting.rows) {
+        try {
+          await assignRider(client, delivery.order_id, actorUserId);
+        } catch (assignErr) {
+          // Individual delivery assignment failures should not abort other waiting deliveries
+        }
+      }
+    });
+  } catch (err) {
+    console.error("[ASSIGN WAITING DELIVERIES BACKGROUND ERROR]", err);
+  }
 }
 
 async function writeAudit(
@@ -968,19 +1030,115 @@ export async function markBusinessReady(userId: string, orderId: string) {
 export async function retryRiderAssignment(userId: string, orderId: string) {
   return withTransaction(async (client) => {
     const order = await loadBusinessOrder(client, orderId, userId);
-    if (order.order_status !== "READY_FOR_PICKUP") {
-      fail("Only orders ready for pickup can retry rider assignment.", 409, "INVALID_ORDER_TRANSITION");
+    if (order.order_status === "CONFIRMED" || order.order_status === "PREPARING") {
+      await client.query(`UPDATE public.orders SET status = 'READY_FOR_PICKUP', updated_at = NOW() WHERE id = $1`, [orderId]);
+      await writeOrderHistory(client, orderId, order.order_status, "READY_FOR_PICKUP", userId, "Business marked order ready for pickup on retry.");
+    } else if (order.order_status !== "READY_FOR_PICKUP") {
+      fail("Only orders being prepared or ready for pickup can retry rider assignment.", 409, "INVALID_ORDER_TRANSITION");
     }
-    const delivery = await assignRider(client, orderId, userId);
-    await writeOutbox(client, "ORDER_READY_FOR_PICKUP", "ORDER", orderId, { orderId, deliveryId: delivery.deliveryId, pickupCredential: delivery.pickupCredential ?? null });
-    if (delivery.status === "ASSIGNED" && !delivery.isNewAssignment) {
-      await writeOutbox(client, "RIDER_ASSIGNED", "DELIVERY", delivery.deliveryId, {
-        deliveryId: delivery.deliveryId,
-        riderId: delivery.riderId ?? null,
-        pickupCredential: null
-      });
+
+    // Check delivery state
+    const deliveryResult = await client.query<{
+      id: string;
+      rider_id: string | null;
+      vehicle_id: string | null;
+      status: string;
+    }>(
+      `SELECT id, rider_id, vehicle_id, status FROM public.deliveries WHERE order_id = $1 FOR UPDATE`,
+      [orderId]
+    );
+
+    let deliveryId: string;
+
+    if (deliveryResult.rows.length === 0) {
+      const initialized = await createDelivery(client, orderId, userId);
+      deliveryId = initialized.id;
+    } else {
+      const existing = deliveryResult.rows[0];
+      deliveryId = existing.id;
+
+      // 1. Release previous rider if assigned
+      if (existing.rider_id) {
+        await client.query(
+          `UPDATE public.riders SET is_available = TRUE, updated_at = NOW() WHERE id = $1`,
+          [existing.rider_id]
+        );
+        await client.query(
+          `INSERT INTO public.delivery_assignment_history (
+             delivery_id, rider_id, vehicle_id, action, changed_by, reason
+           ) VALUES ($1, $2, $3, 'UNASSIGNED', $4, 'Business requested rider re-assignment.')`,
+          [existing.id, existing.rider_id, existing.vehicle_id, userId]
+        );
+      }
+
+      // 2. Expire any existing pending decisions
+      await client.query(
+        `UPDATE public.delivery_assignment_decisions
+         SET status = 'EXPIRED', decided_at = NOW(), updated_at = NOW()
+         WHERE delivery_id = $1 AND status = 'PENDING'`,
+        [existing.id]
+      );
+
+      // 3. Invalidate active pickup verifications
+      await client.query(
+        `UPDATE public.pickup_verifications
+         SET status = 'INVALIDATED', updated_at = NOW()
+         WHERE delivery_id = $1 AND status = 'ACTIVE'`,
+        [existing.id]
+      );
+
+      // 4. Reset delivery to SEARCHING_RIDER
+      await client.query(
+        `UPDATE public.deliveries
+         SET rider_id = NULL, vehicle_id = NULL, status = 'SEARCHING_RIDER', assigned_at = NULL, updated_at = NOW()
+         WHERE id = $1`,
+        [existing.id]
+      );
+
+      if (existing.status !== "SEARCHING_RIDER") {
+        await writeDeliveryHistory(
+          client,
+          existing.id,
+          existing.status,
+          "SEARCHING_RIDER",
+          userId,
+          "Delivery assignment reset by business for re-dispatch."
+        );
+      }
     }
-    return { orderId, status: order.order_status, delivery };
+
+    // 5. Write audit logs
+    await writeAudit(
+      client,
+      userId,
+      "RETRY_RIDER_ASSIGNMENT",
+      "ORDER",
+      orderId,
+      `Business retried rider assignment for order ${orderId}.`
+    );
+    await writeAudit(
+      client,
+      userId,
+      "RETRY_RIDER_ASSIGNMENT",
+      "DELIVERY",
+      deliveryId,
+      `Delivery assignment reset and re-dispatch initiated for delivery ${deliveryId}.`
+    );
+
+    // 6. Search for available riders in the zone and dispatch
+    const delivery = await assignRider(client, orderId, userId, []);
+
+    await writeOutbox(client, "ORDER_READY_FOR_PICKUP", "ORDER", orderId, {
+      orderId,
+      deliveryId: delivery.deliveryId,
+      pickupCredential: delivery.pickupCredential ?? null
+    });
+
+    return {
+      orderId,
+      status: "READY_FOR_PICKUP",
+      delivery
+    };
   });
 }
 
@@ -990,14 +1148,18 @@ async function assignRider(
   actorUserId: string,
   excludedRiderIds: string[] = []
 ) {
-  const deliveryResult = await client.query<{ delivery_id: string; rider_id: string | null; status: string }>(
+  let deliveryResult = await client.query<{ delivery_id: string; rider_id: string | null; status: string }>(
     `SELECT id AS delivery_id, rider_id, status FROM public.deliveries WHERE order_id = $1 FOR UPDATE`,
     [orderId]
   );
   if (deliveryResult.rows.length === 0) {
-    fail("Delivery has not been initialized.", 409, "DELIVERY_NOT_READY");
+    const initialized = await createDelivery(client, orderId, actorUserId);
+    deliveryResult = {
+      rows: [{ delivery_id: initialized.id, rider_id: null, status: initialized.status }]
+    } as any;
   }
   const delivery = deliveryResult.rows[0];
+
   if (delivery.status === "ASSIGNED") {
     const assignmentResult = await client.query<{ rider_id: string; status: string; expires_at: Date }>(
       `
@@ -1029,14 +1191,25 @@ async function assignRider(
         `UPDATE public.deliveries SET rider_id = NULL, vehicle_id = NULL, status = 'SEARCHING_RIDER', assigned_at = NULL, updated_at = NOW() WHERE id = $1`,
         [delivery.delivery_id]
       );
-      await client.query(
-        `UPDATE public.riders SET is_available = TRUE, updated_at = NOW() WHERE id = $1`,
-        [delivery.rider_id]
-      );
+      if (delivery.rider_id) {
+        await client.query(
+          `UPDATE public.riders SET is_available = TRUE, updated_at = NOW() WHERE id = $1`,
+          [delivery.rider_id]
+        );
+      }
       return assignRider(client, orderId, actorUserId, delivery.rider_id ? [delivery.rider_id] : []);
     }
     return { deliveryId: delivery.delivery_id, riderId: delivery.rider_id ?? undefined, status: delivery.status, isNewAssignment: false };
   }
+
+  // Preemptively expire any lingering pending decisions for this delivery to guarantee no unique constraint conflict
+  await client.query(
+    `UPDATE public.delivery_assignment_decisions
+     SET status = 'EXPIRED', decided_at = NOW(), updated_at = NOW()
+     WHERE delivery_id = $1 AND status = 'PENDING'`,
+    [delivery.delivery_id]
+  );
+
   const riderResult = await client.query<{
     rider_id: string;
     vehicle_id: string;
@@ -1052,10 +1225,13 @@ async function assignRider(
       INNER JOIN public.vehicles v ON v.rider_id = r.id AND v.is_active = TRUE
       INNER JOIN public.vehicle_types vt ON vt.id = v.vehicle_type_id AND vt.code IN ('MOTORCYCLE', 'KEKE')
       INNER JOIN public.deliveries d ON d.id = $1
+      LEFT JOIN public.orders o ON o.id = d.order_id
+      LEFT JOIN public.fulfillments f ON f.order_id = o.id
+      LEFT JOIN public.businesses b ON b.id = f.business_id
       INNER JOIN public.rider_verifications rv ON rv.rider_id = r.id AND rv.status = 'VERIFIED'
       WHERE r.is_active = TRUE
         AND r.is_available = TRUE
-        AND NOT (r.id = ANY($2::uuid[]))
+        AND ($2::uuid[] IS NULL OR cardinality($2::uuid[]) = 0 OR NOT (r.id = ANY($2::uuid[])))
         AND NOT EXISTS (
           SELECT 1
           FROM public.deliveries active_delivery
@@ -1076,13 +1252,16 @@ async function assignRider(
         -- PostGIS Equitable Spatial Dispatch:
         -- Evaluate distance using continuous GPS coordinates if available, or static service zone
         -- center location for button-phone riders, ensuring equitable opportunity rather than exclusion.
-        ST_Distance(COALESCE(r.current_location, sz.center_location), d.pickup_location) ASC NULLS LAST,
+        ST_Distance(
+          COALESCE(r.current_location, sz.center_location, ST_SetSRID(ST_MakePoint(9.8167, 10.2833), 4326)::geography),
+          COALESCE(d.pickup_location, b.location, ST_SetSRID(ST_MakePoint(9.8167, 10.2833), 4326)::geography)
+        ) ASC NULLS LAST,
         r.updated_at ASC,
         r.id
       LIMIT 1
       FOR UPDATE OF r SKIP LOCKED
     `,
-    [delivery.delivery_id, excludedRiderIds]
+    [delivery.delivery_id, excludedRiderIds.length ? excludedRiderIds : []]
   );
   if (riderResult.rows.length === 0) {
     return { deliveryId: delivery.delivery_id, status: "SEARCHING_RIDER", pickupCredential: undefined, isNewAssignment: false };
@@ -1097,40 +1276,46 @@ async function assignRider(
     `INSERT INTO public.pickup_verifications (delivery_id, rider_id, business_id, credential_hash, expires_at) SELECT $1, $2, f.business_id, $3, NOW() + INTERVAL '2 hours' FROM public.fulfillments f WHERE f.order_id = $4 RETURNING id`,
     [delivery.delivery_id, rider.rider_id, credentialHash, orderId]
   );
-  await client.query(`INSERT INTO public.pickup_verification_history (pickup_verification_id, previous_status, new_status, rider_id, business_id, changed_by, reason) SELECT $1, NULL, 'ACTIVE', $2, business_id, $3, 'Pickup credential issued.' FROM public.pickup_verifications WHERE id = $1`, [verification.rows[0].id, rider.rider_id, actorUserId]);
+  if (verification.rows.length > 0) {
+    await client.query(`INSERT INTO public.pickup_verification_history (pickup_verification_id, previous_status, new_status, rider_id, business_id, changed_by, reason) SELECT $1, NULL, 'ACTIVE', $2, business_id, $3, 'Pickup credential issued.' FROM public.pickup_verifications WHERE id = $1`, [verification.rows[0].id, rider.rider_id, actorUserId]);
+  }
   await client.query(
     `INSERT INTO public.delivery_assignment_decisions (delivery_id, rider_id) VALUES ($1, $2)`,
     [delivery.delivery_id, rider.rider_id]
   );
-  await writeDeliveryHistory(client, delivery.delivery_id, "SEARCHING_RIDER", "ASSIGNED", actorUserId, "Rider automatically assigned.");
+  await writeDeliveryHistory(client, delivery.delivery_id, delivery.status, "ASSIGNED", actorUserId, "Rider automatically assigned.");
   await writeOutbox(client, "RIDER_ASSIGNED", "DELIVERY", delivery.delivery_id, { deliveryId: delivery.delivery_id, riderId: rider.rider_id, pickupCredential: credential });
 
   // Outbound SMS dispatch notification for button-phone riders upon assignment
   if (rider.device_type === "FEATURE_PHONE" && rider.phone_number) {
-    const details = await client.query<{
-      pickup_address: string;
-      delivery_address: string;
-      delivery_fee_amount: number | string;
-    }>(
-      `SELECT
-         CONCAT_WS(', ', b.address_line, b.city) AS pickup_address,
-         CONCAT_WS(', ', o.delivery_address_line, o.delivery_city) AS delivery_address,
-         o.delivery_fee_amount
-       FROM public.orders o
-       INNER JOIN public.fulfillments f ON f.order_id = o.id
-       INNER JOIN public.businesses b ON b.id = f.business_id
-       WHERE o.id = $1`,
-      [orderId]
-    );
-    const detail = details.rows[0];
-    const payout = Math.max(300, Math.round(Number(detail?.delivery_fee_amount ?? 500) * 0.8));
-    void notifyFeaturePhoneRiderAssignment({
-      riderPhone: rider.phone_number,
-      orderId,
-      pickupAddress: detail?.pickup_address || "Merchant store",
-      deliveryAddress: detail?.delivery_address || "Customer address",
-      payout,
-    }).catch((err) => console.error("[SMS DISPATCH NOTIFICATION ERROR]", err));
+    try {
+      const details = await client.query<{
+        pickup_address: string;
+        delivery_address: string;
+        delivery_fee_amount: number | string;
+      }>(
+        `SELECT
+           CONCAT_WS(', ', b.address_line, b.city) AS pickup_address,
+           CONCAT_WS(', ', o.delivery_address_line, o.delivery_city) AS delivery_address,
+           o.delivery_fee_amount
+         FROM public.orders o
+         INNER JOIN public.fulfillments f ON f.order_id = o.id
+         INNER JOIN public.businesses b ON b.id = f.business_id
+         WHERE o.id = $1`,
+        [orderId]
+      );
+      const detail = details.rows[0];
+      const payout = Math.max(300, Math.round(Number(detail?.delivery_fee_amount ?? 500) * 0.8));
+      void notifyFeaturePhoneRiderAssignment({
+        riderPhone: rider.phone_number,
+        orderId,
+        pickupAddress: detail?.pickup_address || "Merchant store",
+        deliveryAddress: detail?.delivery_address || "Customer address",
+        payout,
+      }).catch((err) => console.error("[SMS DISPATCH NOTIFICATION ERROR]", err));
+    } catch (err) {
+      console.error("[SMS DISPATCH ERROR]", err);
+    }
   }
 
   return { deliveryId: delivery.delivery_id, riderId: rider.rider_id, status: "ASSIGNED", pickupCredential: credential, isNewAssignment: true };

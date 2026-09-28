@@ -20,7 +20,7 @@ function ensureMainAdmin(request: FastifyRequest) {
     throw new AppError("Authentication required.", 401, "AUTHENTICATION_REQUIRED");
   }
 
-  if (request.user.role !== "ADMIN") {
+  if (!["ADMIN", "SUPER_ADMIN"].includes(request.user.role)) {
     throw new AppError("You are not authorized to manage admin access.", 403, "FORBIDDEN");
   }
 

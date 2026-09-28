@@ -130,13 +130,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       const authenticatedUser = normalizeUser(response.data.user);
 
-      if (expectedRole && authenticatedUser.role !== expectedRole) {
-        queryClient.clear();
-        clearToken();
-        setUser(null);
-        throw new Error(
-          `This account is not registered as a ${expectedRole.toLowerCase().replace('_', ' ')} account.`
-        );
+      if (expectedRole) {
+        const isAdminExpected = expectedRole === 'ADMIN';
+        const isAdminRole = ['ADMIN', 'SUPER_ADMIN'].includes(authenticatedUser.role);
+        const roleMatches = isAdminExpected ? isAdminRole : authenticatedUser.role === expectedRole;
+
+        if (!roleMatches) {
+          queryClient.clear();
+          clearToken();
+          setUser(null);
+          throw new Error(
+            `This account is not registered as a ${expectedRole.toLowerCase().replace('_', ' ')} account.`
+          );
+        }
       }
 
       queryClient.clear();

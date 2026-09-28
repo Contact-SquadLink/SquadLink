@@ -10,6 +10,7 @@ import {
   pickupCredentialSchema,
   riderRegistrationSchema,
   riderLocationSchema,
+  riderAvailabilitySchema,
   riderAssignmentDecisionSchema,
   providerPaymentSchema,
   sandboxPaymentSchema,
@@ -158,20 +159,9 @@ export async function lifecycleRoutes(app: FastifyInstance): Promise<void> {
     "/rider/availability",
     { preHandler: [authenticate, authorize("RIDER")] },
     async (request) => {
-      const { available } = (request.body ?? {}) as { available?: boolean };
-      if (typeof available !== "boolean") {
-        return {
-          success: false,
-          error: {
-            code: "VALIDATION_ERROR",
-            message: "available must be a boolean."
-          },
-          requestId: request.id
-        };
-      }
-
+      const input = riderAvailabilitySchema.parse(request.body ?? {});
       return successResponse(
-        await setRiderAvailability(request.user.id, available),
+        await setRiderAvailability(request.user.id, input.available),
         request.id
       );
     }

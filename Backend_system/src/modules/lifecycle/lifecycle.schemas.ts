@@ -52,8 +52,12 @@ export const riderRegistrationSchema = z.object({
 });
 
 export const riderLocationSchema = z.object({
-  latitude: z.number().min(-90).max(90),
-  longitude: z.number().min(-180).max(180)
+  latitude: z.coerce.number().min(-90, "Latitude must be between -90 and 90").max(90, "Latitude must be between -90 and 90"),
+  longitude: z.coerce.number().min(-180, "Longitude must be between -180 and 180").max(180, "Longitude must be between -180 and 180")
+});
+
+export const riderAvailabilitySchema = z.object({
+  available: z.boolean({ message: "available must be a boolean." })
 });
 
 export const riderAssignmentDecisionSchema = z.object({

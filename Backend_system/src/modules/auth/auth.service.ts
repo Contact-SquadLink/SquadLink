@@ -160,7 +160,7 @@ export async function authenticateUser(
   }
 
   if (
-    user.role === "ADMIN" &&
+    ["ADMIN", "SUPER_ADMIN"].includes(user.role) &&
     user.email !== "contact.squadlink@gmail.com" &&
     !user.adminApproved
   ) {
