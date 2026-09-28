@@ -686,18 +686,10 @@ export async function placeOrder(
       items: orderTotals.items
     };
 
-    await client.query(
-      `
-        INSERT INTO public.outbox_events (
-          event_type,
-          aggregate_type,
-          aggregate_id,
-          payload
-        )
-        VALUES ('ORDER_PLACED', 'ORDER', $1, $2::jsonb)
-      `,
-      [orderId, JSON.stringify(response)]
-    );
+    // Pre-Payment Safeguard (Critical Fix):
+    // The order remains strictly PENDING until a verified payment webhook confirms success.
+    // We do NOT emit merchant notification events before payment clears.
+    // Merchant will only be alerted once payment clears via PAYMENT_SUCCESSFUL outbox event.
 
     await client.query(
       `

@@ -96,4 +96,75 @@ export const adminApi = {
 
   reviewRider: (riderId: string, payload: { status: VerificationStatus; notes?: string | null }) =>
     apiRequest<ApiSingleResponse<RiderVerificationRecord>>(`/api/v1/admin/rider-verifications/${riderId}`, { method: 'PUT', body: payload }),
+
+  // Super Admin Control Center Methods
+  getObservabilityDashboard: () =>
+    apiRequest<ApiSingleResponse<import('@/types').ObservabilityDashboardData>>('/api/v1/admin/platform/observability'),
+
+  listSuperAdminOrders: (params?: { stage?: string; limit?: number; offset?: number }) => {
+    const search = new URLSearchParams();
+    if (params?.stage) search.set('stage', params.stage);
+    if (params?.limit) search.set('limit', String(params.limit));
+    if (params?.offset) search.set('offset', String(params.offset));
+    const qs = search.toString();
+    return apiRequest<ApiListResponse<import('@/types').SuperAdminOrderSummary>>(`/api/v1/admin/platform/orders${qs ? `?${qs}` : ''}`);
+  },
+
+  inspectSuperAdminOrder: (orderId: string) =>
+    apiRequest<ApiSingleResponse<{
+      order: Record<string, unknown>;
+      orderStatusHistory: Array<Record<string, unknown>>;
+      deliveryStatusHistory: Array<Record<string, unknown>>;
+      ledgerEntries: import('@/types').LedgerEntryItem[];
+      auditLogs: import('@/types').AuditLogItem[];
+    }>>(`/api/v1/admin/platform/orders/${orderId}`),
+
+  forceTransitionOrder: (orderId: string, payload: { targetStage: string; reason: string }) =>
+    apiRequest<ApiSingleResponse<{
+      orderId: string;
+      deliveryId: string;
+      targetStage: string;
+      previousOrderStatus: string;
+      newOrderStatus: string;
+      newDeliveryStatus: string;
+      reason: string;
+    }>>(`/api/v1/admin/platform/orders/${orderId}/force-transition`, {
+      method: 'POST',
+      body: payload,
+    }),
+
+  getPlatformLedger: (params?: { orderId?: string; accountName?: string; limit?: number; offset?: number }) => {
+    const search = new URLSearchParams();
+    if (params?.orderId) search.set('orderId', params.orderId);
+    if (params?.accountName) search.set('accountName', params.accountName);
+    if (params?.limit) search.set('limit', String(params.limit));
+    if (params?.offset) search.set('offset', String(params.offset));
+    const qs = search.toString();
+    return apiRequest<ApiSingleResponse<import('@/types').LedgerSummary>>(`/api/v1/admin/platform/ledger${qs ? `?${qs}` : ''}`);
+  },
+
+  listAuditLogs: (params?: { entityType?: string; action?: string; actorUserId?: string; limit?: number; offset?: number }) => {
+    const search = new URLSearchParams();
+    if (params?.entityType) search.set('entityType', params.entityType);
+    if (params?.action) search.set('action', params.action);
+    if (params?.actorUserId) search.set('actorUserId', params.actorUserId);
+    if (params?.limit) search.set('limit', String(params.limit));
+    if (params?.offset) search.set('offset', String(params.offset));
+    const qs = search.toString();
+    return apiRequest<ApiListResponse<import('@/types').AuditLogItem>>(`/api/v1/admin/platform/audit-logs${qs ? `?${qs}` : ''}`);
+  },
+
+  getPlatformConfig: () =>
+    apiRequest<ApiSingleResponse<Record<string, { value: Record<string, unknown>; description?: string; updatedAt?: string }>>>('/api/v1/admin/platform/config'),
+
+  updatePlatformConfig: (payload: { key: string; value: Record<string, unknown>; reason?: string }) =>
+    apiRequest<ApiSingleResponse<{ key: string; value: Record<string, unknown>; description?: string; updatedAt?: string }>>('/api/v1/admin/platform/config', {
+      method: 'PUT',
+      body: payload,
+    }),
+
+  listParticipants: (role?: string) => {
+    const qs = role ? `?role=${role}` : '';
+    return apiRequest<ApiListResponse<Record<string, unknown>>>(`/api/v1/admin/platform/participants${qs}`);
+  },
 };

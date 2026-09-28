@@ -7,6 +7,8 @@ import { AppError } from "../../utils/app-error";
 import { env } from "../../config/env";
 import type { ProviderPaymentInput } from "./lifecycle.schemas";
 import { creditDeliveryEarnings } from "../earnings/earnings.service";
+import { calculateAndRecordOrderSettlement } from "../ledger/ledger.service";
+import { notifyFeaturePhoneRiderAssignment } from "../sms/sms.service";
 
 function fail(message: string, status: number, code: string): never {
   throw new AppError(message, status, code);
@@ -24,6 +26,8 @@ export async function registerRider(
     phoneNumber?: string;
     firstName?: string;
     lastName?: string;
+    deviceType?: "SMARTPHONE" | "FEATURE_PHONE";
+    serviceZoneCode?: string;
   }
 ) {
   return withTransaction(async (client) => {
@@ -66,13 +70,42 @@ export async function registerRider(
       [userId]
     );
 
+    const deviceType = input.deviceType === "FEATURE_PHONE" ? "FEATURE_PHONE" : "SMARTPHONE";
+    const regPhone = input.phoneNumber?.trim() || user.phone_number || null;
+
+    let serviceZoneId: string | null = null;
+    if (input.serviceZoneCode) {
+      const zoneRes = await client.query<{ id: string }>(
+        `SELECT id FROM public.service_zones WHERE code = $1 LIMIT 1`,
+        [input.serviceZoneCode]
+      );
+      if (zoneRes.rows.length > 0) serviceZoneId = zoneRes.rows[0].id;
+    }
+    if (!serviceZoneId) {
+      const defaultZone = await client.query<{ id: string }>(
+        `SELECT id FROM public.service_zones WHERE code = 'GWALLAMEJI_YELWA' LIMIT 1`
+      );
+      if (defaultZone.rows.length > 0) serviceZoneId = defaultZone.rows[0].id;
+    }
+
     let riderId: string;
     if (riderResult.rows.length > 0) {
       riderId = riderResult.rows[0].id;
+      await client.query(
+        `UPDATE public.riders
+         SET device_type = $1,
+             registered_phone_number = COALESCE($2, registered_phone_number),
+             service_zone_id = COALESCE($3, service_zone_id),
+             updated_at = NOW()
+         WHERE id = $4`,
+        [deviceType, regPhone, serviceZoneId, riderId]
+      );
     } else {
       const createdRider = await client.query<{ id: string }>(
-        `INSERT INTO public.riders (user_id, is_active, is_available, current_location) VALUES ($1, FALSE, FALSE, NULL) RETURNING id`,
-        [userId]
+        `INSERT INTO public.riders (user_id, is_active, is_available, current_location, device_type, registered_phone_number, service_zone_id)
+         VALUES ($1, FALSE, FALSE, NULL, $2, $3, $4)
+         RETURNING id`,
+        [userId, deviceType, regPhone, serviceZoneId]
       );
       riderId = createdRider.rows[0].id;
     }
@@ -1004,10 +1037,18 @@ async function assignRider(
     }
     return { deliveryId: delivery.delivery_id, riderId: delivery.rider_id ?? undefined, status: delivery.status, isNewAssignment: false };
   }
-  const riderResult = await client.query<{ rider_id: string; vehicle_id: string }>(
+  const riderResult = await client.query<{
+    rider_id: string;
+    vehicle_id: string;
+    device_type: string;
+    phone_number: string | null;
+  }>(
     `
-      SELECT r.id AS rider_id, v.id AS vehicle_id
+      SELECT r.id AS rider_id, v.id AS vehicle_id, r.device_type,
+             COALESCE(r.registered_phone_number, u.phone_number) AS phone_number
       FROM public.riders r
+      INNER JOIN public.users u ON u.id = r.user_id
+      LEFT JOIN public.service_zones sz ON sz.id = r.service_zone_id
       INNER JOIN public.vehicles v ON v.rider_id = r.id AND v.is_active = TRUE
       INNER JOIN public.vehicle_types vt ON vt.id = v.vehicle_type_id AND vt.code IN ('MOTORCYCLE', 'KEKE')
       INNER JOIN public.deliveries d ON d.id = $1
@@ -1032,8 +1073,10 @@ async function assignRider(
             AND rejected.status = 'REJECTED'
         )
       ORDER BY
-        CASE WHEN r.current_location IS NULL THEN 1 ELSE 0 END,
-        ST_Distance(r.current_location, d.pickup_location) ASC NULLS LAST,
+        -- PostGIS Equitable Spatial Dispatch:
+        -- Evaluate distance using continuous GPS coordinates if available, or static service zone
+        -- center location for button-phone riders, ensuring equitable opportunity rather than exclusion.
+        ST_Distance(COALESCE(r.current_location, sz.center_location), d.pickup_location) ASC NULLS LAST,
         r.updated_at ASC,
         r.id
       LIMIT 1
@@ -1061,6 +1104,35 @@ async function assignRider(
   );
   await writeDeliveryHistory(client, delivery.delivery_id, "SEARCHING_RIDER", "ASSIGNED", actorUserId, "Rider automatically assigned.");
   await writeOutbox(client, "RIDER_ASSIGNED", "DELIVERY", delivery.delivery_id, { deliveryId: delivery.delivery_id, riderId: rider.rider_id, pickupCredential: credential });
+
+  // Outbound SMS dispatch notification for button-phone riders upon assignment
+  if (rider.device_type === "FEATURE_PHONE" && rider.phone_number) {
+    const details = await client.query<{
+      pickup_address: string;
+      delivery_address: string;
+      delivery_fee_amount: number | string;
+    }>(
+      `SELECT
+         CONCAT_WS(', ', b.address_line, b.city) AS pickup_address,
+         CONCAT_WS(', ', o.delivery_address_line, o.delivery_city) AS delivery_address,
+         o.delivery_fee_amount
+       FROM public.orders o
+       INNER JOIN public.fulfillments f ON f.order_id = o.id
+       INNER JOIN public.businesses b ON b.id = f.business_id
+       WHERE o.id = $1`,
+      [orderId]
+    );
+    const detail = details.rows[0];
+    const payout = Math.max(300, Math.round(Number(detail?.delivery_fee_amount ?? 500) * 0.8));
+    void notifyFeaturePhoneRiderAssignment({
+      riderPhone: rider.phone_number,
+      orderId,
+      pickupAddress: detail?.pickup_address || "Merchant store",
+      deliveryAddress: detail?.delivery_address || "Customer address",
+      payout,
+    }).catch((err) => console.error("[SMS DISPATCH NOTIFICATION ERROR]", err));
+  }
+
   return { deliveryId: delivery.delivery_id, riderId: rider.rider_id, status: "ASSIGNED", pickupCredential: credential, isNewAssignment: true };
 }
 
@@ -1516,8 +1588,24 @@ export async function issueDeliveryOtp(userId: string, deliveryId: string) {
 
 export async function confirmDelivery(userId: string, deliveryId: string, otp: string) {
   return withTransaction(async (client) => {
-    const result = await client.query<{ delivery_id: string; delivery_status: string; order_id: string; order_status: string; rider_id: string | null; rider_user_id: string | null; business_owner_user_id: string | null }>(
-      `SELECT d.id AS delivery_id, d.status AS delivery_status, d.order_id, o.status AS order_status, d.rider_id, r.user_id AS rider_user_id, b.owner_user_id AS business_owner_user_id FROM public.deliveries d INNER JOIN public.orders o ON o.id = d.order_id LEFT JOIN public.riders r ON r.id = d.rider_id LEFT JOIN public.fulfillments f ON f.order_id = o.id LEFT JOIN public.businesses b ON b.id = f.business_id WHERE d.id = $1 AND r.user_id = $2 FOR UPDATE OF d, o`,
+    const result = await client.query<{
+      delivery_id: string;
+      delivery_status: string;
+      order_id: string;
+      order_status: string;
+      rider_id: string | null;
+      rider_user_id: string | null;
+      business_id: string | null;
+      business_owner_user_id: string | null;
+    }>(
+      `SELECT d.id AS delivery_id, d.status AS delivery_status, d.order_id, o.status AS order_status,
+              d.rider_id, r.user_id AS rider_user_id, b.id AS business_id, b.owner_user_id AS business_owner_user_id
+       FROM public.deliveries d
+       INNER JOIN public.orders o ON o.id = d.order_id
+       LEFT JOIN public.riders r ON r.id = d.rider_id
+       LEFT JOIN public.fulfillments f ON f.order_id = o.id
+       LEFT JOIN public.businesses b ON b.id = f.business_id
+       WHERE d.id = $1 AND r.user_id = $2 FOR UPDATE OF d, o`,
       [deliveryId, userId]
     );
     if (result.rows.length === 0) {
@@ -1554,32 +1642,22 @@ export async function confirmDelivery(userId: string, deliveryId: string, otp: s
     await client.query(`UPDATE public.deliveries SET status = 'DELIVERED', delivered_at = NOW(), updated_at = NOW() WHERE id = $1`, [deliveryId]);
     await client.query(`UPDATE public.orders SET status = 'DELIVERED', updated_at = NOW() WHERE id = $1`, [delivery.order_id]);
     await commitReservations(client, delivery.order_id, userId);
+
+    // Double-Entry Financial Ledger & Unit Economics Engine:
+    // Calculates GMV, Customer Platform Fee (₦100–₦150 pilot targets), dynamic merchant commissions,
+    // gateway transaction costs (1.5%), and Net Platform Contribution per Order:
+    // Contribution = (Customer Fee + Merchant Commission + Delivery Fee) - (Rider Payout + Gateway Fee)
+    // Automatically splits and credits verified earnings to recipient wallets while retaining platform contribution margin.
+    await calculateAndRecordOrderSettlement(client, {
+      orderId: delivery.order_id,
+      deliveryId,
+      riderId: delivery.rider_id,
+      riderUserId: delivery.rider_user_id,
+      businessId: delivery.business_id,
+      businessOwnerUserId: delivery.business_owner_user_id,
+    });
+
     if (delivery.rider_id) {
-      const orderResult = await client.query<{ subtotal_amount: number | string; business_fee_amount: number | string }>(
-        `SELECT subtotal_amount, business_fee_amount FROM public.orders WHERE id = $1`,
-        [delivery.order_id]
-      );
-      const subtotal = Number(orderResult.rows[0]?.subtotal_amount ?? 0);
-      const payout = Math.max(250, subtotal * 0.1);
-      await creditDeliveryEarnings(
-        client,
-        deliveryId,
-        delivery.order_id,
-        delivery.rider_user_id,
-        delivery.business_owner_user_id,
-        subtotal,
-        Number(orderResult.rows[0]?.business_fee_amount ?? 150)
-      );
-      await client.query(
-        `INSERT INTO public.rider_wallets (rider_id, current_balance_amount, currency)
-         VALUES ($1, 0, 'NGN')
-         ON CONFLICT (rider_id) DO NOTHING`,
-        [delivery.rider_id]
-      );
-      await client.query(
-        `UPDATE public.rider_wallets SET current_balance_amount = current_balance_amount + $1, updated_at = NOW() WHERE rider_id = $2`,
-        [payout, delivery.rider_id]
-      );
       await client.query(`UPDATE public.riders SET is_available = TRUE, updated_at = NOW() WHERE id = $1`, [delivery.rider_id]);
     }
     await writeDeliveryHistory(client, deliveryId, "ARRIVED", "DELIVERED", userId, "Customer confirmed delivery with OTP.");
@@ -1587,5 +1665,187 @@ export async function confirmDelivery(userId: string, deliveryId: string, otp: s
     await writeOutbox(client, "ORDER_DELIVERED", "ORDER", delivery.order_id, { orderId: delivery.order_id, deliveryId });
     await writeAudit(client, userId, "DELIVERY_CONFIRMED", "DELIVERY", deliveryId, "Delivery confirmed by customer OTP.");
     return { deliveryId, orderId: delivery.order_id, status: "DELIVERED" };
+  });
+}
+
+/**
+ * Super Admin Absolute Intervention & Override Authority
+ * Allows force-transitioning orders across any of the 9 lifecycle stages with immutable audit logs
+ */
+export async function superAdminForceTransitionOrder(
+  actorUserId: string,
+  orderId: string,
+  targetStage:
+    | "PENDING"
+    | "CONFIRMED"
+    | "PREPARING"
+    | "READY_FOR_PICKUP"
+    | "ASSIGNED"
+    | "PICKED_UP"
+    | "IN_TRANSIT"
+    | "ARRIVED"
+    | "DELIVERED"
+    | "CANCELLED",
+  reason: string
+) {
+  return withTransaction(async (client) => {
+    const orderResult = await client.query<{
+      id: string;
+      status: string;
+      subtotal_amount: number | string;
+      delivery_fee_amount: number | string;
+      total_amount: number | string;
+    }>(
+      `SELECT id, status, subtotal_amount, delivery_fee_amount, total_amount FROM public.orders WHERE id = $1 FOR UPDATE`,
+      [orderId]
+    );
+
+    if (orderResult.rows.length === 0) {
+      fail("Order not found.", 404, "ORDER_NOT_FOUND");
+    }
+
+    const order = orderResult.rows[0];
+    const previousOrderStatus = order.status;
+
+    let newOrderStatus: string;
+    if (["PENDING", "CONFIRMED", "PREPARING", "READY_FOR_PICKUP"].includes(targetStage)) {
+      newOrderStatus = targetStage;
+    } else if (["ASSIGNED", "PICKED_UP", "IN_TRANSIT", "ARRIVED"].includes(targetStage)) {
+      newOrderStatus = "OUT_FOR_DELIVERY";
+    } else if (targetStage === "DELIVERED") {
+      newOrderStatus = "DELIVERED";
+    } else {
+      newOrderStatus = "CANCELLED";
+    }
+
+    await client.query(
+      `UPDATE public.orders SET status = $1::public.order_status, updated_at = NOW() WHERE id = $2`,
+      [newOrderStatus, orderId]
+    );
+
+    await writeOrderHistory(
+      client,
+      orderId,
+      previousOrderStatus,
+      newOrderStatus,
+      actorUserId,
+      `Super Admin forced transition to ${targetStage}: ${reason}`
+    );
+
+    const deliveryResult = await client.query<{
+      id: string;
+      status: string;
+      rider_id: string | null;
+    }>(
+      `SELECT id, status, rider_id FROM public.deliveries WHERE order_id = $1 FOR UPDATE`,
+      [orderId]
+    );
+
+    let deliveryId: string;
+    let previousDeliveryStatus: string | null = null;
+    let riderId: string | null = null;
+
+    if (deliveryResult.rows.length > 0) {
+      deliveryId = deliveryResult.rows[0].id;
+      previousDeliveryStatus = deliveryResult.rows[0].status;
+      riderId = deliveryResult.rows[0].rider_id;
+    } else {
+      const createdDelivery = await createDelivery(client, orderId, actorUserId);
+      deliveryId = createdDelivery.id;
+      previousDeliveryStatus = "SEARCHING_RIDER";
+    }
+
+    let newDeliveryStatus: string;
+    if (targetStage === "PENDING" || targetStage === "CONFIRMED" || targetStage === "PREPARING" || targetStage === "READY_FOR_PICKUP") {
+      newDeliveryStatus = "SEARCHING_RIDER";
+    } else if (targetStage === "ASSIGNED") {
+      newDeliveryStatus = "ASSIGNED";
+    } else if (targetStage === "PICKED_UP") {
+      newDeliveryStatus = "PICKED_UP";
+    } else if (targetStage === "IN_TRANSIT") {
+      newDeliveryStatus = "IN_TRANSIT";
+    } else if (targetStage === "ARRIVED") {
+      newDeliveryStatus = "ARRIVED";
+    } else if (targetStage === "DELIVERED") {
+      newDeliveryStatus = "DELIVERED";
+    } else {
+      newDeliveryStatus = "CANCELLED";
+    }
+
+    await client.query(
+      `UPDATE public.deliveries
+       SET status = $1::public.delivery_status,
+           picked_up_at = CASE WHEN $1 IN ('PICKED_UP', 'IN_TRANSIT', 'ARRIVED', 'DELIVERED') AND picked_up_at IS NULL THEN NOW() ELSE picked_up_at END,
+           delivered_at = CASE WHEN $1 = 'DELIVERED' THEN NOW() ELSE delivered_at END,
+           updated_at = NOW()
+       WHERE id = $2`,
+      [newDeliveryStatus, deliveryId]
+    );
+
+    await writeDeliveryHistory(
+      client,
+      deliveryId,
+      previousDeliveryStatus,
+      newDeliveryStatus,
+      actorUserId,
+      `Super Admin forced transition to ${targetStage}: ${reason}`
+    );
+
+    if (targetStage === "DELIVERED") {
+      await commitReservations(client, orderId, actorUserId);
+
+      const contextRes = await client.query<{
+        rider_user_id: string | null;
+        business_id: string | null;
+        business_owner_user_id: string | null;
+      }>(
+        `SELECT r.user_id AS rider_user_id, b.id AS business_id, b.owner_user_id AS business_owner_user_id
+         FROM public.deliveries d
+         LEFT JOIN public.riders r ON r.id = d.rider_id
+         LEFT JOIN public.fulfillments f ON f.order_id = d.order_id
+         LEFT JOIN public.businesses b ON b.id = f.business_id
+         WHERE d.id = $1`,
+        [deliveryId]
+      );
+      const ctx = contextRes.rows[0];
+
+      await calculateAndRecordOrderSettlement(client, {
+        orderId,
+        deliveryId,
+        riderId,
+        riderUserId: ctx?.rider_user_id ?? null,
+        businessId: ctx?.business_id ?? null,
+        businessOwnerUserId: ctx?.business_owner_user_id ?? null,
+      });
+
+      if (riderId) {
+        await client.query(`UPDATE public.riders SET is_available = TRUE, updated_at = NOW() WHERE id = $1`, [riderId]);
+      }
+    } else if (targetStage === "CANCELLED") {
+      await releaseReservations(client, orderId, actorUserId, `Super Admin cancellation: ${reason}`);
+      if (riderId) {
+        await client.query(`UPDATE public.riders SET is_available = TRUE, updated_at = NOW() WHERE id = $1`, [riderId]);
+      }
+    }
+
+    await writeAudit(
+      client,
+      actorUserId,
+      "SUPER_ADMIN_FORCE_TRANSITION",
+      "ORDER",
+      orderId,
+      `Order force-transitioned from ${previousOrderStatus} to ${targetStage}. Reason: ${reason}`
+    );
+
+    return {
+      orderId,
+      deliveryId,
+      targetStage,
+      previousOrderStatus,
+      newOrderStatus,
+      newDeliveryStatus,
+      reason,
+      transitionedAt: new Date().toISOString(),
+    };
   });
 }

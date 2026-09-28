@@ -42,6 +42,7 @@ import { RiderRegisterPage } from '@/pages/rider/RiderRegisterPage';
 
 // Admin pages
 import { AdminDashboard } from '@/pages/admin/AdminDashboard';
+import { SuperAdminControlCenter } from '@/pages/admin/SuperAdminControlCenter';
 import { AdminBusinessesPage, AdminBusinessDetailPage } from '@/pages/admin/AdminBusinesses';
 import { AdminOperationsPage } from '@/pages/admin/AdminOperations';
 import { AdminAccessPage } from '@/pages/admin/AdminAccessPage';
@@ -195,11 +196,19 @@ export default function App() {
                   }
                 />
 
-                {/* Admin routes */}
+                {/* Admin & Super Admin routes */}
+                <Route
+                  path="/admin/control-center"
+                  element={
+                    <ProtectedRoute allowedRoles={['ADMIN', 'SUPER_ADMIN']}>
+                      <SuperAdminControlCenter />
+                    </ProtectedRoute>
+                  }
+                />
                 <Route
                   path="/admin"
                   element={
-                    <ProtectedRoute allowedRoles={['ADMIN']}>
+                    <ProtectedRoute allowedRoles={['ADMIN', 'SUPER_ADMIN']}>
                       <AdminDashboard />
                     </ProtectedRoute>
                   }
@@ -207,7 +216,7 @@ export default function App() {
                 <Route
                   path="/admin/businesses"
                   element={
-                    <ProtectedRoute allowedRoles={['ADMIN']}>
+                    <ProtectedRoute allowedRoles={['ADMIN', 'SUPER_ADMIN']}>
                       <AdminBusinessesPage />
                     </ProtectedRoute>
                   }
@@ -215,7 +224,7 @@ export default function App() {
                 <Route
                   path="/admin/riders"
                   element={
-                    <ProtectedRoute allowedRoles={['ADMIN']}>
+                    <ProtectedRoute allowedRoles={['ADMIN', 'SUPER_ADMIN']}>
                       <AdminRidersPage />
                     </ProtectedRoute>
                   }
@@ -223,7 +232,7 @@ export default function App() {
                 <Route
                   path="/admin/businesses/:businessId"
                   element={
-                    <ProtectedRoute allowedRoles={['ADMIN']}>
+                    <ProtectedRoute allowedRoles={['ADMIN', 'SUPER_ADMIN']}>
                       <AdminBusinessDetailPage />
                     </ProtectedRoute>
                   }
@@ -231,7 +240,7 @@ export default function App() {
                 <Route
                   path="/admin/operations"
                   element={
-                    <ProtectedRoute allowedRoles={['ADMIN']}>
+                    <ProtectedRoute allowedRoles={['ADMIN', 'SUPER_ADMIN']}>
                       <AdminOperationsPage />
                     </ProtectedRoute>
                   }
@@ -239,7 +248,7 @@ export default function App() {
                 <Route
                   path="/admin/access"
                   element={
-                    <ProtectedRoute allowedRoles={['ADMIN']}>
+                    <ProtectedRoute allowedRoles={['ADMIN', 'SUPER_ADMIN']}>
                       <AdminAccessPage />
                     </ProtectedRoute>
                   }

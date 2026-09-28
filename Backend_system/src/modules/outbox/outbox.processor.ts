@@ -282,6 +282,7 @@ async function notificationJobs(
       break;
     case "PAYMENT_SUCCESSFUL":
       addCustomer("ORDER_CONFIRMED", "Order confirmed", "Your payment was confirmed and your order is being prepared.");
+      addBusiness("NEW_ORDER", "New confirmed order", "A new customer order was successfully paid and is ready for preparation.");
       break;
     case "PAYMENT_FAILED":
       addCustomer("ORDER_CANCELLED", "Order cancelled", "Your order was cancelled because payment was not completed.");
@@ -559,6 +560,21 @@ export async function processOutboxBatch(
     processed += 1;
   }
   return processed;
+}
+
+export async function processOutboxCronTrigger(batchSize = DEFAULT_BATCH_SIZE): Promise<{
+  processedEvents: number;
+  pushedNotifications: number;
+  timestamp: string;
+}> {
+  await expireInventoryReservations();
+  const processedEvents = await processOutboxBatch(batchSize);
+  const pushedNotifications = await processPushDeliveryBatch();
+  return {
+    processedEvents,
+    pushedNotifications,
+    timestamp: new Date().toISOString(),
+  };
 }
 
 export async function runOutboxWorker(): Promise<void> {

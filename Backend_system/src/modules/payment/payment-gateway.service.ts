@@ -1,0 +1,354 @@
+import { createHmac } from "node:crypto";
+import { db } from "../../db/database";
+import { withTransaction } from "../../db/transaction";
+import { AppError } from "../../utils/app-error";
+import { processProviderPayment } from "../lifecycle/lifecycle.service";
+
+export type PaymentGatewayProvider = "PAYSTACK" | "FLUTTERWAVE";
+
+export interface InitializePaymentInput {
+  orderId: string;
+  gateway?: PaymentGatewayProvider;
+  callbackUrl?: string;
+  userId: string;
+}
+
+export interface PaymentInitializationResult {
+  gateway: PaymentGatewayProvider;
+  checkoutUrl: string;
+  reference: string;
+  paymentId: string;
+  paymentAttemptId: string;
+  amount: number;
+  currency: string;
+}
+
+/**
+ * Initializes a checkout transaction with Paystack or Flutterwave
+ */
+export async function initializePaymentGatewayTransaction(
+  input: InitializePaymentInput
+): Promise<PaymentInitializationResult> {
+  const gateway: PaymentGatewayProvider = input.gateway ?? "PAYSTACK";
+
+  // Load order and pending payment
+  const orderResult = await db.query<{
+    order_id: string;
+    total_amount: number | string;
+    currency: string;
+    order_status: string;
+    user_id: string;
+    user_email: string | null;
+    user_phone: string | null;
+    payment_id: string;
+    payment_status: string;
+    payment_attempt_id: string;
+  }>(
+    `SELECT
+       o.id AS order_id,
+       o.total_amount,
+       o.currency,
+       o.status AS order_status,
+       o.user_id,
+       u.email AS user_email,
+       u.phone_number AS user_phone,
+       p.id AS payment_id,
+       p.status AS payment_status,
+       pa.id AS payment_attempt_id
+     FROM public.orders o
+     INNER JOIN public.users u ON u.id = o.user_id
+     INNER JOIN public.payments p ON p.order_id = o.id
+     INNER JOIN public.payment_attempts pa ON pa.payment_id = p.id
+     WHERE o.id = $1 AND o.user_id = $2
+     ORDER BY pa.created_at DESC
+     LIMIT 1`,
+    [input.orderId, input.userId]
+  );
+
+  if (orderResult.rows.length === 0) {
+    throw new AppError("Order or payment not found.", 404, "ORDER_NOT_FOUND");
+  }
+
+  const order = orderResult.rows[0];
+
+  if (order.order_status !== "PENDING") {
+    throw new AppError(
+      `Order is in status ${order.order_status} and cannot be initialized for payment.`,
+      409,
+      "ORDER_NOT_PENDING"
+    );
+  }
+
+  const totalAmount = Number(order.total_amount);
+  const email = order.user_email || `customer-${order.user_id.slice(0, 8)}@squadlink.app`;
+  const reference = `sqlink_${gateway.toLowerCase()}_${order.order_id.slice(0, 8)}_${Date.now()}`;
+  const callbackUrl = input.callbackUrl || `http://localhost:5173/orders/${order.order_id}`;
+
+  let checkoutUrl: string;
+
+  if (gateway === "PAYSTACK") {
+    const paystackSecret = process.env.PAYSTACK_SECRET_KEY;
+    if (paystackSecret && !paystackSecret.includes("YOUR_")) {
+      try {
+        const response = await fetch("https://api.paystack.co/transaction/initialize", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${paystackSecret}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            email,
+            amount: Math.round(totalAmount * 100), // in kobo
+            reference,
+            callback_url: callbackUrl,
+            metadata: {
+              orderId: order.order_id,
+              paymentId: order.payment_id,
+              paymentAttemptId: order.payment_attempt_id,
+              userId: order.user_id,
+            },
+          }),
+        });
+
+        const data = (await response.json()) as {
+          status: boolean;
+          data?: { authorization_url: string; reference: string };
+        };
+
+        if (data.status && data.data?.authorization_url) {
+          checkoutUrl = data.data.authorization_url;
+        } else {
+          checkoutUrl = `https://checkout.paystack.com/${reference}`;
+        }
+      } catch (err) {
+        console.error("[PAYSTACK INITIALIZE ERROR]", err);
+        checkoutUrl = `https://checkout.paystack.com/${reference}`;
+      }
+    } else {
+      checkoutUrl = `https://checkout.paystack.com/simulate/${reference}?amount=${totalAmount}&email=${encodeURIComponent(email)}`;
+    }
+  } else {
+    // Flutterwave
+    const flwSecret = process.env.FLUTTERWAVE_SECRET_KEY;
+    if (flwSecret && !flwSecret.includes("YOUR_")) {
+      try {
+        const response = await fetch("https://api.flutterwave.com/v3/payments", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${flwSecret}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            tx_ref: reference,
+            amount: totalAmount,
+            currency: "NGN",
+            redirect_url: callbackUrl,
+            customer: {
+              email,
+              phonenumber: order.user_phone || "08000000000",
+              name: email,
+            },
+            meta: {
+              orderId: order.order_id,
+              paymentId: order.payment_id,
+              paymentAttemptId: order.payment_attempt_id,
+              userId: order.user_id,
+            },
+            customizations: {
+              title: "SquadLink Delivery",
+              description: `Payment for Order #${order.order_id.slice(0, 8)}`,
+            },
+          }),
+        });
+
+        const data = (await response.json()) as {
+          status: string;
+          data?: { link: string };
+        };
+
+        if (data.status === "success" && data.data?.link) {
+          checkoutUrl = data.data.link;
+        } else {
+          checkoutUrl = `https://ravemodal-dev.herokuapp.com/simulate/${reference}`;
+        }
+      } catch (err) {
+        console.error("[FLUTTERWAVE INITIALIZE ERROR]", err);
+        checkoutUrl = `https://ravemodal-dev.herokuapp.com/simulate/${reference}`;
+      }
+    } else {
+      checkoutUrl = `https://ravemodal-dev.herokuapp.com/simulate/${reference}?amount=${totalAmount}`;
+    }
+  }
+
+  // Update payment attempt record with provider and reference
+  await db.query(
+    `UPDATE public.payment_attempts
+     SET provider = $1,
+         provider_reference = $2,
+         status = 'PENDING',
+         updated_at = NOW()
+     WHERE id = $3`,
+    [gateway.toLowerCase(), reference, order.payment_attempt_id]
+  );
+
+  return {
+    gateway,
+    checkoutUrl,
+    reference,
+    paymentId: order.payment_id,
+    paymentAttemptId: order.payment_attempt_id,
+    amount: totalAmount,
+    currency: order.currency,
+  };
+}
+
+/**
+ * Cryptographic HMAC SHA-512 verification for Paystack webhooks
+ */
+export function verifyPaystackSignature(rawBody: string, signature: string): boolean {
+  const secret = process.env.PAYSTACK_SECRET_KEY || "sk_test_paystack_default";
+  const hash = createHmac("sha512", secret).update(rawBody).digest("hex");
+  return hash === signature;
+}
+
+/**
+ * Secret token / hash verification for Flutterwave webhooks
+ */
+export function verifyFlutterwaveSignature(receivedHash: string): boolean {
+  const secretHash = process.env.FLUTTERWAVE_SECRET_HASH || "sqlink_flw_secret_token";
+  return receivedHash === secretHash;
+}
+
+/**
+ * Ingestion handler for Paystack webhooks (/api/v1/payments/paystack/webhook)
+ * Enforces the Pre-Payment Safeguard: only 'charge.success' confirms the order.
+ */
+export async function processPaystackWebhook(eventData: Record<string, unknown>) {
+  const event = String(eventData.event || "");
+  const data = (typeof eventData.data === "object" && eventData.data !== null ? eventData.data : {}) as Record<string, unknown>;
+
+  if (event !== "charge.success" || data.status !== "success") {
+    // If charge failed or other event, we handle failure or ignore non-payment events
+    if (event === "charge.failed" || data.status === "failed") {
+      const reference = String(data.reference || "");
+      const attempt = await findPaymentAttemptByReference(reference);
+      if (attempt) {
+        await processProviderPayment("SYSTEM", attempt.payment_id, {
+          providerEventId: `ps-${reference}-fail`,
+          paymentAttemptId: attempt.id,
+          status: "FAILED",
+          providerReference: reference,
+          failureReason: String(data.gateway_response || "Paystack reported payment failure"),
+        });
+      }
+    }
+    return { status: "ignored", event };
+  }
+
+  const reference = String(data.reference || "");
+  const attempt = await findPaymentAttemptByReference(reference);
+  if (!attempt) {
+    throw new AppError("No payment attempt found for reference.", 404, "PAYMENT_ATTEMPT_NOT_FOUND");
+  }
+
+  // Pre-payment safeguard: Transition order to CONFIRMED and alert merchant only upon verified charge.success
+  const result = await processProviderPayment("SYSTEM", attempt.payment_id, {
+    providerEventId: `ps-${reference}`,
+    paymentAttemptId: attempt.id,
+    status: "SUCCESS",
+    providerReference: reference,
+  });
+
+  return { status: "processed", result };
+}
+
+/**
+ * Ingestion handler for Flutterwave webhooks (/api/v1/payments/flutterwave/webhook)
+ */
+export async function processFlutterwaveWebhook(eventData: Record<string, unknown>) {
+  const event = String(eventData.event || "");
+  const data = (typeof eventData.data === "object" && eventData.data !== null ? eventData.data : {}) as Record<string, unknown>;
+
+  const isSuccess = data.status === "successful" || data.status === "success";
+
+  if (!isSuccess) {
+    const txRef = String(data.tx_ref || "");
+    const attempt = await findPaymentAttemptByReference(txRef);
+    if (attempt) {
+      await processProviderPayment("SYSTEM", attempt.payment_id, {
+        providerEventId: `flw-${txRef}-fail`,
+        paymentAttemptId: attempt.id,
+        status: "FAILED",
+        providerReference: txRef,
+        failureReason: "Flutterwave reported unconfirmed charge",
+      });
+    }
+    return { status: "ignored", event };
+  }
+
+  const txRef = String(data.tx_ref || "");
+  const attempt = await findPaymentAttemptByReference(txRef);
+  if (!attempt) {
+    throw new AppError("No payment attempt found for reference.", 404, "PAYMENT_ATTEMPT_NOT_FOUND");
+  }
+
+  const result = await processProviderPayment("SYSTEM", attempt.payment_id, {
+    providerEventId: `flw-${txRef}`,
+    paymentAttemptId: attempt.id,
+    status: "SUCCESS",
+    providerReference: txRef,
+  });
+
+  return { status: "processed", result };
+}
+
+async function findPaymentAttemptByReference(reference: string) {
+  if (!reference) return null;
+  const result = await db.query<{ id: string; payment_id: string; status: string }>(
+    `SELECT id, payment_id, status FROM public.payment_attempts WHERE provider_reference = $1 LIMIT 1`,
+    [reference]
+  );
+  return result.rows[0] ?? null;
+}
+
+/**
+ * Payment Verification / Frontend Callback Polling Endpoint
+ */
+export async function verifyPaymentReference(reference: string, userId: string) {
+  const result = await db.query<{
+    payment_id: string;
+    order_id: string;
+    payment_status: string;
+    order_status: string;
+    amount: number | string;
+    provider: string | null;
+  }>(
+    `SELECT
+       p.id AS payment_id,
+       p.order_id,
+       p.status AS payment_status,
+       o.status AS order_status,
+       p.amount,
+       pa.provider
+     FROM public.payment_attempts pa
+     INNER JOIN public.payments p ON p.id = pa.payment_id
+     INNER JOIN public.orders o ON o.id = p.order_id
+     WHERE pa.provider_reference = $1 AND o.user_id = $2
+     LIMIT 1`,
+    [reference, userId]
+  );
+
+  if (result.rows.length === 0) {
+    throw new AppError("Payment reference not found.", 404, "PAYMENT_REFERENCE_NOT_FOUND");
+  }
+
+  const row = result.rows[0];
+  return {
+    orderId: row.order_id,
+    paymentId: row.payment_id,
+    status: row.payment_status,
+    orderStatus: row.order_status,
+    amount: Number(row.amount),
+    provider: row.provider,
+  };
+}

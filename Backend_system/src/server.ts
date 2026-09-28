@@ -39,9 +39,13 @@ async function start() {
       host: "0.0.0.0"
     });
     console.log("[STARTUP] After app.listen");
-    void runOutboxWorker().catch((error) => {
-      app.log.error(error, "Outbox worker stopped unexpectedly.");
-    });
+    // In serverless environments (e.g. Vercel), background worker loops are converted into
+    // scheduled cron executions via POST /api/v1/cron/outbox.
+    if (process.env.VERCEL !== "1" && process.env.RUN_BACKGROUND_WORKER !== "false") {
+      void runOutboxWorker().catch((error) => {
+        app.log.error(error, "Outbox worker stopped unexpectedly.");
+      });
+    }
 
     console.log(
       `Delivery System API running on http://localhost:${env.PORT}`

@@ -20,6 +20,10 @@ export function authorize(
       );
     }
 
+    if (request.user.role === "SUPER_ADMIN") {
+      return;
+    }
+
     if (!allowedRoles.includes(request.user.role)) {
       throw new AppError(
         "You are not authorized to perform this action.",

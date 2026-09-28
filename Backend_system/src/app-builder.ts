@@ -25,6 +25,9 @@ import { notificationRoutes } from "./modules/notification/notification.routes";
 import { platformAdminRoutes } from "./modules/platform-admin/platform-admin.routes";
 import { earningsRoutes } from "./modules/earnings/earnings.routes";
 import { contactRoutes } from "./modules/contact/contact.routes";
+import { paymentRoutes } from "./modules/payment/payment.routes";
+import { smsWebhookRoutes } from "./modules/sms/sms.routes";
+import { cronRoutes } from "./modules/cron/cron.routes";
 
 export async function buildApp() {
   console.log("[STARTUP] buildApp entered");
@@ -127,6 +130,16 @@ export async function buildApp() {
 
   await app.register(contactRoutes, {
     prefix: "/api/v1/contact"
+  });
+
+  await app.register(paymentRoutes, {
+    prefix: "/api/v1/payments"
+  });
+
+  await app.register(smsWebhookRoutes);
+
+  await app.register(cronRoutes, {
+    prefix: "/api/v1/cron"
   });
 
   app.get("/health", async (_request, reply) => {

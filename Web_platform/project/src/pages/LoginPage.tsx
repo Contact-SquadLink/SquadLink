@@ -67,6 +67,7 @@ function safeRedirect(value: string | null): string | null {
 }
 
 function roleCanOpenPath(role: Role, path: string): boolean {
+  if (role === 'SUPER_ADMIN') return true;
   if (path.startsWith('/business')) return role === 'BUSINESS_USER' || role === 'ADMIN';
   if (path.startsWith('/rider')) return role === 'RIDER' || role === 'ADMIN';
   if (path.startsWith('/admin')) return role === 'ADMIN';
@@ -75,6 +76,7 @@ function roleCanOpenPath(role: Role, path: string): boolean {
 }
 
 function defaultPathForRole(role: Role): string {
+  if (role === 'SUPER_ADMIN') return '/admin/control-center';
   if (role === 'ADMIN') return '/admin';
   if (role === 'BUSINESS_USER') return '/business';
   if (role === 'RIDER') return '/rider';

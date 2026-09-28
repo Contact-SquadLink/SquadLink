@@ -17,7 +17,7 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
   const roleKey = `${location.pathname}:${allowedRoles?.join(',') ?? ''}`;
 
   useEffect(() => {
-    if (!user || !allowedRoles || allowedRoles.includes(user.role) || refreshKey === roleKey) {
+    if (!user || !allowedRoles || user.role === 'SUPER_ADMIN' || allowedRoles.includes(user.role) || refreshKey === roleKey) {
       return;
     }
 
@@ -36,6 +36,11 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
   if (!user) {
     const redirect = encodeURIComponent(location.pathname + location.search);
     return <Navigate to={`/login?redirect=${redirect}`} replace />;
+  }
+
+  // Super Admin has absolute authority and access over all platform routes
+  if (user.role === 'SUPER_ADMIN') {
+    return <>{children}</>;
   }
 
   if (allowedRoles && !allowedRoles.includes(user.role)) {

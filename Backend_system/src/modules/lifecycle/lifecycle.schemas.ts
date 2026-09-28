@@ -37,6 +37,8 @@ export const deliveryOtpSchema = z.object({
 export const riderRegistrationSchema = z.object({
   vehicleType: z.enum(["MOTORCYCLE", "KEKE"]).default("MOTORCYCLE"),
   vehicleRegistration: z.string().trim().min(2).max(50),
+  deviceType: z.enum(["SMARTPHONE", "FEATURE_PHONE"]).default("SMARTPHONE"),
+  serviceZoneCode: z.string().trim().optional(),
   phoneNumber: z.string().trim().min(10).max(30).transform((value, context) => {
     const normalized = normalizePhoneNumber(value);
     if (!normalized) {

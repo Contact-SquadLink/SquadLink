@@ -18,6 +18,7 @@ import {
   Home,
   ChevronRight,
   Repeat,
+  Gauge,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useCart } from '@/hooks/useCart';
@@ -32,13 +33,13 @@ interface NavLink {
 }
 
 const allNavLinks: NavLink[] = [
-  { label: 'Home', path: '/', icon: Home, roles: ['CUSTOMER', 'BUSINESS_USER', 'RIDER', 'ADMIN'] },
-  { label: 'Browse', path: '/browse', icon: ShoppingBag, roles: ['CUSTOMER', 'BUSINESS_USER', 'RIDER', 'ADMIN'] },
+  { label: 'Home', path: '/', icon: Home, roles: ['CUSTOMER', 'BUSINESS_USER', 'RIDER', 'ADMIN', 'SUPER_ADMIN'] },
+  { label: 'Browse', path: '/browse', icon: ShoppingBag, roles: ['CUSTOMER', 'BUSINESS_USER', 'RIDER', 'ADMIN', 'SUPER_ADMIN'] },
   { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard, roles: ['CUSTOMER'] },
   { label: 'Cart', path: '/cart', icon: ShoppingCart, roles: ['CUSTOMER'] },
   { label: 'Orders', path: '/orders', icon: Package, roles: ['CUSTOMER'] },
-  { label: 'Notifications', path: '/notifications', icon: Bell, roles: ['CUSTOMER', 'BUSINESS_USER', 'RIDER', 'ADMIN'] },
-  { label: 'Profile', path: '/profile', icon: UserIcon, roles: ['CUSTOMER', 'BUSINESS_USER', 'RIDER', 'ADMIN'] },
+  { label: 'Notifications', path: '/notifications', icon: Bell, roles: ['CUSTOMER', 'BUSINESS_USER', 'RIDER', 'ADMIN', 'SUPER_ADMIN'] },
+  { label: 'Profile', path: '/profile', icon: UserIcon, roles: ['CUSTOMER', 'BUSINESS_USER', 'RIDER', 'ADMIN', 'SUPER_ADMIN'] },
   // Business
   { label: 'Dashboard', path: '/business', icon: LayoutDashboard, roles: ['BUSINESS_USER'] },
   { label: 'Orders', path: '/business/orders', icon: ClipboardList, roles: ['BUSINESS_USER'] },
@@ -48,11 +49,12 @@ const allNavLinks: NavLink[] = [
   // Rider
   { label: 'Deliveries', path: '/rider', icon: Bike, roles: ['RIDER'] },
   { label: 'Earnings', path: '/earnings', icon: Repeat, roles: ['RIDER'] },
-  // Admin
-  { label: 'Dashboard', path: '/admin', icon: LayoutDashboard, roles: ['ADMIN'] },
-  { label: 'Businesses', path: '/admin/businesses', icon: Shield, roles: ['ADMIN'] },
-  { label: 'Riders', path: '/admin/riders', icon: Bike, roles: ['ADMIN'] },
-  { label: 'Access', path: '/admin/access', icon: Shield, roles: ['ADMIN'] },
+  // Admin & Super Admin
+  { label: 'Control Center', path: '/admin/control-center', icon: Gauge, roles: ['ADMIN', 'SUPER_ADMIN'] },
+  { label: 'Dashboard', path: '/admin', icon: LayoutDashboard, roles: ['ADMIN', 'SUPER_ADMIN'] },
+  { label: 'Businesses', path: '/admin/businesses', icon: Shield, roles: ['ADMIN', 'SUPER_ADMIN'] },
+  { label: 'Riders', path: '/admin/riders', icon: Bike, roles: ['ADMIN', 'SUPER_ADMIN'] },
+  { label: 'Access', path: '/admin/access', icon: Shield, roles: ['ADMIN', 'SUPER_ADMIN'] },
 ];
 
 const roleLabels: Record<Role, string> = {
@@ -60,6 +62,7 @@ const roleLabels: Record<Role, string> = {
   BUSINESS_USER: 'Business',
   RIDER: 'Rider',
   ADMIN: 'Admin',
+  SUPER_ADMIN: 'Super Admin',
 };
 
 const roleColors: Record<Role, string> = {
@@ -67,6 +70,7 @@ const roleColors: Record<Role, string> = {
   BUSINESS_USER: 'bg-secondary-100 text-secondary-700',
   RIDER: 'bg-accent-100 text-accent-700',
   ADMIN: 'bg-gray-800 text-white',
+  SUPER_ADMIN: 'bg-gradient-to-r from-red-600 to-amber-600 text-white font-bold',
 };
 
 export function DashboardLayout() {

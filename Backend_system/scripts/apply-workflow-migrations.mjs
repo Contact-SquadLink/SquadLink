@@ -159,11 +159,39 @@ try {
     );
   }
 
+  const superAdminMigration = await client.query(
+    "SELECT 1 FROM public.schema_migrations WHERE version = '098'"
+  );
+  if (superAdminMigration.rowCount === 0) {
+    const sql098 = await readFile(
+      new URL('../database/migrations/098_add_super_admin_and_zones.sql', import.meta.url),
+      'utf8'
+    );
+    await client.query(sql098);
+    await client.query(
+      "INSERT INTO public.schema_migrations (version, name) VALUES ('098', 'add_super_admin_and_zones')"
+    );
+  }
+
+  const ledgerMigration = await client.query(
+    "SELECT 1 FROM public.schema_migrations WHERE version = '099'"
+  );
+  if (ledgerMigration.rowCount === 0) {
+    const sql099 = await readFile(
+      new URL('../database/migrations/099_create_financial_ledger_and_platform_config.sql', import.meta.url),
+      'utf8'
+    );
+    await client.query(sql099);
+    await client.query(
+      "INSERT INTO public.schema_migrations (version, name) VALUES ('099', 'create_financial_ledger_and_platform_config')"
+    );
+  }
+
   await client.query('COMMIT');
   console.log('Workflow migrations applied successfully.');
 } catch (error) {
   await client.query('ROLLBACK').catch(() => undefined);
-  console.error('Workflow migration failed.');
+  console.error('Workflow migration failed:', error);
   process.exitCode = 1;
 } finally {
   await client.end();

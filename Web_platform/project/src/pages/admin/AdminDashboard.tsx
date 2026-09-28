@@ -79,6 +79,30 @@ export function AdminDashboard() {
       <h1 className="font-display text-2xl font-bold text-gray-900 mb-1">Admin Dashboard</h1>
       <p className="text-sm text-gray-500 mb-6">Platform operations, business verification, and oversight.</p>
 
+      {/* Super Admin Absolute Authority Banner */}
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-gradient-to-r from-gray-900 via-gray-950 to-red-950 p-6 text-white shadow-lg border border-red-900/40">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <span className="rounded bg-red-600 px-2 py-0.5 text-xs font-bold uppercase tracking-wider text-white">
+              Super Admin Authority
+            </span>
+            <span className="text-xs text-gray-400">Governance & Unit Economics</span>
+          </div>
+          <h2 className="text-xl font-bold tracking-tight text-white">
+            Absolute Authority Control Center
+          </h2>
+          <p className="text-xs text-gray-300 max-w-2xl">
+            Live observability (GMV, platform revenue, net contribution), 9-stage order intervention, double-entry ledger balancing, and pilot parameter governance.
+          </p>
+        </div>
+        <Link
+          to="/admin/control-center"
+          className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-5 py-2.5 text-sm font-bold text-white shadow-md hover:bg-red-700 transition-all"
+        >
+          Open Control Center <ArrowRight className="h-4 w-4" />
+        </Link>
+      </div>
+
       {error ? (
         <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
           We could not load the business verification queue.

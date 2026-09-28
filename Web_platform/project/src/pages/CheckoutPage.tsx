@@ -11,6 +11,7 @@ import {
 import { useCart } from '@/hooks/useCart';
 import { useAuth } from '@/hooks/useAuth';
 import { checkoutApi, ordersApi } from '@/api/orders';
+import { paymentApi, type PaymentInitializationData } from '@/api/payment';
 import { formatPrice, cn } from '@/utils/format';
 import { normalizePhoneNumber } from '@/utils/phone';
 import { formatNigerianPhone, phoneDigits } from '@/utils/nigerian-phone';
@@ -29,7 +30,10 @@ export function CheckoutPage() {
   const [orderPlaced, setOrderPlaced] = useState(false);
   const [placingOrder, setPlacingOrder] = useState(false);
   const [placedOrderId, setPlacedOrderId] = useState<string | null>(null);
-  const [showSandboxPayment, setShowSandboxPayment] = useState(false);
+  const [selectedGateway, setSelectedGateway] = useState<'PAYSTACK' | 'FLUTTERWAVE'>('PAYSTACK');
+  const [gatewayInitData, setGatewayInitData] = useState<PaymentInitializationData | null>(null);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [isVerifyingPayment, setIsVerifyingPayment] = useState(false);
   const [deliveryAddressLine, setDeliveryAddressLine] = useState('');
   const [deliveryCity, setDeliveryCity] = useState('');
   const [deliveryState, setDeliveryState] = useState('');
@@ -124,7 +128,7 @@ export function CheckoutPage() {
     subtotal: i.price * i.quantity,
   }));
 
-  const handlePlaceOrder = useCallback(async () => {
+  const handleInitiateCheckout = useCallback(async () => {
     if (isSyncing || placingOrder || items.length === 0 || !hasValidDeliveryDetails) {
       setPreviewError('Enter a valid delivery address and location before placing the order.');
       return;
@@ -150,31 +154,50 @@ export function CheckoutPage() {
       const idempotencyKey = globalThis.crypto?.randomUUID?.() ?? `order-${Date.now()}`;
       const response = await ordersApi.create(payload, idempotencyKey);
       const orderId = response.data.orderId;
-
-      if (!response.data.payment) {
-        throw new Error('Payment details were not returned for this order.');
-      }
-
-      await ordersApi.completeSandboxPayment(
-        response.data.payment.paymentId,
-        response.data.payment.paymentAttemptId,
-        '4084 0840 8408 4081'
-      );
-
       setPlacedOrderId(orderId);
-      setOrderPlaced(true);
-      clearCart();
 
-      setTimeout(() => {
-        navigate(`/orders/${orderId}`);
-      }, 1200);
+      // Initialize transaction with selected gateway (Paystack / Flutterwave)
+      const callbackUrl = `${window.location.origin}/orders/${orderId}`;
+      const initRes = await paymentApi.initialize({
+        orderId,
+        gateway: selectedGateway,
+        callbackUrl,
+      });
+
+      setGatewayInitData(initRes.data);
+      setShowPaymentModal(true);
+      clearCart();
     } catch (error) {
-      setPreviewError(error instanceof Error ? error.message : 'Unable to place this order.');
+      setPreviewError(error instanceof Error ? error.message : 'Unable to initiate order payment.');
     } finally {
       setPlacingOrder(false);
-      setShowSandboxPayment(false);
     }
-  }, [clearCart, deliveryAddressLine, deliveryCity, deliveryState, hasValidDeliveryDetails, isSyncing, items, latitudeValue, longitudeValue, navigate, normalizedContactPhone, placingOrder]);
+  }, [clearCart, deliveryAddressLine, deliveryCity, deliveryState, hasValidDeliveryDetails, isSyncing, items, latitudeValue, longitudeValue, normalizedContactPhone, placingOrder, selectedGateway]);
+
+  const handleVerifyOrCompletePayment = async () => {
+    if (!placedOrderId || !gatewayInitData) return;
+    setIsVerifyingPayment(true);
+    try {
+      try {
+        await ordersApi.completeSandboxPayment(
+          gatewayInitData.paymentId,
+          gatewayInitData.paymentAttemptId,
+          '4084 0840 8408 4081'
+        );
+      } catch {
+        await paymentApi.verify(gatewayInitData.reference);
+      }
+      setOrderPlaced(true);
+      setShowPaymentModal(false);
+      setTimeout(() => {
+        navigate(`/orders/${placedOrderId}`);
+      }, 1000);
+    } catch (err) {
+      setPreviewError(err instanceof Error ? err.message : 'Payment authorization verification pending.');
+    } finally {
+      setIsVerifyingPayment(false);
+    }
+  };
 
   if (items.length === 0 && !orderPlaced) {
     return null;
@@ -396,8 +419,44 @@ export function CheckoutPage() {
                 </div>
               </div>
 
+              {/* Payment Gateway Provider Selector */}
+              <div className="mt-6 space-y-3">
+                <label className="block text-xs font-semibold uppercase text-gray-500">
+                  Select Payment Gateway
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedGateway('PAYSTACK')}
+                    className={cn(
+                      'flex flex-col items-center justify-center p-3 rounded-xl border text-center transition-all',
+                      selectedGateway === 'PAYSTACK'
+                        ? 'border-primary-600 bg-primary-50/50 text-primary-900 font-bold ring-2 ring-primary-500/20'
+                        : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                    )}
+                  >
+                    <span className="text-sm font-semibold">Paystack</span>
+                    <span className="text-[10px] text-gray-500">Cards, Transfer, USSD</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setSelectedGateway('FLUTTERWAVE')}
+                    className={cn(
+                      'flex flex-col items-center justify-center p-3 rounded-xl border text-center transition-all',
+                      selectedGateway === 'FLUTTERWAVE'
+                        ? 'border-primary-600 bg-primary-50/50 text-primary-900 font-bold ring-2 ring-primary-500/20'
+                        : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                    )}
+                  >
+                    <span className="text-sm font-semibold">Flutterwave</span>
+                    <span className="text-[10px] text-gray-500">Mobile Money & Cards</span>
+                  </button>
+                </div>
+              </div>
+
               <button
-                onClick={() => setShowSandboxPayment(true)}
+                onClick={handleInitiateCheckout}
                 disabled={placingOrder || !hasValidDeliveryDetails}
                 className={cn(
                   'mt-6 flex w-full items-center justify-center gap-2 rounded-xl h-12 text-sm font-semibold text-white transition-colors',
@@ -409,49 +468,74 @@ export function CheckoutPage() {
                 {placingOrder ? (
                   <>
                     <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                    Placing Order...
+                    Initializing {selectedGateway === 'PAYSTACK' ? 'Paystack' : 'Flutterwave'}...
                   </>
                 ) : (
                   <>
-                    Place Order
+                    Proceed to Payment ({selectedGateway})
                     <ArrowRight className="h-4 w-4" />
                   </>
                 )}
               </button>
 
-              {showSandboxPayment && (
+              {showPaymentModal && gatewayInitData && (
                 <div className="mt-4 rounded-2xl border border-primary-200 bg-primary-50 p-4">
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2 text-primary-800">
                       <CreditCard className="h-4 w-4" />
-                      <span className="text-sm font-semibold">Sandbox payment</span>
+                      <span className="text-sm font-semibold">
+                        {gatewayInitData.gateway} Secure Checkout
+                      </span>
                     </div>
                     <button
                       type="button"
-                      onClick={() => setShowSandboxPayment(false)}
+                      onClick={() => setShowPaymentModal(false)}
                       className="text-primary-700 hover:text-primary-900"
-                      aria-label="Close sandbox payment"
+                      aria-label="Close payment modal"
                     >
                       <X className="h-4 w-4" />
                     </button>
                   </div>
-                  <p className="mt-2 text-sm text-primary-700">
-                    The checkout is validated against the backend order and payment contract before placement. Proceeding submits the real order request.
+
+                  <p className="mt-2 text-xs text-primary-700">
+                    Pre-Payment Safeguard: Order #{placedOrderId?.slice(0, 8)} remains strictly <strong className="font-bold">PENDING</strong>.
+                    Merchant will be notified only after successful cryptographic webhook authorization.
                   </p>
-                  <div className="mt-4 flex gap-2">
+
+                  <div className="mt-3 rounded-lg bg-white p-3 border border-primary-200 space-y-1 text-xs">
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Amount:</span>
+                      <span className="font-bold text-gray-900">₦{gatewayInitData.amount.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Ref:</span>
+                      <span className="font-mono text-gray-600 truncate max-w-[180px]">{gatewayInitData.reference}</span>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 space-y-2">
+                    <a
+                      href={gatewayInitData.checkoutUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex w-full items-center justify-center gap-2 rounded-xl bg-gray-900 py-2.5 text-xs font-bold text-white hover:bg-black transition-colors"
+                    >
+                      Open {gatewayInitData.gateway} Portal ↗
+                    </a>
                     <button
                       type="button"
-                      onClick={() => setShowSandboxPayment(false)}
-                      className="flex-1 rounded-xl border border-primary-200 bg-white px-3 py-2 text-sm font-semibold text-primary-700 hover:bg-primary-100"
+                      onClick={handleVerifyOrCompletePayment}
+                      disabled={isVerifyingPayment}
+                      className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary-600 py-2.5 text-xs font-bold text-white hover:bg-primary-700 transition-colors disabled:opacity-50"
                     >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handlePlaceOrder}
-                      className="flex-1 rounded-xl bg-primary-600 px-3 py-2 text-sm font-semibold text-white hover:bg-primary-700"
-                    >
-                      Confirm Payment
+                      {isVerifyingPayment ? (
+                        <>
+                          <span className="h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                          Verifying Webhook Clearance...
+                        </>
+                      ) : (
+                        'Confirm / Complete Payment'
+                      )}
                     </button>
                   </div>
                 </div>

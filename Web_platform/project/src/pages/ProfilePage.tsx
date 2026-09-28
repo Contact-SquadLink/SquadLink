@@ -8,6 +8,7 @@ const roleLabels: Record<Role, string> = {
   BUSINESS_USER: 'Business User',
   RIDER: 'Rider',
   ADMIN: 'Administrator',
+  SUPER_ADMIN: 'Super Administrator',
 };
 
 export function ProfilePage() {

@@ -1,4 +1,15 @@
-export type Role = 'CUSTOMER' | 'BUSINESS_USER' | 'RIDER' | 'ADMIN';
+export type Role = 'CUSTOMER' | 'BUSINESS_USER' | 'RIDER' | 'ADMIN' | 'SUPER_ADMIN';
+
+export type OrderStage =
+  | 'PENDING'
+  | 'CONFIRMED'
+  | 'PREPARING'
+  | 'READY_FOR_PICKUP'
+  | 'ASSIGNED'
+  | 'PICKED_UP'
+  | 'IN_TRANSIT'
+  | 'ARRIVED'
+  | 'DELIVERED';
 
 export interface User {
   id: string;
@@ -13,6 +24,116 @@ export interface User {
   firstName?: string;
   lastName?: string;
   phone?: string;
+}
+
+export interface ObservabilityDashboardData {
+  financials: {
+    grossMerchandiseValue: number;
+    totalPlatformRevenue: number;
+    totalNetContribution: number;
+    averageContributionPerOrder: number;
+    completedOrdersCount: number;
+    totalGatewayFees: number;
+    totalRiderPayouts: number;
+    totalMerchantPayouts: number;
+  };
+  health: {
+    healthScore: number;
+    completionRate: number;
+    cancellationRate: number;
+    assignmentAcceptanceRate: number;
+    activeExceptionsCount: number;
+  };
+  lifecycleStages: {
+    PENDING: number;
+    CONFIRMED: number;
+    PREPARING: number;
+    READY_FOR_PICKUP: number;
+    ASSIGNED: number;
+    PICKED_UP: number;
+    IN_TRANSIT: number;
+    ARRIVED: number;
+    DELIVERED: number;
+    CANCELLED: number;
+    total: number;
+  };
+  serviceZones: Array<{
+    id: string;
+    code: string;
+    name: string;
+    description: string | null;
+    radiusMeters: number;
+    isActive: boolean;
+    totalRiders: number;
+    activeRiders: number;
+    featurePhoneRiders: number;
+    smartphoneRiders: number;
+    activeDeliveries: number;
+    isPrimaryPilot: boolean;
+  }>;
+}
+
+export interface SuperAdminOrderSummary {
+  id: string;
+  orderStatus: string;
+  deliveryStatus: string | null;
+  deliveryId: string | null;
+  currentStage: string;
+  customer: { id: string; name: string | null; phone: string | null };
+  business: { id: string | null; name: string | null };
+  rider: {
+    id: string;
+    name: string | null;
+    phone: string | null;
+    deviceType: 'SMARTPHONE' | 'FEATURE_PHONE' | null;
+  } | null;
+  financials: {
+    subtotal: number;
+    deliveryFee: number;
+    platformFee: number;
+    merchantCommission: number;
+    totalAmount: number;
+  };
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LedgerEntryItem {
+  id: string;
+  orderId: string;
+  deliveryId?: string;
+  entryGroupId: string;
+  accountName: string;
+  entryType: 'DEBIT' | 'CREDIT';
+  amount: number;
+  currency: string;
+  description: string;
+  metadata?: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface LedgerSummary {
+  entries: LedgerEntryItem[];
+  summary: {
+    totalDebits: number;
+    totalCredits: number;
+    isBalanced: boolean;
+    variance: number;
+  };
+}
+
+export interface AuditLogItem {
+  id: string;
+  actorType: string;
+  actorUserId: string | null;
+  actorName?: string;
+  actorEmail?: string;
+  action: string;
+  entityType: string;
+  entityId: string;
+  description: string;
+  metadata?: Record<string, unknown>;
+  createdAt: string;
 }
 
 export interface Product {
