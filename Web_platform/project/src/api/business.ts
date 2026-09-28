@@ -149,9 +149,12 @@ export const businessApi = {
     apiRequest<ApiResponseEnvelope<OperatingHour[]>>('/api/v1/businesses/me/operating-hours', {
       method: 'PUT',
       body: {
-        hours: hours.map(({ opensAt, closesAt, ...hour }) => hour.isClosed
-          ? hour
-          : { ...hour, opensAt, closesAt }),
+        hours: hours.map((hour) => ({
+          dayOfWeek: hour.dayOfWeek,
+          isClosed: Boolean(hour.isClosed),
+          opensAt: hour.isClosed ? undefined : (hour.opensAt ? hour.opensAt.slice(0, 5) : '08:00'),
+          closesAt: hour.isClosed ? undefined : (hour.closesAt ? hour.closesAt.slice(0, 5) : '22:00'),
+        })),
       },
     }),
 };

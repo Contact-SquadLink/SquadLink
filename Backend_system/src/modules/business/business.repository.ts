@@ -1095,6 +1095,34 @@ export async function createBusinessCatalogItem(
 
     const inserted = insertResult.rows[0];
 
+    // Seed initial inventory for enrolled product so it is immediately active and in stock
+    await client.query(
+      `
+        INSERT INTO public.inventory (
+          business_product_id,
+          quantity_on_hand,
+          quantity_reserved,
+          low_stock_threshold
+        )
+        VALUES ($1, 25, 0, 5)
+        ON CONFLICT (business_product_id) DO NOTHING
+      `,
+      [inserted.id]
+    );
+
+    // Update inventory_configured flag
+    await client.query(
+      `
+        UPDATE public.businesses
+        SET
+          inventory_configured = TRUE,
+          inventory_configured_at = COALESCE(inventory_configured_at, NOW()),
+          updated_at = NOW()
+        WHERE id = $1 AND inventory_configured = FALSE
+      `,
+      [businessId]
+    );
+
     /*
      * The readiness flag represents the current configured state.
      * The first successfully enrolled product changes it from false

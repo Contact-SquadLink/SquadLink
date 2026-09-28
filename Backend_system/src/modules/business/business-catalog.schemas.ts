@@ -1,10 +1,29 @@
 import { z } from "zod";
 
+const imageUrlSchema = z
+  .string()
+  .trim()
+  .max(5000)
+  .transform((val) => {
+    if (!val) return null;
+    if (
+      !val.startsWith("http://") &&
+      !val.startsWith("https://") &&
+      !val.startsWith("/") &&
+      !val.startsWith("data:")
+    ) {
+      return `https://${val}`;
+    }
+    return val;
+  })
+  .nullable()
+  .optional();
+
 export const createBusinessCatalogItemSchema = z.object({
   productId: z.string().uuid(),
   priceAmount: z.number().int().nonnegative(),
   description: z.string().trim().max(5000).nullable().optional(),
-  imageUrl: z.string().url().max(2000).nullable().optional(),
+  imageUrl: imageUrlSchema,
   currency: z
     .string()
     .trim()
@@ -24,7 +43,7 @@ export type CreateBusinessCatalogItemInput =
 export const updateBusinessCatalogItemSchema = z.object({
   priceAmount: z.number().int().nonnegative().optional(),
   description: z.string().trim().max(5000).nullable().optional(),
-  imageUrl: z.string().url().max(2000).nullable().optional(),
+  imageUrl: imageUrlSchema,
   currency: z
     .string()
     .trim()

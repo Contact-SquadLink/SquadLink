@@ -110,30 +110,29 @@ export type DayOfWeek =
 /**
  * HH:mm time format.
  *
- * PostgreSQL TIME values will be returned by the API
- * using this format.
+ * PostgreSQL TIME values may return with seconds (HH:mm:ss);
+ * this normalizes to HH:mm.
  */
 const timeSchema = z
   .string()
-  .regex(
-    /^([01]\d|2[0-3]):([0-5]\d)$/,
-    "Time must use HH:mm format."
+  .transform((val) => (val ? val.trim().slice(0, 5) : val))
+  .pipe(
+    z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, "Time must use HH:mm format.")
   );
-
 
 /**
  * One weekly operating-hours entry.
  *
- * When isClosed is true, opensAt and closesAt are omitted.
+ * When isClosed is true, opensAt and closesAt are optional/nullable.
  * When isClosed is false, both times are required.
  */
 export const operatingHourSchema = z
   .object({
     dayOfWeek: dayOfWeekSchema,
 
-    opensAt: timeSchema.optional(),
+    opensAt: timeSchema.nullable().optional(),
 
-    closesAt: timeSchema.optional(),
+    closesAt: timeSchema.nullable().optional(),
 
     isClosed: z.boolean().default(false)
   })
