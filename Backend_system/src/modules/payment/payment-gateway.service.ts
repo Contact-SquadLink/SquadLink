@@ -185,8 +185,7 @@ export async function initializePaymentGatewayTransaction(
     `UPDATE public.payment_attempts
      SET provider = $1,
          provider_reference = $2,
-         status = 'PENDING',
-         updated_at = NOW()
+         status = 'PENDING'
      WHERE id = $3`,
     [gateway.toLowerCase(), reference, order.payment_attempt_id]
   );

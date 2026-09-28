@@ -17,6 +17,7 @@ import {
   updateOperatingHoursSchema
 } from "./business.schemas";
 
+import { z } from "zod";
 import {
   createBusinessCatalogItemSchema,
   updateBusinessCatalogItemSchema
@@ -37,6 +38,7 @@ import {
   getBusinessCatalogForOwner,
   addProductToBusinessCatalog,
   updateBusinessCatalogForOwner,
+  updateBusinessLocationForOwner,
   deleteBusinessCatalogForOwner
 } from "./business.service";
 
@@ -117,6 +119,50 @@ export async function businessRoutes(
           business,
           request.id
         )
+      );
+    }
+  );
+
+  /**
+   * Update the authenticated owner's business location & coordinates.
+   */
+  app.patch(
+    "/me/location",
+    {
+      preHandler: businessOwnerPreHandler
+    },
+    async (
+      request: FastifyRequest,
+      reply: FastifyReply
+    ) => {
+      const locationSchema = z.object({
+        addressLine: z.string().trim().min(3).max(255).optional(),
+        city: z.string().trim().min(2).max(100).optional(),
+        state: z.string().trim().min(2).max(100).optional(),
+        latitude: z.number().min(-90).max(90),
+        longitude: z.number().min(-180).max(180)
+      });
+
+      const parsed = locationSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({
+          success: false,
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "Invalid location coordinates.",
+            details: parsed.error.flatten()
+          },
+          requestId: request.id
+        });
+      }
+
+      const updated = await updateBusinessLocationForOwner(
+        request.user.id,
+        parsed.data
+      );
+
+      return reply.status(200).send(
+        successResponse(updated, request.id)
       );
     }
   );

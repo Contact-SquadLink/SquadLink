@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Package,
   ClipboardList,
@@ -8,6 +9,8 @@ import {
   Clock,
   ArrowRight,
   ShieldCheck,
+  MapPin,
+  Loader2,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/States';
@@ -35,6 +38,29 @@ export function BusinessDashboard() {
     queryKey: ['business-profile'],
     queryFn: businessApi.getMyBusiness,
   });
+
+  const queryClient = useQueryClient();
+  const [isUpdatingLocation, setIsUpdatingLocation] = useState(false);
+  const [locationSuccess, setLocationSuccess] = useState<string | null>(null);
+  const [locationError, setLocationError] = useState<string | null>(null);
+
+  const handleUpdateLocation = async (lat: number, lng: number) => {
+    setIsUpdatingLocation(true);
+    setLocationSuccess(null);
+    setLocationError(null);
+    try {
+      await businessApi.updateLocation({
+        latitude: lat,
+        longitude: lng,
+      });
+      await queryClient.invalidateQueries({ queryKey: ['business-profile'] });
+      setLocationSuccess(`Store coordinates updated to (${lat.toFixed(4)}, ${lng.toFixed(4)})`);
+    } catch (err) {
+      setLocationError(err instanceof Error ? err.message : 'Unable to update store location.');
+    } finally {
+      setIsUpdatingLocation(false);
+    }
+  };
 
   const orders = Array.isArray(ordersData?.data) ? (ordersData.data as BusinessOrderSummary[]) : [];
   const business = businessData?.data as Business | undefined;
@@ -87,6 +113,61 @@ export function BusinessDashboard() {
               <p className="font-display text-2xl font-bold text-gray-900">{orders.length}</p>
               <p className="text-xs text-gray-500">Orders received</p>
             </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Store Location & Dispatch Hub Card */}
+      <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm mb-8">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-100 text-primary-700">
+              <MapPin className="h-5 w-5" />
+            </div>
+            <div>
+              <h3 className="text-base font-semibold text-gray-900">Store Dispatch Location</h3>
+              <p className="text-xs text-gray-500 mt-0.5">
+                {business?.addressLine ? `${business.addressLine}, ${business.city}, ${business.state}` : 'Location configured'}
+              </p>
+              <div className="flex items-center gap-2 mt-2">
+                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono font-medium bg-gray-100 text-gray-700">
+                  Lat: {business?.latitude ? Number(business.latitude).toFixed(4) : '10.2833'}, Lng: {business?.longitude ? Number(business.longitude).toFixed(4) : '9.8167'}
+                </span>
+                {locationSuccess && (
+                  <span className="text-xs font-medium text-emerald-600">✓ {locationSuccess}</span>
+                )}
+                {locationError && (
+                  <span className="text-xs font-medium text-red-600">⚠ {locationError}</span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 self-start sm:self-center">
+            <button
+              type="button"
+              disabled={isUpdatingLocation}
+              onClick={() => {
+                if (navigator.geolocation) {
+                  navigator.geolocation.getCurrentPosition(
+                    (pos) => handleUpdateLocation(pos.coords.latitude, pos.coords.longitude),
+                    () => setLocationError('Could not access device GPS.')
+                  );
+                }
+              }}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-primary-200 bg-primary-50 px-3 py-1.5 text-xs font-semibold text-primary-700 hover:bg-primary-100 transition-colors disabled:opacity-50"
+            >
+              {isUpdatingLocation ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <MapPin className="h-3.5 w-3.5" />}
+              Sync GPS where I am
+            </button>
+            <button
+              type="button"
+              disabled={isUpdatingLocation}
+              onClick={() => handleUpdateLocation(10.2833, 9.8167)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-100 transition-colors disabled:opacity-50"
+            >
+              Set to Yelwa, Bauchi
+            </button>
           </div>
         </div>
       </div>

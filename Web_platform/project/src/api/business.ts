@@ -121,6 +121,12 @@ export const businessApi = {
   getMyBusiness: () =>
     apiRequest<ApiResponseEnvelope<Business>>('/api/v1/businesses/me'),
 
+  updateLocation: (payload: { addressLine?: string; city?: string; state?: string; latitude: number; longitude: number }) =>
+    apiRequest<ApiResponseEnvelope<Business>>('/api/v1/businesses/me/location', {
+      method: 'PATCH',
+      body: payload,
+    }),
+
   listCatalog: () =>
     apiRequest<ApiResponseEnvelope<BusinessCatalogItem[]>>('/api/v1/businesses/me/catalog'),
 

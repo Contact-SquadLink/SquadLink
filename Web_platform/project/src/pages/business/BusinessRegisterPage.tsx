@@ -363,6 +363,49 @@ export function BusinessRegisterPage() {
                 </div>
               </div>
 
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
+                <span className="text-xs font-medium text-gray-500">Business GPS Coordinates</span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (typeof navigator !== 'undefined' && navigator.geolocation) {
+                        navigator.geolocation.getCurrentPosition(
+                          (pos) => {
+                            setForm((prev) => ({
+                              ...prev,
+                              latitude: pos.coords.latitude.toFixed(6),
+                              longitude: pos.coords.longitude.toFixed(6),
+                            }));
+                          },
+                          () => {
+                            // Keep default if permission denied
+                          }
+                        );
+                      }
+                    }}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-primary-200 bg-primary-50 px-2.5 py-1 text-xs font-semibold text-primary-700 hover:bg-primary-100 transition-colors"
+                  >
+                    📍 Detect my current GPS
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setForm((prev) => ({
+                        ...prev,
+                        city: 'Yelwa',
+                        state: 'Bauchi',
+                        latitude: '10.2833',
+                        longitude: '9.8167',
+                      }));
+                    }}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+                  >
+                    Yelwa, Bauchi
+                  </button>
+                </div>
+              </div>
+
               <div className="grid gap-5 sm:grid-cols-2">
                 <div>
                   <label htmlFor="latitude" className="mb-1 block text-sm font-medium text-gray-700">

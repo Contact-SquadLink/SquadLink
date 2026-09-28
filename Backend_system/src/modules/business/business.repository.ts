@@ -1429,3 +1429,61 @@ export async function deleteBusinessCatalogItem(
     client.release();
   }
 }
+
+export async function updateBusinessLocation(
+  businessId: string,
+  input: {
+    addressLine?: string;
+    city?: string;
+    state?: string;
+    latitude: number;
+    longitude: number;
+  }
+): Promise<BusinessRecord> {
+  const result = await db.query<BusinessRow>(
+    `
+      UPDATE public.businesses
+      SET
+        address_line = COALESCE($1, address_line),
+        city = COALESCE($2, city),
+        state = COALESCE($3, state),
+        location = ST_SetSRID(ST_MakePoint($4, $5), 4326)::geography,
+        updated_at = NOW()
+      WHERE id = $6
+      RETURNING
+        id,
+        name,
+        description,
+        phone_number,
+        email,
+        address_line,
+        city,
+        state,
+        ST_Y(location::geometry) AS latitude,
+        ST_X(location::geometry) AS longitude,
+        is_active,
+        is_verified,
+        created_at,
+        updated_at,
+        status,
+        accepts_orders,
+        minimum_order_amount,
+        owner_user_id,
+        onboarding_completed,
+        operating_hours_configured,
+        catalog_configured,
+        inventory_configured,
+        verification_required
+    `,
+    [
+      input.addressLine ?? null,
+      input.city ?? null,
+      input.state ?? null,
+      input.longitude,
+      input.latitude,
+      businessId
+    ]
+  );
+
+  return mapBusiness(result.rows[0]);
+}

@@ -18,6 +18,7 @@ import {
   findBusinessCatalogItems,
   replaceOperatingHours,
   updateBusinessCatalogItem,
+  updateBusinessLocation,
   updateOperatingException,
   type BusinessCatalogItemRecord,
   type BusinessRecord,
@@ -455,3 +456,17 @@ export async function getBusinessApplicationForCustomer(ownerUserId: string) {
     verification
   };
 }
+
+export async function updateBusinessLocationForOwner(
+  ownerUserId: string,
+  input: {
+    addressLine?: string;
+    city?: string;
+    state?: string;
+    latitude: number;
+    longitude: number;
+  }
+): Promise<BusinessRecord> {
+  const business = await getBusinessForOwner(ownerUserId);
+  return updateBusinessLocation(business.id, input);
+}
