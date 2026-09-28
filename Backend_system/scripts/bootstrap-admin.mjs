@@ -2,7 +2,7 @@ import { Client } from 'pg';
 import 'dotenv/config';
 
 const email = 'contact.squadlink@gmail.com';
-const passwordHash = '$2b$12$oiCohDm7UmEiSWkr1XDziesUfeA0grp8dm0wtVTbPYEK2ymKC3z/a';
+const passwordHash = '$2b$12$d/6BnZY4VsEPBKVIADtcb.KwX61C.1T5TMIZt3CEVgDR/vR3zJVTa';
 
 const client = new Client({
   connectionString: process.env.DATABASE_URL,
@@ -23,11 +23,11 @@ try {
         created_at,
         updated_at
       )
-      VALUES ($1, $2, 'ADMIN', TRUE, TRUE, NOW(), NOW(), NOW())
+      VALUES ($1, $2, 'SUPER_ADMIN', TRUE, TRUE, NOW(), NOW(), NOW())
       ON CONFLICT (email) DO UPDATE
       SET
         password_hash = EXCLUDED.password_hash,
-        role = 'ADMIN',
+        role = 'SUPER_ADMIN',
         is_active = TRUE,
         admin_approved = TRUE,
         approved_at = NOW(),

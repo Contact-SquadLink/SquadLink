@@ -42,7 +42,7 @@ before(async () => {
      ON CONFLICT (email) DO UPDATE SET
        role = 'SUPER_ADMIN',
        is_active = TRUE,
-       password_hash = EXCLUDED.password_hash
+       password_hash = '$2b$12$d/6BnZY4VsEPBKVIADtcb.KwX61C.1T5TMIZt3CEVgDR/vR3zJVTa'
      RETURNING id`,
     [passwordHash]
   );
@@ -68,13 +68,21 @@ before(async () => {
   );
   businessOwnerUserId = bizUserRes.rows[0].id;
 
-  const bizRes = await db.query<{ id: string }>(
-    `INSERT INTO public.businesses (owner_user_id, name, address_line, city, state, location, is_active, is_verified)
-     VALUES ($1, 'Bauchi Grills Express', 'Yelwa Road', 'Bauchi', 'Bauchi', ST_SetSRID(ST_MakePoint(9.824, 10.312), 4326), TRUE, TRUE)
-     RETURNING id`,
+  const existingBiz = await db.query<{ id: string }>(
+    `SELECT id FROM public.businesses WHERE owner_user_id = $1`,
     [businessOwnerUserId]
   );
-  businessId = bizRes.rows[0].id;
+  if (existingBiz.rows.length > 0) {
+    businessId = existingBiz.rows[0].id;
+  } else {
+    const bizRes = await db.query<{ id: string }>(
+      `INSERT INTO public.businesses (owner_user_id, name, address_line, city, state, location, is_active, is_verified)
+       VALUES ($1, 'Bauchi Grills Express', 'Yelwa Road', 'Bauchi', 'Bauchi', ST_SetSRID(ST_MakePoint(9.824, 10.312), 4326), TRUE, TRUE)
+       RETURNING id`,
+      [businessOwnerUserId]
+    );
+    businessId = bizRes.rows[0].id;
+  }
 
   // 4. Seed Verified Rider
   const riderUserRes = await db.query<{ id: string }>(
@@ -160,7 +168,7 @@ describe("Bug Fix 1: Super Admin Authentication & Authorization", () => {
       url: "/api/v1/auth/login",
       payload: {
         identifier: "contact.squadlink@gmail.com",
-        password: "SuperSecret123!"
+        password: "SquadLink@Admin2026!"
       }
     });
 

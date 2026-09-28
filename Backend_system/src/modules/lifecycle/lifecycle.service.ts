@@ -1273,11 +1273,34 @@ async function assignRider(
   const credential = sixDigitCode() + sixDigitCode();
   const credentialHash = await bcrypt.hash(credential, 12);
   const verification = await client.query<{ id: string }>(
-    `INSERT INTO public.pickup_verifications (delivery_id, rider_id, business_id, credential_hash, expires_at) SELECT $1, $2, f.business_id, $3, NOW() + INTERVAL '2 hours' FROM public.fulfillments f WHERE f.order_id = $4 RETURNING id`,
+    `INSERT INTO public.pickup_verifications (
+       delivery_id, rider_id, business_id, credential_hash, status, expires_at, verified_at, attempt_count, updated_at
+     )
+     SELECT $1, $2, f.business_id, $3, 'ACTIVE', NOW() + INTERVAL '2 hours', NULL, 0, NOW()
+     FROM public.fulfillments f
+     WHERE f.order_id = $4
+     ON CONFLICT (delivery_id) DO UPDATE
+     SET
+       rider_id = EXCLUDED.rider_id,
+       business_id = EXCLUDED.business_id,
+       credential_hash = EXCLUDED.credential_hash,
+       status = 'ACTIVE',
+       expires_at = NOW() + INTERVAL '2 hours',
+       verified_at = NULL,
+       attempt_count = 0,
+       updated_at = NOW()
+     RETURNING id`,
     [delivery.delivery_id, rider.rider_id, credentialHash, orderId]
   );
   if (verification.rows.length > 0) {
-    await client.query(`INSERT INTO public.pickup_verification_history (pickup_verification_id, previous_status, new_status, rider_id, business_id, changed_by, reason) SELECT $1, NULL, 'ACTIVE', $2, business_id, $3, 'Pickup credential issued.' FROM public.pickup_verifications WHERE id = $1`, [verification.rows[0].id, rider.rider_id, actorUserId]);
+    await client.query(
+      `INSERT INTO public.pickup_verification_history (
+         pickup_verification_id, previous_status, new_status, rider_id, business_id, changed_by, reason
+       )
+       SELECT $1, NULL, 'ACTIVE', $2, business_id, $3, 'Pickup credential issued.'
+       FROM public.pickup_verifications WHERE id = $1`,
+      [verification.rows[0].id, rider.rider_id, actorUserId]
+    );
   }
   await client.query(
     `INSERT INTO public.delivery_assignment_decisions (delivery_id, rider_id) VALUES ($1, $2)`,
