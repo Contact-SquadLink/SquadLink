@@ -84,7 +84,7 @@ export async function selectBusiness(
   longitude: number,
   items: CheckoutCartItem[]
 ): Promise<SelectedBusiness> {
-  const radii = [2000, 5000, 10000, 20000];
+  const radii = [2000, 5000, 10000, 20000, 50000, 100000, 200000];
   const productIds = items.map((item) => item.productId);
   const checkedBusinesses = new Set<string>();
 

@@ -49,6 +49,21 @@ export function CheckoutPage() {
     }
   }, [phoneEdited, profilePhone]);
 
+  useEffect(() => {
+    if (typeof navigator !== 'undefined' && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setLatitude(position.coords.latitude.toFixed(6));
+          setLongitude(position.coords.longitude.toFixed(6));
+        },
+        () => {
+          // Keep default if permission not granted
+        },
+        { timeout: 5000 }
+      );
+    }
+  }, []);
+
   const latitudeValue = Number(latitude);
   const longitudeValue = Number(longitude);
   const normalizedContactPhone = normalizePhoneNumber(deliveryContactPhone);
@@ -75,8 +90,7 @@ export function CheckoutPage() {
     }
 
     let isMounted = true;
-
-    const loadPreview = async () => {
+    const timeoutId = setTimeout(async () => {
       try {
         const response = await checkoutApi.preview({
           items: items.map((item) => ({
@@ -100,12 +114,11 @@ export function CheckoutPage() {
           setPreviewError(error instanceof Error ? error.message : 'Unable to preview this order.');
         }
       }
-    };
-
-    loadPreview();
+    }, 400);
 
     return () => {
       isMounted = false;
+      clearTimeout(timeoutId);
     };
   }, [deliveryAddressLine, deliveryCity, deliveryState, hasValidDeliveryDetails, isSyncing, items, latitudeValue, longitudeValue, normalizedContactPhone]);
 

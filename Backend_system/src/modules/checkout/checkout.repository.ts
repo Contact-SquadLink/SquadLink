@@ -252,18 +252,26 @@ export async function isBusinessCurrentlyOpen(
             FROM exception
           )
           AND (
-            SELECT opens_at
-            FROM exception
-          ) <= (
-            SELECT current_time
-            FROM current_context
-          )
-          AND (
-            SELECT closes_at
-            FROM exception
-          ) >= (
-            SELECT current_time
-            FROM current_context
+            (
+              (
+                SELECT opens_at
+                FROM exception
+              ) <= (
+                SELECT current_time
+                FROM current_context
+              )
+              AND (
+                SELECT closes_at
+                FROM exception
+              ) >= (
+                SELECT current_time
+                FROM current_context
+              )
+            )
+            OR EXISTS (
+              SELECT 1 FROM public.businesses
+              WHERE id = $1 AND accepts_orders = TRUE
+            )
           )
 
           WHEN EXISTS (
@@ -274,21 +282,32 @@ export async function isBusinessCurrentlyOpen(
             FROM regular_hours
           )
           AND (
-            SELECT opens_at
-            FROM regular_hours
-          ) <= (
-            SELECT current_time
-            FROM current_context
-          )
-          AND (
-            SELECT closes_at
-            FROM regular_hours
-          ) >= (
-            SELECT current_time
-            FROM current_context
+            (
+              (
+                SELECT opens_at
+                FROM regular_hours
+              ) <= (
+                SELECT current_time
+                FROM current_context
+              )
+              AND (
+                SELECT closes_at
+                FROM regular_hours
+              ) >= (
+                SELECT current_time
+                FROM current_context
+              )
+            )
+            OR EXISTS (
+              SELECT 1 FROM public.businesses
+              WHERE id = $1 AND accepts_orders = TRUE
+            )
           )
 
-          ELSE FALSE
+          ELSE EXISTS (
+            SELECT 1 FROM public.businesses
+            WHERE id = $1 AND accepts_orders = TRUE
+          )
         END AS is_open
     `,
     [businessId]

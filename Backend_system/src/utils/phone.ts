@@ -13,5 +13,13 @@ export function normalizePhoneNumber(input: string): string | null {
     return `+${compact}`;
   }
 
+  if (/^[789]\d{9}$/.test(compact)) {
+    return `+234${compact}`;
+  }
+
+  if (/^\+[1-9]\d{7,14}$/.test(compact)) {
+    return compact;
+  }
+
   return null;
 }

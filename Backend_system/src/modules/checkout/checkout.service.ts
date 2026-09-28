@@ -16,10 +16,13 @@ const SEARCH_RADIUS_BANDS_METERS = [
   2000,
   5000,
   10000,
-  20000
+  20000,
+  50000,
+  100000,
+  200000
 ];
 
-const MAX_SEARCH_RADIUS_METERS = 20000;
+const MAX_SEARCH_RADIUS_METERS = 200000;
 
 interface EvaluatedItem {
   productId: string;
