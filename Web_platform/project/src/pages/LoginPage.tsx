@@ -161,10 +161,12 @@ export function LoginPage() {
         <div className="border-b border-gray-100 bg-white">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
             <Link to="/" className="flex items-center gap-2.5">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-600 text-white">
-                <ShoppingBag className="h-5 w-5" />
-              </div>
-              <span className="font-display text-xl font-bold text-gray-900">SQUA<span className="text-primary-600">LINK</span></span>
+              <img
+                src="/squadlink-logo.png"
+                alt="SquadLink"
+                className="h-9 w-9 object-contain drop-shadow-sm"
+              />
+              <span className="font-display text-xl font-bold text-gray-900">SQUAD<span className="text-primary-600">LINK</span></span>
             </Link>
             <Link
               to="/login"

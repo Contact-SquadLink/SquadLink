@@ -32,7 +32,7 @@ const footerSections = [
   {
     title: 'Company',
     links: [
-      { label: 'About', path: '/about' },
+      { label: 'About Us', path: '/about' },
       { label: 'FAQ', path: '/faq' },
       { label: 'Contact', path: '/contact' },
       { label: 'Privacy Policy', path: '/#privacy' },
@@ -49,9 +49,11 @@ export function Footer() {
           {/* Brand */}
           <div className="col-span-2 lg:col-span-2">
             <Link to="/" className="flex items-center gap-2.5 mb-4">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-600 text-white">
-                <ShoppingBag className="h-5 w-5" />
-              </div>
+              <img
+                src="/squadlink-logo.png"
+                alt="SquadLink"
+                className="h-9 w-9 object-contain drop-shadow-sm"
+              />
               <span className="font-display text-lg font-bold tracking-tight text-white">
                 SQUAD<span className="text-primary-400">LINK</span>
               </span>

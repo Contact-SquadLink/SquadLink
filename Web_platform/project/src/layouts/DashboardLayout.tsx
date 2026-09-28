@@ -100,9 +100,11 @@ export function DashboardLayout() {
       <div className="lg:hidden sticky top-0 z-40 bg-white border-b border-gray-100">
         <div className="flex h-16 items-center justify-between px-4">
           <Link to="/" className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-600 text-white">
-              <ShoppingBag className="h-5 w-5" />
-            </div>
+            <img
+              src="/squadlink-logo.png"
+              alt="SquadLink"
+              className="h-9 w-9 object-contain drop-shadow-sm"
+            />
             <span className="font-display text-lg font-bold tracking-tight text-gray-900">
               SQUAD<span className="text-primary-600">LINK</span>
             </span>
@@ -203,9 +205,11 @@ function SidebarContent({
     <>
       {/* Desktop logo */}
       <div className="hidden lg:flex items-center gap-2.5 px-6 h-16 border-b border-gray-100">
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-600 text-white">
-          <ShoppingBag className="h-5 w-5" />
-        </div>
+        <img
+          src="/squadlink-logo.png"
+          alt="SquadLink"
+          className="h-9 w-9 object-contain drop-shadow-sm"
+        />
         <span className="font-display text-lg font-bold tracking-tight text-gray-900">
           SQUAD<span className="text-primary-600">LINK</span>
         </span>

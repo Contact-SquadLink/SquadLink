@@ -39,7 +39,7 @@ function serializeOrderRow(row: {
     deliveryFee: Number(row.delivery_fee_amount),
     platformFee: Number(row.platform_fee_amount),
     businessFee: Number(row.business_fee_amount ?? 0),
-    vat: 0,
+    vat: Math.round(Number(row.subtotal_amount) * 0.075),
     total: Number(row.total_amount),
     deliveryContactPhone: row.delivery_contact_phone,
     delivery: row.delivery_id ? { id: row.delivery_id, status: row.delivery_status } : null,
@@ -361,9 +361,13 @@ export async function placeOrder(
       }
     );
 
+    const distanceKm = business.distanceMeters > 0
+      ? business.distanceMeters / 1000
+      : 1;
+    const deliveryFeeAmount = Math.max(500, Math.round(350 + distanceKm * 50));
     const platformFeeAmount = 150;
-    const deliveryFeeAmount = 0;
-    const totalAmount = orderTotals.subtotal + deliveryFeeAmount + platformFeeAmount;
+    const vatAmount = Math.round(orderTotals.subtotal * 0.075);
+    const totalAmount = orderTotals.subtotal + deliveryFeeAmount + platformFeeAmount + vatAmount;
 
     const orderResult = await client.query<{ id: string }>(
       `
@@ -391,10 +395,10 @@ export async function placeOrder(
           $5,
           ST_SetSRID(ST_MakePoint($7, $6), 4326)::geography,
           $8,
-          0,
-          150,
-          150,
           $9,
+          $10,
+          $10,
+          $11,
           'NGN'
         )
         RETURNING id
@@ -408,6 +412,8 @@ export async function placeOrder(
         input.latitude,
         input.longitude,
         orderTotals.subtotal,
+        deliveryFeeAmount,
+        platformFeeAmount,
         totalAmount
       ]
     );
@@ -681,6 +687,7 @@ export async function placeOrder(
         subtotalAmount: orderTotals.subtotal,
         deliveryFeeAmount,
         platformFeeAmount,
+        vatAmount,
         totalAmount
       },
       items: orderTotals.items

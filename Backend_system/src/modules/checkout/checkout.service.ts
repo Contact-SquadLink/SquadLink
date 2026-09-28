@@ -217,14 +217,19 @@ export async function previewCheckout(
     );
   }
 
+  const distanceKm = qualifyingBusiness.distanceMeters > 0
+    ? qualifyingBusiness.distanceMeters / 1000
+    : 1;
+  const deliveryFeeAmount = Math.max(500, Math.round(350 + distanceKm * 50));
   const platformFeeAmount = 150;
-  const totalAmount = qualifyingBusiness.subtotalAmount + platformFeeAmount;
+  const vatAmount = Math.round(qualifyingBusiness.subtotalAmount * 0.075);
+  const totalAmount = qualifyingBusiness.subtotalAmount + deliveryFeeAmount + platformFeeAmount + vatAmount;
 
   return {
     subtotal: qualifyingBusiness.subtotalAmount,
-    deliveryFee: 0,
+    deliveryFee: deliveryFeeAmount,
     platformFee: platformFeeAmount,
-    vat: 0,
+    vat: vatAmount,
     total: totalAmount,
     cart: {
       itemCount: cartItems.length
@@ -258,8 +263,9 @@ export async function previewCheckout(
       currency: "NGN",
       subtotalAmount:
         qualifyingBusiness.subtotalAmount,
-      deliveryFeeAmount: 0,
+      deliveryFeeAmount,
       platformFeeAmount,
+      vatAmount,
       totalAmount
     },
 

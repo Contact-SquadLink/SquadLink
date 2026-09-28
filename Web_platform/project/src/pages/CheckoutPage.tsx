@@ -35,10 +35,10 @@ export function CheckoutPage() {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [isVerifyingPayment, setIsVerifyingPayment] = useState(false);
   const [deliveryAddressLine, setDeliveryAddressLine] = useState('');
-  const [deliveryCity, setDeliveryCity] = useState('');
-  const [deliveryState, setDeliveryState] = useState('');
-  const [latitude, setLatitude] = useState('');
-  const [longitude, setLongitude] = useState('');
+  const [deliveryCity, setDeliveryCity] = useState('Bauchi');
+  const [deliveryState, setDeliveryState] = useState('Bauchi');
+  const [latitude, setLatitude] = useState('10.2833');
+  const [longitude, setLongitude] = useState('9.8167');
   const [deliveryContactPhone, setDeliveryContactPhone] = useState('');
   const [phoneEdited, setPhoneEdited] = useState(false);
   const profilePhone = user?.phoneNumber ?? user?.phone;
@@ -115,9 +115,11 @@ export function CheckoutPage() {
     }
   }, [items.length, orderPlaced, placingOrder, navigate]);
 
-  const deliveryFee = preview?.deliveryFee ?? 0;
+  const estimatedDeliveryFee = items.length > 0 ? DELIVERY_FEE : 0;
+  const estimatedVat = items.length > 0 ? Math.round(subtotal * VAT_RATE) : 0;
+  const deliveryFee = preview?.deliveryFee ?? estimatedDeliveryFee;
   const platformFee = preview?.platformFee ?? (items.length > 0 ? 150 : 0);
-  const vat = preview?.vat ?? 0;
+  const vat = preview?.vat ?? estimatedVat;
   const total = preview?.total ?? subtotal + deliveryFee + platformFee + vat;
 
   const orderItems: OrderItem[] = items.map((i) => ({
@@ -129,9 +131,44 @@ export function CheckoutPage() {
   }));
 
   const handleInitiateCheckout = useCallback(async () => {
-    if (isSyncing || placingOrder || items.length === 0 || !hasValidDeliveryDetails) {
-      setPreviewError('Enter a valid delivery address and location before placing the order.');
+    if (isSyncing || placingOrder || items.length === 0) {
       return;
+    }
+
+    if (!deliveryAddressLine.trim() || deliveryAddressLine.trim().length < 3) {
+      setPreviewError('Please enter your delivery street address (at least 3 characters).');
+      return;
+    }
+
+    if (!deliveryCity.trim() || deliveryCity.trim().length < 2) {
+      setPreviewError('Please enter your delivery city.');
+      return;
+    }
+
+    if (!deliveryState.trim() || deliveryState.trim().length < 2) {
+      setPreviewError('Please enter your delivery state.');
+      return;
+    }
+
+    if (!normalizedContactPhone) {
+      setPreviewError('Please enter a valid 10-digit Nigerian delivery contact phone number.');
+      return;
+    }
+
+    let effectiveLat = latitudeValue;
+    let effectiveLng = longitudeValue;
+    if (
+      !Number.isFinite(effectiveLat) ||
+      effectiveLat < -90 ||
+      effectiveLat > 90 ||
+      !Number.isFinite(effectiveLng) ||
+      effectiveLng < -180 ||
+      effectiveLng > 180
+    ) {
+      effectiveLat = 10.2833;
+      effectiveLng = 9.8167;
+      setLatitude('10.2833');
+      setLongitude('9.8167');
     }
 
     setPlacingOrder(true);
@@ -146,9 +183,9 @@ export function CheckoutPage() {
         deliveryAddressLine: deliveryAddressLine.trim(),
         deliveryCity: deliveryCity.trim(),
         deliveryState: deliveryState.trim(),
-        latitude: latitudeValue,
-        longitude: longitudeValue,
-        deliveryContactPhone: normalizedContactPhone as string,
+        latitude: effectiveLat,
+        longitude: effectiveLng,
+        deliveryContactPhone: normalizedContactPhone,
       };
 
       const idempotencyKey = globalThis.crypto?.randomUUID?.() ?? `order-${Date.now()}`;
@@ -167,12 +204,17 @@ export function CheckoutPage() {
       setGatewayInitData(initRes.data);
       setShowPaymentModal(true);
       clearCart();
+
+      // Seamlessly open payment portal in a new tab if URL provided
+      if (initRes.data.checkoutUrl) {
+        window.open(initRes.data.checkoutUrl, '_blank');
+      }
     } catch (error) {
       setPreviewError(error instanceof Error ? error.message : 'Unable to initiate order payment.');
     } finally {
       setPlacingOrder(false);
     }
-  }, [clearCart, deliveryAddressLine, deliveryCity, deliveryState, hasValidDeliveryDetails, isSyncing, items, latitudeValue, longitudeValue, normalizedContactPhone, placingOrder, selectedGateway]);
+  }, [clearCart, deliveryAddressLine, deliveryCity, deliveryState, isSyncing, items, latitudeValue, longitudeValue, normalizedContactPhone, placingOrder, selectedGateway]);
 
   const handleVerifyOrCompletePayment = async () => {
     if (!placedOrderId || !gatewayInitData) return;
@@ -345,26 +387,41 @@ export function CheckoutPage() {
                     />
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!navigator.geolocation) {
-                      setPreviewError('Location detection is not available in this browser.');
-                      return;
-                    }
-                    navigator.geolocation.getCurrentPosition(
-                      (position) => {
-                        setLatitude(position.coords.latitude.toFixed(6));
-                        setLongitude(position.coords.longitude.toFixed(6));
-                        setPreviewError(null);
-                      },
-                      () => setPreviewError('Unable to detect your location. Enter the coordinates manually.')
-                    );
-                  }}
-                  className="text-sm font-semibold text-primary-700 hover:text-primary-800"
-                >
-                  Use my current location
-                </button>
+                <div className="flex flex-wrap items-center gap-3 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!navigator.geolocation) {
+                        setPreviewError('Location detection is not available in this browser.');
+                        return;
+                      }
+                      navigator.geolocation.getCurrentPosition(
+                        (position) => {
+                          setLatitude(position.coords.latitude.toFixed(6));
+                          setLongitude(position.coords.longitude.toFixed(6));
+                          setPreviewError(null);
+                        },
+                        () => setPreviewError('Unable to detect GPS location. Pilot coordinates (10.2833, 9.8167) will be used.')
+                      );
+                    }}
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary-700 hover:text-primary-800 bg-primary-50 px-3 py-1.5 rounded-lg border border-primary-100 hover:bg-primary-100 transition-colors"
+                  >
+                    📍 Use my current GPS
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDeliveryCity('Bauchi');
+                      setDeliveryState('Bauchi');
+                      setLatitude('10.2833');
+                      setLongitude('9.8167');
+                      setPreviewError(null);
+                    }}
+                    className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-700 hover:text-gray-900 bg-gray-100 px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-200 transition-colors"
+                  >
+                    Set Bauchi Pilot Zone (10.2833, 9.8167)
+                  </button>
+                </div>
               </div>
             </div>
             <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
@@ -456,23 +513,24 @@ export function CheckoutPage() {
               </div>
 
               <button
+                type="button"
                 onClick={handleInitiateCheckout}
-                disabled={placingOrder || !hasValidDeliveryDetails}
+                disabled={placingOrder}
                 className={cn(
-                  'mt-6 flex w-full items-center justify-center gap-2 rounded-xl h-12 text-sm font-semibold text-white transition-colors',
-                  placingOrder || !hasValidDeliveryDetails
-                    ? 'bg-primary-400 cursor-not-allowed'
-                    : 'bg-primary-600 hover:bg-primary-700'
+                  'mt-6 flex w-full items-center justify-center gap-2 rounded-xl h-12 text-sm font-semibold text-white transition-all shadow-md',
+                  placingOrder
+                    ? 'bg-primary-400 cursor-wait'
+                    : 'bg-primary-600 hover:bg-primary-700 active:scale-[0.99] cursor-pointer hover:shadow-lg'
                 )}
               >
                 {placingOrder ? (
                   <>
                     <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                    Initializing {selectedGateway === 'PAYSTACK' ? 'Paystack' : 'Flutterwave'}...
+                    Connecting to {selectedGateway === 'PAYSTACK' ? 'Paystack' : 'Flutterwave'}...
                   </>
                 ) : (
                   <>
-                    Proceed to Payment ({selectedGateway})
+                    Pay {formatPrice(total)} with {selectedGateway}
                     <ArrowRight className="h-4 w-4" />
                   </>
                 )}
@@ -513,28 +571,28 @@ export function CheckoutPage() {
                     </div>
                   </div>
 
-                  <div className="mt-4 space-y-2">
+                  <div className="mt-4 space-y-2.5">
                     <a
                       href={gatewayInitData.checkoutUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex w-full items-center justify-center gap-2 rounded-xl bg-gray-900 py-2.5 text-xs font-bold text-white hover:bg-black transition-colors"
+                      className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#09A5DB] hover:bg-[#0895c7] py-3 text-sm font-bold text-white shadow-md hover:shadow-lg transition-all"
                     >
-                      Open {gatewayInitData.gateway} Portal ↗
+                      💳 Complete Payment on {gatewayInitData.gateway} Portal ↗
                     </a>
                     <button
                       type="button"
                       onClick={handleVerifyOrCompletePayment}
                       disabled={isVerifyingPayment}
-                      className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary-600 py-2.5 text-xs font-bold text-white hover:bg-primary-700 transition-colors disabled:opacity-50"
+                      className="flex w-full items-center justify-center gap-2 rounded-xl bg-gray-900 py-2.5 text-xs font-bold text-white hover:bg-black transition-colors disabled:opacity-50"
                     >
                       {isVerifyingPayment ? (
                         <>
                           <span className="h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                          Verifying Webhook Clearance...
+                          Verifying Payment Clearance...
                         </>
                       ) : (
-                        'Confirm / Complete Payment'
+                        'I have completed payment — Verify Order'
                       )}
                     </button>
                   </div>

@@ -85,9 +85,15 @@ export default {
         display: ['Plus Jakarta Sans', 'system-ui', 'sans-serif'],
       },
       animation: {
-        'fade-in': 'fadeIn 0.4s ease-out',
-        'slide-up': 'slideUp 0.5s ease-out',
-        'slide-down': 'slideDown 0.3s ease-out',
+        'fade-in': 'fadeIn 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
+        'slide-up': 'slideUp 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
+        'slide-down': 'slideDown 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
+      },
+      transitionDuration: {
+        DEFAULT: '350ms',
+      },
+      transitionTimingFunction: {
+        DEFAULT: 'cubic-bezier(0.4, 0, 0.2, 1)',
       },
       keyframes: {
         fadeIn: {
@@ -95,7 +101,7 @@ export default {
           '100%': { opacity: '1' },
         },
         slideUp: {
-          '0%': { opacity: '0', transform: 'translateY(20px)' },
+          '0%': { opacity: '0', transform: 'translateY(16px)' },
           '100%': { opacity: '1', transform: 'translateY(0)' },
         },
         slideDown: {
