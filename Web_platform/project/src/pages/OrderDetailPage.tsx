@@ -1,11 +1,12 @@
-import { useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Package, CheckCircle2, Truck, Store, MapPin } from 'lucide-react';
+import { ArrowLeft, Package, CheckCircle2, Truck, Store, MapPin, CreditCard, RefreshCw } from 'lucide-react';
 import { EmptyState } from '@/components/ui/States';
 import { formatDate, formatPrice } from '@/utils/format';
 import { ordersApi } from '@/api/orders';
 import { deliveryApi } from '@/api/delivery';
+import { paymentApi } from '@/api/payment';
 import type { Order } from '@/types';
 
 const orderStages: Record<string, string[]> = {
@@ -20,8 +21,10 @@ const orderStages: Record<string, string[]> = {
 
 export function OrderDetailPage() {
   const { orderId } = useParams<{ orderId: string }>();
+  const [searchParams] = useSearchParams();
+  const paymentReference = searchParams.get('reference') || searchParams.get('trxref');
 
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['customer-order', orderId],
     queryFn: () => ordersApi.getById(orderId as string),
     enabled: Boolean(orderId),
@@ -30,8 +33,54 @@ export function OrderDetailPage() {
   const [deliveryOtp, setDeliveryOtp] = useState<string | null>(null);
   const [otpMessage, setOtpMessage] = useState<string | null>(null);
   const [otpLoading, setOtpLoading] = useState(false);
+  const [isVerifyingPayment, setIsVerifyingPayment] = useState(false);
+  const [paymentNotice, setPaymentNotice] = useState<string | null>(null);
+  const [isInitiatingPayment, setIsInitiatingPayment] = useState(false);
 
   const order = (data?.data ?? null) as Order | null;
+
+  // Auto-verify payment if returning from Paystack / gateway with reference
+  useEffect(() => {
+    if (paymentReference && order && order.status === 'PENDING' && !isVerifyingPayment) {
+      setIsVerifyingPayment(true);
+      setPaymentNotice('Verifying payment clearance with gateway...');
+      paymentApi
+        .verify(paymentReference)
+        .then(() => {
+          setPaymentNotice('Payment verified successfully! Order is confirmed.');
+          refetch();
+        })
+        .catch((err) => {
+          setPaymentNotice(
+            err instanceof Error ? err.message : 'Payment clearance pending. Click verify below to retry.'
+          );
+        })
+        .finally(() => {
+          setIsVerifyingPayment(false);
+        });
+    }
+  }, [paymentReference, order?.status]);
+
+  const handlePayNow = async () => {
+    if (!orderId) return;
+    setIsInitiatingPayment(true);
+    setPaymentNotice(null);
+    try {
+      const callbackUrl = `${window.location.origin}/orders/${orderId}`;
+      const res = await paymentApi.initialize({
+        orderId,
+        gateway: 'PAYSTACK',
+        callbackUrl,
+      });
+      if (res.data.checkoutUrl) {
+        window.location.href = res.data.checkoutUrl;
+      }
+    } catch (err) {
+      setPaymentNotice(err instanceof Error ? err.message : 'Unable to initialize payment.');
+    } finally {
+      setIsInitiatingPayment(false);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -120,6 +169,62 @@ export function OrderDetailPage() {
             <div className="h-2.5 rounded-full bg-primary-600 transition-all" style={{ width: `${progress}%` }} />
           </div>
         </div>
+
+        {order.status === 'PENDING' && (
+          <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50/70 p-5">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 rounded-lg bg-amber-100 p-2 text-amber-700">
+                  <CreditCard className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="font-display text-base font-bold text-amber-950">Awaiting Payment Clearance</h3>
+                  <p className="mt-1 text-xs text-amber-800">
+                    This order is placed and awaiting payment confirmation. Once payment clears, the merchant will be notified immediately to prepare your package.
+                  </p>
+                  {paymentNotice && (
+                    <p className="mt-2 text-xs font-semibold text-amber-900 bg-amber-100 px-2.5 py-1 rounded-md inline-block">
+                      {paymentNotice}
+                    </p>
+                  )}
+                </div>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={handlePayNow}
+                  disabled={isInitiatingPayment}
+                  className="rounded-xl bg-primary-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-primary-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5 shadow-sm"
+                >
+                  {isInitiatingPayment ? (
+                    <>
+                      <span className="h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                      Connecting...
+                    </>
+                  ) : (
+                    <>
+                      Pay {formatPrice(order.total)} with Paystack
+                    </>
+                  )}
+                </button>
+                {paymentReference && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsVerifyingPayment(true);
+                      paymentApi.verify(paymentReference).then(() => refetch()).finally(() => setIsVerifyingPayment(false));
+                    }}
+                    disabled={isVerifyingPayment}
+                    className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
+                  >
+                    <RefreshCw className={isVerifyingPayment ? "h-3 w-3 animate-spin" : "h-3 w-3"} />
+                    Verify
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="mt-8 grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
           <div className="space-y-4">

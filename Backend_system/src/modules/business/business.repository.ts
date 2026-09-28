@@ -1,4 +1,5 @@
 import { db } from "../../db/database";
+import { createInAppNotification, notifyAdmins } from "../notification/notification.service";
 
 import type {
   CreateBusinessInput,
@@ -434,6 +435,31 @@ export async function createBusiness(
       `,
       [business.id]
     );
+
+    // Promote user role to BUSINESS_USER upon business registration
+    await client.query(
+      `UPDATE public.users SET role = 'BUSINESS_USER', updated_at = NOW() WHERE id = $1 AND role = 'CUSTOMER'`,
+      [ownerUserId]
+    );
+
+    // In-app notification for business owner
+    await createInAppNotification({
+      userId: ownerUserId,
+      type: "BUSINESS_APPLICATION_SUBMITTED",
+      title: "Business Application Submitted",
+      message: `Your registration for "${business.name}" has been received and is awaiting admin verification. You can now set up your catalog from the business dashboard.`,
+      eventKey: `biz-app-submitted:${business.id}`,
+      client,
+    });
+
+    // In-app notification for platform admins
+    await notifyAdmins({
+      type: "BUSINESS_APPLICATION_SUBMITTED",
+      title: "New Business Registration",
+      message: `"${business.name}" has registered and submitted a business application awaiting verification.`,
+      eventKeyPrefix: `admin-biz-submitted:${business.id}`,
+      client,
+    });
 
     await client.query("COMMIT");
 

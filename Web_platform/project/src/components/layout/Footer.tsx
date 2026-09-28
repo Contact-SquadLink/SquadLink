@@ -48,13 +48,13 @@ export function Footer() {
         <div className="grid grid-cols-2 gap-8 lg:grid-cols-6">
           {/* Brand */}
           <div className="col-span-2 lg:col-span-2">
-            <Link to="/" className="flex items-center gap-2.5 mb-4">
+            <Link to="/" className="flex items-center gap-3 mb-4 group">
               <img
                 src="/squadlink-logo.png"
                 alt="SquadLink"
-                className="h-9 w-9 object-contain drop-shadow-sm"
+                className="h-12 w-12 object-contain drop-shadow-sm transition-transform duration-300 group-hover:scale-105"
               />
-              <span className="font-display text-lg font-bold tracking-tight text-white">
+              <span className="font-display text-xl sm:text-2xl font-bold tracking-tight text-white">
                 SQUAD<span className="text-primary-400">LINK</span>
               </span>
             </Link>

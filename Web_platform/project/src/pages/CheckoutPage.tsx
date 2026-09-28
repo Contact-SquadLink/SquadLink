@@ -512,12 +512,18 @@ export function CheckoutPage() {
                 </div>
               </div>
 
+              {previewError && (
+                <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-xs font-medium text-red-700">
+                  {previewError}
+                </div>
+              )}
+
               <button
                 type="button"
                 onClick={handleInitiateCheckout}
                 disabled={placingOrder}
                 className={cn(
-                  'mt-6 flex w-full items-center justify-center gap-2 rounded-xl h-12 text-sm font-semibold text-white transition-all shadow-md',
+                  'mt-4 flex w-full items-center justify-center gap-2 rounded-xl h-12 text-sm font-semibold text-white transition-all shadow-md',
                   placingOrder
                     ? 'bg-primary-400 cursor-wait'
                     : 'bg-primary-600 hover:bg-primary-700 active:scale-[0.99] cursor-pointer hover:shadow-lg'

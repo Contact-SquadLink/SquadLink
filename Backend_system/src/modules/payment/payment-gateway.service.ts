@@ -313,6 +313,7 @@ async function findPaymentAttemptByReference(reference: string) {
 
 /**
  * Payment Verification / Frontend Callback Polling Endpoint
+ * Queries Paystack/Flutterwave directly if still pending to guarantee instant order confirmation upon return.
  */
 export async function verifyPaymentReference(reference: string, userId: string) {
   const result = await db.query<{
@@ -343,11 +344,50 @@ export async function verifyPaymentReference(reference: string, userId: string) 
   }
 
   const row = result.rows[0];
+  let currentPaymentStatus = row.payment_status;
+  let currentOrderStatus = row.order_status;
+
+  // Direct Paystack verification fallback if payment hasn't cleared yet via webhook
+  if (currentPaymentStatus === "PENDING" || currentOrderStatus === "PENDING") {
+    const paystackSecret = process.env.PAYSTACK_SECRET_KEY;
+    if (paystackSecret && !paystackSecret.includes("YOUR_")) {
+      try {
+        const response = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`, {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${paystackSecret}`,
+            "Content-Type": "application/json",
+          },
+        });
+        const psData = (await response.json()) as {
+          status: boolean;
+          data?: { status: string; reference: string; amount: number; gateway_response?: string };
+        };
+
+        if (psData.status && psData.data?.status === "success") {
+          const attempt = await findPaymentAttemptByReference(reference);
+          if (attempt && attempt.status !== "SUCCESS") {
+            await processProviderPayment(userId, attempt.payment_id, {
+              providerEventId: `ps-verify-${reference}`,
+              paymentAttemptId: attempt.id,
+              status: "SUCCESS",
+              providerReference: reference,
+            });
+            currentPaymentStatus = "AUTHORIZED";
+            currentOrderStatus = "CONFIRMED";
+          }
+        }
+      } catch (err) {
+        console.error("[PAYSTACK DIRECT VERIFY ERROR]", err);
+      }
+    }
+  }
+
   return {
     orderId: row.order_id,
     paymentId: row.payment_id,
-    status: row.payment_status,
-    orderStatus: row.order_status,
+    status: currentPaymentStatus,
+    orderStatus: currentOrderStatus,
     amount: Number(row.amount),
     provider: row.provider,
   };

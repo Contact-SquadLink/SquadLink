@@ -1,3 +1,4 @@
+import type { PoolClient } from "pg";
 import { db } from "../../db/database";
 import { AppError } from "../../utils/app-error";
 import { env } from "../../config/env";
@@ -153,3 +154,59 @@ export async function markNotificationRead(userId: string, notificationId: strin
 
   return { id: notificationId, read: true };
 }
+
+export async function createInAppNotification(params: {
+  userId: string;
+  type: string;
+  title: string;
+  message: string;
+  orderId?: string | null;
+  eventKey?: string | null;
+  client?: PoolClient;
+}) {
+  const runner = params.client ?? db;
+  await runner.query(
+    `
+      INSERT INTO public.notifications (
+        user_id, order_id, type, channel, status, title, message, event_key
+      )
+      VALUES ($1, $2, $3::public.notification_type, 'IN_APP', 'SENT', $4, $5, $6)
+      ON CONFLICT (event_key) WHERE event_key IS NOT NULL DO NOTHING
+    `,
+    [
+      params.userId,
+      params.orderId ?? null,
+      params.type,
+      params.title,
+      params.message,
+      params.eventKey ?? null,
+    ]
+  );
+}
+
+export async function notifyAdmins(params: {
+  type: string;
+  title: string;
+  message: string;
+  orderId?: string | null;
+  eventKeyPrefix?: string | null;
+  client?: PoolClient;
+}) {
+  const runner = params.client ?? db;
+  const admins = await runner.query<{ id: string }>(
+    `SELECT id FROM public.users WHERE role IN ('ADMIN', 'SUPER_ADMIN') AND is_active = TRUE`
+  );
+  for (const admin of admins.rows) {
+    const key = params.eventKeyPrefix ? `${params.eventKeyPrefix}:${admin.id}` : null;
+    await createInAppNotification({
+      userId: admin.id,
+      type: params.type,
+      title: params.title,
+      message: params.message,
+      orderId: params.orderId,
+      eventKey: key,
+      client: params.client,
+    });
+  }
+}
+

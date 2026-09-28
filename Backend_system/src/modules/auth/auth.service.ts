@@ -10,6 +10,7 @@ import {
   type UserRecord
 } from "./auth.repository";
 import type { LoginInput, RegisterInput } from "./auth.schemas";
+import { createInAppNotification, notifyAdmins } from "../notification/notification.service";
 
 const BCRYPT_ROUNDS = 12;
 
@@ -109,6 +110,26 @@ export async function registerUser(
     input,
     passwordHash
   );
+
+  try {
+    await createInAppNotification({
+      userId: user.id,
+      type: "ACCOUNT_CREATED",
+      title: "Welcome to SquadLink!",
+      message: `Welcome to SquadLink, ${user.firstName || 'neighbor'}! Your account has been created. Discover local businesses, place orders, and track your deliveries.`,
+      eventKey: `welcome:${user.id}`,
+    });
+
+    await notifyAdmins({
+      type: "ACCOUNT_CREATED",
+      title: "New User Registered",
+      message: `${user.firstName || user.email || 'A user'} has registered with role: ${user.role}.`,
+      eventKeyPrefix: `admin-new-user:${user.id}`,
+    });
+  } catch (notifErr) {
+    // Non-blocking notification error logging
+    console.error("[NOTIFICATION WARNING] Failed to deliver registration notifications:", notifErr);
+  }
 
   return toSafeUser(user);
 }

@@ -98,7 +98,7 @@ export function Header() {
             : 'bg-white border-b border-transparent'
         )}
       >
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto flex h-18 sm:h-20 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
           {/* Logo */}
           <Link
             to="/"
@@ -108,14 +108,14 @@ export function Header() {
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               }
             }}
-            className="flex items-center gap-2.5 shrink-0 group"
+            className="flex items-center gap-3 shrink-0 group py-1"
           >
             <img
               src="/squadlink-logo.png"
               alt="SquadLink"
-              className="h-9 w-9 object-contain drop-shadow-sm transition-transform duration-300 group-hover:scale-105"
+              className="h-11 w-11 sm:h-13 sm:w-13 object-contain drop-shadow-md transition-transform duration-300 group-hover:scale-105"
             />
-            <span className="font-display text-lg font-bold tracking-tight text-gray-900">
+            <span className="font-display text-xl sm:text-2xl font-bold tracking-tight text-gray-900">
               SQUAD<span className="text-primary-600">LINK</span>
             </span>
           </Link>

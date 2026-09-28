@@ -7,6 +7,13 @@ export async function ensureWorkflowSchema(): Promise<void> {
     // Already exists or unsupported inside sub-transaction
   }
 
+  try {
+    await db.query(`ALTER TYPE public.notification_type ADD VALUE IF NOT EXISTS 'ACCOUNT_CREATED'`);
+    await db.query(`ALTER TYPE public.notification_type ADD VALUE IF NOT EXISTS 'BUSINESS_APPLICATION_SUBMITTED'`);
+  } catch {
+    // Already exists or unsupported inside sub-transaction
+  }
+
   await db.query(`
     -- Orders fee columns
     ALTER TABLE public.orders

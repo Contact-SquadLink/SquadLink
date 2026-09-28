@@ -9,6 +9,7 @@ import type { ProviderPaymentInput } from "./lifecycle.schemas";
 import { creditDeliveryEarnings } from "../earnings/earnings.service";
 import { calculateAndRecordOrderSettlement } from "../ledger/ledger.service";
 import { notifyFeaturePhoneRiderAssignment } from "../sms/sms.service";
+import { createInAppNotification, notifyAdmins } from "../notification/notification.service";
 
 function fail(message: string, status: number, code: string): never {
   throw new AppError(message, status, code);
@@ -156,6 +157,14 @@ export async function registerRider(
         `rider-application:${riderId}:SUBMITTED`
       ]
     );
+
+    await notifyAdmins({
+      type: "RIDER_APPLICATION_SUBMITTED",
+      title: "New Rider Registration",
+      message: `A new rider (${input.firstName || 'Applicant'} ${input.lastName || ''}) has submitted an application awaiting verification.`,
+      eventKeyPrefix: `admin-rider-submitted:${riderId}`,
+      client,
+    });
 
     await client.query(
       `INSERT INTO public.rider_wallets (rider_id, current_balance_amount, currency)
@@ -748,6 +757,45 @@ export async function processProviderPayment(
       `UPDATE public.payment_provider_events SET status = 'PROCESSED', processed_at = NOW() WHERE id = $1`,
       [eventId]
     );
+
+    // Instant in-app notification for the customer
+    await createInAppNotification({
+      userId: payment.user_id,
+      orderId: payment.order_id,
+      type: "ORDER_CONFIRMED",
+      title: "Payment Confirmed",
+      message: `Your payment for Order #${payment.order_id.slice(0, 8)} was successful. The store has been notified to prepare your items.`,
+      eventKey: `payment-captured-customer:${payment.order_id}`,
+      client,
+    });
+
+    // Instant in-app notification for the fulfilling merchant
+    const merchantResult = await client.query<{ owner_user_id: string }>(
+      `SELECT b.owner_user_id FROM public.fulfillments f INNER JOIN public.businesses b ON b.id = f.business_id WHERE f.order_id = $1 LIMIT 1`,
+      [payment.order_id]
+    );
+    if (merchantResult.rows[0]?.owner_user_id) {
+      await createInAppNotification({
+        userId: merchantResult.rows[0].owner_user_id,
+        orderId: payment.order_id,
+        type: "NEW_ORDER",
+        title: "New Paid Order",
+        message: `Order #${payment.order_id.slice(0, 8)} has been paid and confirmed. Please prepare the package for rider pickup.`,
+        eventKey: `payment-captured-merchant:${payment.order_id}`,
+        client,
+      });
+    }
+
+    // Instant notification for platform administrators
+    await notifyAdmins({
+      type: "NEW_ORDER",
+      title: "New Confirmed Order",
+      message: `Order #${payment.order_id.slice(0, 8)} has been confirmed with successful payment.`,
+      orderId: payment.order_id,
+      eventKeyPrefix: `admin-order-paid:${payment.order_id}`,
+      client,
+    });
+
     await writeOutbox(client, "PAYMENT_SUCCESSFUL", "ORDER", payment.order_id, { orderId: payment.order_id, deliveryId: delivery.id });
     await writeAudit(client, actorUserId, "PAYMENT_SUCCESSFUL", "PAYMENT", paymentId, "Payment authorized and delivery initialized.");
     return { paymentId, status: "AUTHORIZED", orderId: payment.order_id, deliveryId: delivery.id };
@@ -1228,12 +1276,13 @@ async function assignRider(
 
   const riderResult = await client.query<{
     rider_id: string;
+    user_id: string;
     vehicle_id: string;
     device_type: string;
     phone_number: string | null;
   }>(
     `
-      SELECT r.id AS rider_id, v.id AS vehicle_id, r.device_type,
+      SELECT r.id AS rider_id, r.user_id, v.id AS vehicle_id, r.device_type,
              COALESCE(r.registered_phone_number, u.phone_number) AS phone_number
       FROM public.riders r
       INNER JOIN public.users u ON u.id = r.user_id
@@ -1324,6 +1373,57 @@ async function assignRider(
   );
   await writeDeliveryHistory(client, delivery.delivery_id, delivery.status, "ASSIGNED", actorUserId, "Rider automatically assigned.");
   await writeOutbox(client, "RIDER_ASSIGNED", "DELIVERY", delivery.delivery_id, { deliveryId: delivery.delivery_id, riderId: rider.rider_id, pickupCredential: credential });
+
+  // In-app notification for the newly assigned rider
+  if (rider.user_id) {
+    await createInAppNotification({
+      userId: rider.user_id,
+      orderId,
+      type: "DELIVERY_ASSIGNMENT",
+      title: "New Delivery Assignment",
+      message: `You have been assigned to order #${orderId.slice(0, 8)}. Please review and accept the task in your rider dashboard.`,
+      eventKey: `rider-assigned:${delivery.delivery_id}:${rider.rider_id}`,
+      client,
+    });
+  }
+
+  // In-app notifications for customer and fulfilling merchant
+  const orderStakeholders = await client.query<{
+    customer_user_id: string;
+    merchant_user_id: string | null;
+  }>(
+    `SELECT o.user_id AS customer_user_id, b.owner_user_id AS merchant_user_id
+     FROM public.orders o
+     LEFT JOIN public.fulfillments f ON f.order_id = o.id
+     LEFT JOIN public.businesses b ON b.id = f.business_id
+     WHERE o.id = $1`,
+    [orderId]
+  );
+  if (orderStakeholders.rows[0]) {
+    const { customer_user_id, merchant_user_id } = orderStakeholders.rows[0];
+    if (customer_user_id) {
+      await createInAppNotification({
+        userId: customer_user_id,
+        orderId,
+        type: "RIDER_ASSIGNED",
+        title: "Rider Assigned",
+        message: `A rider has been assigned to pick up your order #${orderId.slice(0, 8)}.`,
+        eventKey: `customer-rider-assigned:${delivery.delivery_id}:${rider.rider_id}`,
+        client,
+      });
+    }
+    if (merchant_user_id) {
+      await createInAppNotification({
+        userId: merchant_user_id,
+        orderId,
+        type: "RIDER_ASSIGNED",
+        title: "Rider Assigned to Order",
+        message: `A delivery rider has been assigned to pick up order #${orderId.slice(0, 8)}.`,
+        eventKey: `merchant-rider-assigned:${delivery.delivery_id}:${rider.rider_id}`,
+        client,
+      });
+    }
+  }
 
   // Outbound SMS dispatch notification for button-phone riders upon assignment
   if (rider.device_type === "FEATURE_PHONE" && rider.phone_number) {
@@ -1444,6 +1544,35 @@ export async function acceptRiderAssignment(
       `UPDATE public.delivery_assignment_decisions SET status = 'ACCEPTED', decided_at = NOW(), updated_at = NOW() WHERE id = $1`,
       [decision.id]
     );
+
+    if (delivery.business_owner_user_id) {
+      await createInAppNotification({
+        userId: delivery.business_owner_user_id,
+        orderId: delivery.order_id,
+        type: "RIDER_APPROACHING",
+        title: "Rider Accepted Delivery",
+        message: `The assigned rider has accepted order #${delivery.order_id.slice(0, 8)} and is heading to your store for pickup.`,
+        eventKey: `merchant-rider-accepted:${deliveryId}:${decision.id}`,
+        client,
+      });
+    }
+
+    const customerRes = await client.query<{ user_id: string }>(
+      `SELECT user_id FROM public.orders WHERE id = $1`,
+      [delivery.order_id]
+    );
+    if (customerRes.rows[0]?.user_id) {
+      await createInAppNotification({
+        userId: customerRes.rows[0].user_id,
+        orderId: delivery.order_id,
+        type: "RIDER_APPROACHING",
+        title: "Rider Heading to Store",
+        message: `Your assigned rider is en route to collect order #${delivery.order_id.slice(0, 8)} from the store.`,
+        eventKey: `customer-rider-accepted:${deliveryId}:${decision.id}`,
+        client,
+      });
+    }
+
     await writeAudit(client, userId, "DELIVERY_ASSIGNMENT_ACCEPTED", "DELIVERY", deliveryId, "Rider accepted the delivery assignment.");
     return { deliveryId, status: "ASSIGNED", assignmentStatus: "ACCEPTED" };
   });
@@ -1765,6 +1894,35 @@ export async function verifyPickup(userId: string, deliveryId: string, credentia
     await client.query(`UPDATE public.deliveries SET status = 'PICKED_UP', picked_up_at = NOW(), updated_at = NOW() WHERE id = $1`, [deliveryId]);
     await client.query(`UPDATE public.orders SET status = 'OUT_FOR_DELIVERY', updated_at = NOW() WHERE id = $1`, [delivery.order_id]);
     await client.query(`INSERT INTO public.pickup_verification_history (pickup_verification_id, previous_status, new_status, rider_id, business_id, changed_by, reason) VALUES ($1, 'ACTIVE', 'VERIFIED', $2, $3, $4, 'Assigned rider verified pickup.')`, [verification.id, verification.rider_id, verification.business_id, userId]);
+
+    // In-app notifications for customer and merchant
+    const customerOrderInfo = await client.query<{ user_id: string }>(
+      `SELECT user_id FROM public.orders WHERE id = $1`,
+      [delivery.order_id]
+    );
+    if (customerOrderInfo.rows[0]?.user_id) {
+      await createInAppNotification({
+        userId: customerOrderInfo.rows[0].user_id,
+        orderId: delivery.order_id,
+        type: "ORDER_IN_TRANSIT",
+        title: "Order Picked Up",
+        message: `Your order #${delivery.order_id.slice(0, 8)} has been picked up from the merchant and is on the way!`,
+        eventKey: `customer-pickedup:${deliveryId}`,
+        client,
+      });
+    }
+    if (delivery.business_owner_user_id) {
+      await createInAppNotification({
+        userId: delivery.business_owner_user_id,
+        orderId: delivery.order_id,
+        type: "ORDER_PICKED_UP",
+        title: "Order Picked Up by Rider",
+        message: `Order #${delivery.order_id.slice(0, 8)} was collected by the rider with valid pickup credential.`,
+        eventKey: `merchant-pickedup:${deliveryId}`,
+        client,
+      });
+    }
+
     await writeDeliveryHistory(client, deliveryId, "ASSIGNED", "PICKED_UP", userId, "Pickup verified.");
     await writeOrderHistory(client, delivery.order_id, "READY_FOR_PICKUP", "OUT_FOR_DELIVERY", userId, "Rider collected the order.");
     await writeOutbox(client, "ORDER_PICKED_UP", "DELIVERY", deliveryId, { deliveryId, orderId: delivery.order_id });
@@ -1781,6 +1939,25 @@ export async function updateRiderDeliveryStatus(userId: string, deliveryId: stri
       fail("Invalid delivery state transition.", 409, "INVALID_DELIVERY_TRANSITION");
     }
     await client.query(`UPDATE public.deliveries SET status = $1::delivery_status, updated_at = NOW() WHERE id = $2`, [nextStatus, deliveryId]);
+
+    if (nextStatus === "ARRIVED") {
+      const customerOrderInfo = await client.query<{ user_id: string }>(
+        `SELECT user_id FROM public.orders WHERE id = $1`,
+        [delivery.order_id]
+      );
+      if (customerOrderInfo.rows[0]?.user_id) {
+        await createInAppNotification({
+          userId: customerOrderInfo.rows[0].user_id,
+          orderId: delivery.order_id,
+          type: "RIDER_ARRIVED",
+          title: "Rider Has Arrived",
+          message: `Your rider has arrived at your location with order #${delivery.order_id.slice(0, 8)}. Please generate your confirmation code in order details.`,
+          eventKey: `customer-arrived:${deliveryId}`,
+          client,
+        });
+      }
+    }
+
     await writeDeliveryHistory(client, deliveryId, expected, nextStatus, userId, `Rider updated delivery to ${nextStatus}.`);
     await writeOutbox(client, `DELIVERY_${nextStatus}`, "DELIVERY", deliveryId, { deliveryId, orderId: delivery.order_id });
     await writeAudit(client, userId, `DELIVERY_${nextStatus}`, "DELIVERY", deliveryId, `Delivery status changed to ${nextStatus}.`);
@@ -1908,6 +2085,54 @@ export async function confirmDelivery(userId: string, deliveryId: string, otp: s
     if (delivery.rider_id) {
       await client.query(`UPDATE public.riders SET is_available = TRUE, updated_at = NOW() WHERE id = $1`, [delivery.rider_id]);
     }
+
+    // In-app notifications to all parties
+    const customerOrderInfo = await client.query<{ user_id: string }>(
+      `SELECT user_id FROM public.orders WHERE id = $1`,
+      [delivery.order_id]
+    );
+    if (customerOrderInfo.rows[0]?.user_id) {
+      await createInAppNotification({
+        userId: customerOrderInfo.rows[0].user_id,
+        orderId: delivery.order_id,
+        type: "ORDER_DELIVERED",
+        title: "Order Delivered Successfully",
+        message: `Your order #${delivery.order_id.slice(0, 8)} has been delivered. Enjoy your purchase!`,
+        eventKey: `customer-delivered:${delivery.order_id}`,
+        client,
+      });
+    }
+    if (delivery.rider_user_id) {
+      await createInAppNotification({
+        userId: delivery.rider_user_id,
+        orderId: delivery.order_id,
+        type: "ORDER_DELIVERED",
+        title: "Delivery Completed",
+        message: `Delivery for Order #${delivery.order_id.slice(0, 8)} is confirmed. Your earnings have been credited to your wallet.`,
+        eventKey: `rider-delivered:${delivery.order_id}`,
+        client,
+      });
+    }
+    if (delivery.business_owner_user_id) {
+      await createInAppNotification({
+        userId: delivery.business_owner_user_id,
+        orderId: delivery.order_id,
+        type: "ORDER_DELIVERED",
+        title: "Order Fulfillment Complete",
+        message: `Order #${delivery.order_id.slice(0, 8)} was delivered and customer confirmed with OTP. Funds settled to your wallet.`,
+        eventKey: `merchant-delivered:${delivery.order_id}`,
+        client,
+      });
+    }
+    await notifyAdmins({
+      type: "ORDER_DELIVERED",
+      title: "Order Delivered & Settled",
+      message: `Order #${delivery.order_id.slice(0, 8)} completed delivery and double-entry settlement was recorded.`,
+      orderId: delivery.order_id,
+      eventKeyPrefix: `admin-delivered:${delivery.order_id}`,
+      client,
+    });
+
     await writeDeliveryHistory(client, deliveryId, "ARRIVED", "DELIVERED", userId, "Customer confirmed delivery with OTP.");
     await writeOrderHistory(client, delivery.order_id, "OUT_FOR_DELIVERY", "DELIVERED", userId, "Customer confirmed delivery.");
     await writeOutbox(client, "ORDER_DELIVERED", "ORDER", delivery.order_id, { orderId: delivery.order_id, deliveryId });
