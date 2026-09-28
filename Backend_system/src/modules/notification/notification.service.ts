@@ -18,12 +18,11 @@ export async function savePushSubscription(
     throw new AppError("Push notifications are not configured yet.", 503, "PUSH_NOT_CONFIGURED");
   }
 
-  const result = await db.query<{ id: string }>(
+  await db.query<{ id: string }>(
     `
       INSERT INTO public.push_subscriptions (user_id, endpoint, p256dh_key, auth_key, is_active)
       VALUES ($1, $2, $3, $4, TRUE)
-      ON CONFLICT (endpoint) DO UPDATE SET
-        user_id = EXCLUDED.user_id,
+      ON CONFLICT (user_id, endpoint) DO UPDATE SET
         p256dh_key = EXCLUDED.p256dh_key,
         auth_key = EXCLUDED.auth_key,
         is_active = TRUE,
@@ -33,31 +32,69 @@ export async function savePushSubscription(
     [userId, subscription.endpoint, subscription.keys.p256dh, subscription.keys.auth]
   );
 
+  await db.query(
+    `UPDATE public.users SET notifications_enabled = TRUE, updated_at = NOW() WHERE id = $1`,
+    [userId]
+  );
+
   return { enabled: true };
 }
 
-export async function removePushSubscription(userId: string, endpoint: string) {
+export async function removePushSubscription(userId: string, endpoint?: string | null) {
   await db.query(`
     UPDATE public.notification_push_deliveries deliveries
     SET status = 'EXPIRED', locked_at = NULL, failure_reason = 'Push disabled by account holder.', updated_at = NOW()
     FROM public.push_subscriptions subscriptions
     WHERE deliveries.subscription_id = subscriptions.id
-      AND subscriptions.user_id = $1 AND subscriptions.endpoint = $2
+      AND subscriptions.user_id = $1
+      AND ($2::text IS NULL OR subscriptions.endpoint = $2)
       AND deliveries.status IN ('PENDING', 'PROCESSING')
-  `, [userId, endpoint]);
+  `, [userId, endpoint || null]);
+
   await db.query(
-    `UPDATE public.push_subscriptions SET is_active = FALSE, updated_at = NOW() WHERE user_id = $1 AND endpoint = $2`,
-    [userId, endpoint]
+    `UPDATE public.push_subscriptions
+     SET is_active = FALSE, updated_at = NOW()
+     WHERE user_id = $1
+       AND ($2::text IS NULL OR endpoint = $2)`,
+    [userId, endpoint || null]
   );
   return { enabled: false };
 }
 
 export async function getPushSubscriptionStatus(userId: string) {
-  const result = await db.query<{ enabled: boolean }>(
+  const pushResult = await db.query<{ enabled: boolean }>(
     `SELECT EXISTS (SELECT 1 FROM public.push_subscriptions WHERE user_id = $1 AND is_active = TRUE) AS enabled`,
     [userId]
   );
-  return { enabled: result.rows[0]?.enabled ?? false };
+  const userResult = await db.query<{ notifications_enabled: boolean; role: string; email: string }>(
+    `SELECT notifications_enabled, role, email FROM public.users WHERE id = $1`,
+    [userId]
+  );
+  const userRow = userResult.rows[0];
+  const isPushEnabled = pushResult.rows[0]?.enabled ?? false;
+  const isAccountEnabled = userRow?.notifications_enabled ?? true;
+
+  return {
+    enabled: isPushEnabled && isAccountEnabled,
+    pushEnabled: isPushEnabled,
+    notificationsEnabled: isAccountEnabled,
+    role: userRow?.role ?? "CUSTOMER",
+    email: userRow?.email ?? ""
+  };
+}
+
+export async function updateNotificationPreferences(userId: string, enabled: boolean) {
+  await db.query(
+    `UPDATE public.users SET notifications_enabled = $2, updated_at = NOW() WHERE id = $1`,
+    [userId, enabled]
+  );
+  if (!enabled) {
+    await db.query(
+      `UPDATE public.push_subscriptions SET is_active = FALSE, updated_at = NOW() WHERE user_id = $1`,
+      [userId]
+    );
+  }
+  return { notificationsEnabled: enabled };
 }
 
 export async function listNotificationsForUser(userId: string) {

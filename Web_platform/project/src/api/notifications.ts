@@ -12,7 +12,7 @@ export const notificationsApi = {
     apiRequest<{ success: boolean; data: { available: boolean; publicKey: string | null } }>('/api/v1/notifications/push/config'),
 
   pushSubscription: () =>
-    apiRequest<{ success: boolean; data: { enabled: boolean } }>('/api/v1/notifications/push/subscription'),
+    apiRequest<{ success: boolean; data: { enabled: boolean; pushEnabled?: boolean; notificationsEnabled?: boolean; role?: string; email?: string } }>('/api/v1/notifications/push/subscription'),
 
   subscribeToPush: (subscription: PushSubscriptionJSON) =>
     apiRequest<{ success: boolean; data: { enabled: boolean } }>('/api/v1/notifications/push/subscription', {
@@ -20,9 +20,15 @@ export const notificationsApi = {
       body: subscription,
     }),
 
-  unsubscribeFromPush: (endpoint: string) =>
+  unsubscribeFromPush: (endpoint?: string) =>
     apiRequest<{ success: boolean; data: { enabled: boolean } }>('/api/v1/notifications/push/subscription', {
       method: 'DELETE',
-      body: { endpoint },
+      body: { endpoint: endpoint || undefined },
+    }),
+
+  updatePreferences: (enabled: boolean) =>
+    apiRequest<{ success: boolean; data: { notificationsEnabled: boolean } }>('/api/v1/notifications/preferences', {
+      method: 'PATCH',
+      body: { enabled },
     }),
 };

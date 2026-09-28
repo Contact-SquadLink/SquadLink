@@ -23,10 +23,11 @@ export function NotificationsPage() {
   const { user } = useAuth();
   const [actionError, setActionError] = useState<string | null>(null);
   const [pushError, setPushError] = useState<string | null>(null);
-  const [browserSubscribed, setBrowserSubscribed] = useState(false);
   const handledPushNotification = useRef<string | null>(null);
   const pushConfigQuery = useQuery({ queryKey: ['push-config'], queryFn: notificationsApi.pushConfig, enabled: Boolean(user), retry: false });
   const pushStatusQuery = useQuery({ queryKey: ['push-subscription', user?.id], queryFn: notificationsApi.pushSubscription, enabled: Boolean(user), retry: false });
+  const isAccountPushEnabled = Boolean(pushStatusQuery.data?.data.enabled);
+
   const { data, isLoading, error } = useQuery({
     queryKey: ['customer-notifications', user?.id],
     queryFn: notificationsApi.list,
@@ -45,13 +46,13 @@ export function NotificationsPage() {
         throw new Error('This browser does not support web push notifications.');
       }
 
-      if (browserSubscribed) {
+      if (isAccountPushEnabled) {
+        // Disable push notifications strictly for THIS account
         const registration = await navigator.serviceWorker.getRegistration('/');
         const subscription = await registration?.pushManager.getSubscription();
-        if (subscription) {
-          await notificationsApi.unsubscribeFromPush(subscription.endpoint);
-          await subscription.unsubscribe();
-        }
+        await notificationsApi.unsubscribeFromPush(subscription?.endpoint || undefined);
+        // Note: We deliberately do NOT call subscription.unsubscribe() here.
+        // Doing so would kill push notifications for other accounts sharing this device.
         return false;
       }
 
@@ -68,29 +69,22 @@ export function NotificationsPage() {
       if (permission !== 'granted') throw new Error('Browser notification permission was not granted.');
 
       const registration = await navigator.serviceWorker.register('/sw.js');
-      const subscription = await registration.pushManager.getSubscription()
-        ?? await registration.pushManager.subscribe({
+      let subscription = await registration.pushManager.getSubscription();
+      if (!subscription) {
+        subscription = await registration.pushManager.subscribe({
           userVisibleOnly: true,
           applicationServerKey: decodeApplicationServerKey(publicKey),
         });
+      }
       await notificationsApi.subscribeToPush(subscription.toJSON());
       return true;
     },
-    onSuccess: (enabled) => {
-      setBrowserSubscribed(enabled);
+    onSuccess: () => {
       setPushError(null);
-      void queryClient.invalidateQueries({ queryKey: ['push-subscription'] });
+      void queryClient.invalidateQueries({ queryKey: ['push-subscription', user?.id] });
     },
     onError: (caughtError) => setPushError(caughtError instanceof Error ? caughtError.message : 'Unable to update push notification settings.'),
   });
-
-  useEffect(() => {
-    if (!('serviceWorker' in navigator)) return;
-    void navigator.serviceWorker.getRegistration('/').then(async (registration) => {
-      const subscription = await registration?.pushManager.getSubscription();
-      setBrowserSubscribed(Boolean(subscription));
-    }).catch(() => setBrowserSubscribed(false));
-  }, []);
 
   const openNotification = useCallback(async (notification: Notification) => {
     setActionError(null);
@@ -111,7 +105,7 @@ export function NotificationsPage() {
     }
     if (notification.type.startsWith('BUSINESS_APPLICATION_')) navigate(user?.role === 'CUSTOMER' ? '/business/register' : '/business');
     else if (notification.type.startsWith('RIDER_APPLICATION_')) navigate(user?.role === 'CUSTOMER' ? '/rider/register' : '/rider');
-    else navigate(user?.role === 'BUSINESS_USER' ? '/business' : user?.role === 'RIDER' ? '/rider' : user?.role === 'ADMIN' ? '/admin' : '/dashboard');
+    else navigate(user?.role === 'BUSINESS_USER' ? '/business' : user?.role === 'RIDER' ? '/rider' : ['ADMIN', 'SUPER_ADMIN'].includes(user?.role || '') ? '/admin' : '/dashboard');
   }, [navigate, queryClient, user?.id, user?.role]);
 
   useEffect(() => {
@@ -124,35 +118,86 @@ export function NotificationsPage() {
     void openNotification(notification);
   }, [data, isLoading, location.search, navigate, openNotification]);
 
+  const userDisplayName = user?.firstName
+    ? `${user.firstName} ${user.lastName || ''}`.trim()
+    : user?.email || 'Account';
+  const roleDisplay = user?.role === 'SUPER_ADMIN'
+    ? 'Super Admin'
+    : user?.role === 'ADMIN'
+    ? 'Admin'
+    : user?.role === 'RIDER'
+    ? 'Rider'
+    : user?.role === 'BUSINESS_USER'
+    ? 'Business'
+    : 'Customer';
+
   return (
     <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8 py-8">
       <h1 className="font-display text-2xl font-bold text-gray-900 mb-1">Notifications</h1>
       <p className="text-sm text-gray-500 mb-6">Stay updated on your orders and deliveries.</p>
       {actionError && <p role="alert" className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{actionError}</p>}
 
-      <section className="mb-6 flex flex-wrap items-center justify-between gap-4 border-y border-gray-200 py-4">
-        <div className="flex items-start gap-3">
-          <BellRing className="mt-0.5 h-5 w-5 text-primary-700" />
-          <div>
-            <h2 className="text-sm font-semibold text-gray-900">Push notifications</h2>
-            <p className="mt-1 text-sm text-gray-600">Get account activity on this device, even when SQUADLINK is not open.</p>
-            {pushConfigQuery.error instanceof ApiRequestError && pushConfigQuery.error.statusCode === 404 && <p role="alert" className="mt-1 text-xs text-red-700">The deployed backend does not have the push setup endpoint yet. Deploy the backend push-notification update; the frontend cannot enable push until then.</p>}
-            {pushConfigQuery.error && !(pushConfigQuery.error instanceof ApiRequestError && pushConfigQuery.error.statusCode === 404) && <p role="alert" className="mt-1 text-xs text-red-700">Push setup could not be reached. Check your connection and backend deployment.</p>}
-            {!pushConfigQuery.data?.data.available && !pushConfigQuery.error && !pushConfigQuery.isLoading && <p className="mt-1 text-xs text-gray-500">Push delivery is not configured on the backend yet. In-app notifications remain available.</p>}
-            {pushStatusQuery.data?.data.enabled && !browserSubscribed && <p className="mt-1 text-xs text-gray-500">Push is enabled on another device.</p>}
-            {pushError && <p role="alert" className="mt-1 text-xs text-red-700">{pushError}</p>}
+      {/* Account-Isolated Notification Control */}
+      <section className="mb-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-start gap-3.5">
+            <div className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
+              isAccountPushEnabled ? 'bg-success-100 text-success-700' : 'bg-gray-100 text-gray-500'
+            }`}>
+              <BellRing className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-base font-semibold text-gray-900">Push Notifications</h2>
+                <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                  isAccountPushEnabled
+                    ? 'border border-success-200 bg-success-50 text-success-700'
+                    : 'border border-gray-200 bg-gray-50 text-gray-600'
+                }`}>
+                  <span className={`h-1.5 w-1.5 rounded-full ${isAccountPushEnabled ? 'bg-success-600' : 'bg-gray-400'}`} />
+                  {isAccountPushEnabled ? 'Active for this account' : 'Disabled for this account'}
+                </span>
+              </div>
+              <p className="mt-1 text-sm text-gray-600">
+                Receiving updates for <span className="font-semibold text-gray-900">{userDisplayName}</span> ({roleDisplay}).
+              </p>
+              <p className="mt-0.5 text-xs text-gray-400">
+                Notification controls are strictly private to this account. Toggling here will not affect other accounts on this device.
+              </p>
+              {pushConfigQuery.error instanceof ApiRequestError && pushConfigQuery.error.statusCode === 404 && (
+                <p role="alert" className="mt-1.5 text-xs font-medium text-red-700">The deployed backend does not have the push setup endpoint yet.</p>
+              )}
+              {pushConfigQuery.error && !(pushConfigQuery.error instanceof ApiRequestError && pushConfigQuery.error.statusCode === 404) && (
+                <p role="alert" className="mt-1.5 text-xs font-medium text-red-700">Push setup could not be reached. Check your connection.</p>
+              )}
+              {!pushConfigQuery.data?.data.available && !pushConfigQuery.error && !pushConfigQuery.isLoading && (
+                <p className="mt-1.5 text-xs text-gray-500">Push delivery is not configured on the backend yet. In-app notifications remain available.</p>
+              )}
+              {pushError && (
+                <p role="alert" className="mt-1.5 text-xs font-medium text-red-700">{pushError}</p>
+              )}
+            </div>
           </div>
+
+          <button
+            type="button"
+            onClick={() => pushMutation.mutate()}
+            disabled={pushMutation.isPending || pushConfigQuery.isLoading || (!isAccountPushEnabled && !pushConfigQuery.data?.data.available)}
+            aria-pressed={isAccountPushEnabled}
+            className={`inline-flex h-10 min-w-44 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
+              isAccountPushEnabled
+                ? 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 hover:border-gray-400'
+                : 'bg-primary-600 text-white shadow-sm hover:bg-primary-700'
+            }`}
+          >
+            {pushMutation.isPending ? (
+              <LoaderCircle className="h-4 w-4 animate-spin" />
+            ) : (
+              <Bell className="h-4 w-4" />
+            )}
+            {isAccountPushEnabled ? 'Disable for this account' : 'Enable push notifications'}
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={() => pushMutation.mutate()}
-          disabled={pushMutation.isPending || pushConfigQuery.isLoading || (!browserSubscribed && !pushConfigQuery.data?.data.available)}
-          aria-pressed={browserSubscribed}
-          className={`inline-flex h-10 min-w-36 items-center justify-center gap-2 rounded-lg px-4 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${browserSubscribed ? 'border border-gray-300 text-gray-700 hover:bg-gray-50' : 'bg-primary-700 text-white hover:bg-primary-800'}`}
-        >
-          {pushMutation.isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Bell className="h-4 w-4" />}
-          {browserSubscribed ? 'Disable on this device' : 'Enable push'}
-        </button>
       </section>
 
       {isLoading ? (

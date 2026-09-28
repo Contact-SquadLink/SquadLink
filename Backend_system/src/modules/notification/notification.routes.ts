@@ -10,7 +10,8 @@ import {
   listNotificationsForUser,
   markNotificationRead,
   removePushSubscription,
-  savePushSubscription
+  savePushSubscription,
+  updateNotificationPreferences
 } from "./notification.service";
 
 const notificationParamsSchema = z.object({
@@ -25,13 +26,19 @@ const pushSubscriptionSchema = z.object({
   })
 });
 
-const pushUnsubscribeSchema = z.object({ endpoint: z.string().url().max(2048) });
+const pushUnsubscribeSchema = z.object({
+  endpoint: z.string().url().max(2048).optional()
+}).optional();
+
+const notificationPreferencesSchema = z.object({
+  enabled: z.boolean()
+});
 
 export async function notificationRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("preHandler", authenticate);
   app.addHook(
     "preHandler",
-    authorize("CUSTOMER", "BUSINESS_USER", "RIDER", "ADMIN")
+    authorize("CUSTOMER", "BUSINESS_USER", "RIDER", "ADMIN", "SUPER_ADMIN")
   );
 
   app.get("/", async (request) => successResponse(
@@ -58,9 +65,17 @@ export async function notificationRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.delete("/push/subscription", async (request) => {
-    const { endpoint } = pushUnsubscribeSchema.parse(request.body);
+    const body = pushUnsubscribeSchema.parse(request.body ?? {});
     return successResponse(
-      await removePushSubscription(request.user.id, endpoint),
+      await removePushSubscription(request.user.id, body?.endpoint),
+      request.id
+    );
+  });
+
+  app.patch("/preferences", async (request) => {
+    const { enabled } = notificationPreferencesSchema.parse(request.body);
+    return successResponse(
+      await updateNotificationPreferences(request.user.id, enabled),
       request.id
     );
   });

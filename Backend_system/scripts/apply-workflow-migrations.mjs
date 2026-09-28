@@ -187,6 +187,20 @@ try {
     );
   }
 
+  const notificationIsolationMigration = await client.query(
+    "SELECT 1 FROM public.schema_migrations WHERE version = '100'"
+  );
+  if (notificationIsolationMigration.rowCount === 0) {
+    const sql100 = await readFile(
+      new URL('../database/migrations/100_isolate_account_push_subscriptions.sql', import.meta.url),
+      'utf8'
+    );
+    await client.query(sql100);
+    await client.query(
+      "INSERT INTO public.schema_migrations (version, name) VALUES ('100', 'isolate_account_push_subscriptions')"
+    );
+  }
+
     await client.query(`
       INSERT INTO public.schema_migrations (version, name) VALUES
         ('004', 'create_businesses'),
