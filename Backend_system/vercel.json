@@ -1,10 +1,5 @@
 {
   "version": 2,
-  "buildCommand": "pnpm run vercel-build",
-  "crons": [
-    {
-      "path": "/api/v1/cron/outbox",
-      "schedule": "* * * * *"
-    }
-  ]
+  "buildCommand": "pnpm run vercel-build"
 }
+

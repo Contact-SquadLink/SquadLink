@@ -22,6 +22,8 @@ const envSchema = z.object({
 
   VAPID_SUBJECT: z.string().default("mailto:support@squadlink.app"),
 
+  CRON_SECRET: z.string().optional(),
+
   SANDBOX_PAYMENTS_ENABLED: z
     .enum(["true", "false"])
     .default("true")
