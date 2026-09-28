@@ -152,8 +152,8 @@ export async function buildApp() {
 
       const queryTimeout = new Promise<never>((_, reject) => {
         timeoutHandle = setTimeout(
-          () => reject(new Error("Health database query timed out after 5000ms")),
-          5000
+          () => reject(new Error("Health database query timed out after 15000ms")),
+          15000
         );
       });
 
