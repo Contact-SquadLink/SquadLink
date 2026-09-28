@@ -1,6 +1,12 @@
 import { db } from "./database";
 
 export async function ensureWorkflowSchema(): Promise<void> {
+  try {
+    await db.query(`ALTER TYPE public.user_role ADD VALUE IF NOT EXISTS 'SUPER_ADMIN'`);
+  } catch {
+    // Already exists or unsupported inside sub-transaction
+  }
+
   await db.query(`
     -- Orders fee columns
     ALTER TABLE public.orders
@@ -25,9 +31,6 @@ export async function ensureWorkflowSchema(): Promise<void> {
           ADD CONSTRAINT chk_orders_business_fee CHECK (business_fee_amount >= 0) NOT VALID;
       END IF;
     END $$;
-
-    -- Add SUPER_ADMIN to user_role enum
-    ALTER TYPE public.user_role ADD VALUE IF NOT EXISTS 'SUPER_ADMIN';
 
     -- Service zones
     CREATE TABLE IF NOT EXISTS public.service_zones (

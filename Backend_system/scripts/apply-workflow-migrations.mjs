@@ -187,8 +187,30 @@ try {
     );
   }
 
-  await client.query('COMMIT');
-  console.log('Workflow migrations applied successfully.');
+    await client.query(`
+      INSERT INTO public.schema_migrations (version, name) VALUES
+        ('004', 'create_businesses'),
+        ('077', 'add_delivery_arrived_status'),
+        ('078', 'add_notification_type_column'),
+        ('079', 'add_user_first_last_name'),
+        ('080', 'add_admin_approval_fields'),
+        ('081', 'add_delivery_contact_phone'),
+        ('082', 'add_business_application_notification_types'),
+        ('083', 'seed_platform_business_templates'),
+        ('084', 'add_catalog_template_metadata'),
+        ('085', 'backfill_template_catalog_metadata'),
+        ('088', 'add_admin_account_controls'),
+        ('089', 'create_earnings_and_withdrawals'),
+        ('090', 'retire_test_rice_template')
+      ON CONFLICT (version) DO NOTHING;
+
+      UPDATE public.users
+      SET role = 'SUPER_ADMIN', updated_at = NOW()
+      WHERE email = 'contact.squadlink@gmail.com' AND role <> 'SUPER_ADMIN';
+    `);
+
+    await client.query('COMMIT');
+    console.log('Workflow migrations applied successfully.');
 } catch (error) {
   await client.query('ROLLBACK').catch(() => undefined);
   console.error('Workflow migration failed:', error);
