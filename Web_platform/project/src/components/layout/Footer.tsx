@@ -35,8 +35,8 @@ const footerSections = [
       { label: 'About Us', path: '/about' },
       { label: 'FAQ', path: '/faq' },
       { label: 'Contact', path: '/contact' },
-      { label: 'Privacy Policy', path: '/#privacy' },
-      { label: 'Terms of Service', path: '/#terms' },
+      { label: 'Privacy Policy', path: '/privacy' },
+      { label: 'Terms of Service', path: '/terms' },
     ],
   },
 ];
@@ -100,8 +100,8 @@ export function Footer() {
 
         <div className="mt-12 flex flex-col items-center justify-between gap-4 border-t border-gray-800 pt-8 sm:flex-row">
           <div className="flex items-center gap-6 text-sm text-gray-500">
-            <Link to="/#privacy" className="hover:text-gray-300">Privacy Policy</Link>
-            <Link to="/#terms" className="hover:text-gray-300">Terms of Service</Link>
+            <Link to="/privacy" className="hover:text-gray-300">Privacy Policy</Link>
+            <Link to="/terms" className="hover:text-gray-300">Terms of Service</Link>
           </div>
           <p className="text-sm text-gray-500">
             &copy; {new Date().getFullYear()} SQUADLINK. All rights reserved.

@@ -21,6 +21,8 @@ export interface UserRecord {
   emailVerifiedAt: Date | null;
   phoneVerifiedAt: Date | null;
   profileUpdatedAt: Date | null;
+  termsAccepted: boolean;
+  termsAcceptedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -42,6 +44,8 @@ interface UserRow {
   email_verified_at: Date | null;
   phone_verified_at: Date | null;
   profile_updated_at: Date | null;
+  terms_accepted: boolean;
+  terms_accepted_at: Date | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -75,6 +79,8 @@ function mapUser(row: UserRow): UserRecord {
     emailVerifiedAt: row.email_verified_at,
     phoneVerifiedAt: row.phone_verified_at,
     profileUpdatedAt: row.profile_updated_at,
+    termsAccepted: row.terms_accepted,
+    termsAcceptedAt: row.terms_accepted_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
@@ -97,6 +103,8 @@ const USER_COLUMNS = `
   email_verified_at,
   phone_verified_at,
   profile_updated_at,
+  terms_accepted,
+  terms_accepted_at,
   created_at,
   updated_at
 `;
@@ -237,9 +245,11 @@ export async function createUser(
         first_name,
         last_name,
         username,
-        password_hash
+        password_hash,
+        terms_accepted,
+        terms_accepted_at
       )
-      VALUES ($1, $2, $3, $4, $5, $6)
+      VALUES ($1, $2, $3, $4, $5, $6, TRUE, NOW())
       RETURNING ${USER_COLUMNS}
     `,
     [

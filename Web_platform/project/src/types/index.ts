@@ -22,6 +22,8 @@ export interface User {
   emailVerifiedAt?: string | null;
   phoneVerifiedAt?: string | null;
   profileUpdatedAt?: string | null;
+  termsAccepted?: boolean;
+  termsAcceptedAt?: string | null;
   createdAt?: string;
   updatedAt?: string;
   firstName?: string;

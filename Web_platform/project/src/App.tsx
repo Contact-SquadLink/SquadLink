@@ -18,7 +18,10 @@ import { FAQPage } from '@/pages/FAQPage';
 import { ContactPage } from '@/pages/ContactPage';
 import { LoginPage } from '@/pages/LoginPage';
 import { RegisterPage } from '@/pages/RegisterPage';
+import { TermsPage } from '@/pages/TermsPage';
+import { PrivacyPage } from '@/pages/PrivacyPage';
 import { UnauthorizedPage } from '@/pages/UnauthorizedPage';
+import { CookieConsentBanner } from '@/components/common/CookieConsentBanner';
 
 // Customer pages
 import { CustomerDashboard } from '@/pages/CustomerDashboard';
@@ -118,6 +121,8 @@ export default function App() {
               <Route path="/about" element={<PublicPagesLayout><AboutPage /></PublicPagesLayout>} />
               <Route path="/faq" element={<PublicPagesLayout><FAQPage /></PublicPagesLayout>} />
               <Route path="/contact" element={<PublicPagesLayout><ContactPage /></PublicPagesLayout>} />
+              <Route path="/terms" element={<PublicPagesLayout><TermsPage /></PublicPagesLayout>} />
+              <Route path="/privacy" element={<PublicPagesLayout><PrivacyPage /></PublicPagesLayout>} />
 
               {/* Customer authenticated routes — use dashboard layout */}
               <Route
@@ -274,6 +279,7 @@ export default function App() {
                 }
               />
             </Routes>
+            <CookieConsentBanner />
           </BrowserRouter>
         </CartProvider>
       </AuthProvider>

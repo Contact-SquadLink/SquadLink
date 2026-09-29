@@ -48,6 +48,8 @@ export interface SafeUser {
   emailVerifiedAt: Date | null;
   phoneVerifiedAt: Date | null;
   profileUpdatedAt: Date | null;
+  termsAccepted: boolean;
+  termsAcceptedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -74,6 +76,8 @@ export function toSafeUser(user: UserRecord): SafeUser {
     emailVerifiedAt: user.emailVerifiedAt,
     phoneVerifiedAt: user.phoneVerifiedAt,
     profileUpdatedAt: user.profileUpdatedAt,
+    termsAccepted: user.termsAccepted,
+    termsAcceptedAt: user.termsAcceptedAt,
     createdAt: user.createdAt,
     updatedAt: user.updatedAt
   };

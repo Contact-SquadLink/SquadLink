@@ -50,7 +50,13 @@ export const registerSchema = z
       .max(30)
       .regex(/^[a-zA-Z0-9_]+$/, "Username may only contain letters, numbers, and underscores.")
       .toLowerCase()
-      .optional()
+      .optional(),
+
+    termsAccepted: z
+      .boolean()
+      .refine((val) => val === true, {
+        message: "You must agree to SquadLink's Terms of Service and Privacy Policy, and certify that all provided information is accurate."
+      })
   })
   .refine(
     (data) => Boolean(data.email || data.phoneNumber),

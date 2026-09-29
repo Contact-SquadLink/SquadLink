@@ -61,6 +61,7 @@ export function BusinessRegisterPage() {
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
 
   useEffect(() => {
     if (!user) {
@@ -140,6 +141,10 @@ export function BusinessRegisterPage() {
 
     if (form.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
       return 'Business email is invalid.';
+    }
+
+    if (!agreedToTerms) {
+      return 'You must certify information accuracy and agree to SquadLink’s Terms of Service and Privacy Policy to register your business.';
     }
 
     return null;
@@ -463,10 +468,33 @@ export function BusinessRegisterPage() {
                 />
               </div>
 
+              {/* Legal Compliance Checkbox */}
+              <div className="rounded-xl border border-gray-200 bg-gray-50/80 p-3.5 text-xs text-gray-600">
+                <label className="flex items-start gap-3 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={agreedToTerms}
+                    onChange={(e) => setAgreedToTerms(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500 cursor-pointer shrink-0"
+                  />
+                  <span className="leading-snug">
+                    I agree to SquadLink’s{' '}
+                    <Link to="/terms" target="_blank" rel="noopener noreferrer" className="font-bold text-primary-600 hover:underline">
+                      Terms of Service
+                    </Link>{' '}
+                    and{' '}
+                    <Link to="/privacy" target="_blank" rel="noopener noreferrer" className="font-bold text-primary-600 hover:underline">
+                      Privacy Policy
+                    </Link>
+                    , and certify that all listed business details, products, and prices are authentic, safe, and authorized for commercial sale in Nigeria. I understand that submitting false credentials creates direct legal accountability and indemnifies SquadLink.
+                  </span>
+                </label>
+              </div>
+
               <button
                 type="submit"
-                disabled={isSubmitting}
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary-600 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={!agreedToTerms || isSubmitting}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary-600 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
               >
                 {isSubmitting ? (
                   <>

@@ -72,6 +72,7 @@ export function RegisterPage() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
 
   // Auto-suggested username preview if user has not typed a custom username
   const suggestedUsername = (
@@ -111,6 +112,11 @@ export function RegisterPage() {
       return;
     }
 
+    if (!agreedToTerms) {
+      setError("Please agree to SquadLink's Terms of Service and Privacy Policy to continue.");
+      return;
+    }
+
     setIsLoading(true);
 
     if (user) {
@@ -135,6 +141,7 @@ export function RegisterPage() {
         email: cleanEmail || undefined,
         phoneNumber: cleanPhone || undefined,
         password,
+        termsAccepted: true,
       });
 
       if (intent === 'business') {
@@ -454,10 +461,34 @@ export function RegisterPage() {
                   </div>
                 </div>
 
+                {/* Mandatory Legal Compliance Checkbox */}
+                <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50/80 p-3.5 transition-colors focus-within:border-primary-400">
+                  <label className="flex items-start gap-3 cursor-pointer select-none">
+                    <input
+                      id="terms-checkbox"
+                      type="checkbox"
+                      checked={agreedToTerms}
+                      onChange={(e) => setAgreedToTerms(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500 cursor-pointer shrink-0"
+                    />
+                    <span className="text-xs text-gray-600 leading-snug">
+                      I agree to SquadLink’s{' '}
+                      <Link to="/terms" target="_blank" rel="noopener noreferrer" className="font-bold text-primary-600 hover:underline">
+                        Terms of Service
+                      </Link>{' '}
+                      and{' '}
+                      <Link to="/privacy" target="_blank" rel="noopener noreferrer" className="font-bold text-primary-600 hover:underline">
+                        Privacy Policy
+                      </Link>
+                      , and certify that all provided information is accurate. I understand that providing false details or causing harm will result in immediate account termination and legal liability.
+                    </span>
+                  </label>
+                </div>
+
                 <button
                   type="submit"
-                  disabled={isLoading}
-                  className="w-full mt-2 inline-flex items-center justify-center rounded-xl bg-primary-600 py-3 text-sm font-bold text-white shadow-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500/20 disabled:opacity-50 transition-all cursor-pointer"
+                  disabled={!agreedToTerms || isLoading}
+                  className="w-full mt-3 inline-flex items-center justify-center rounded-xl bg-primary-600 py-3 text-sm font-bold text-white shadow-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500/20 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
                 >
                   {isLoading ? (
                     <>

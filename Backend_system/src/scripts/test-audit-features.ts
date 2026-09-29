@@ -1,10 +1,12 @@
 import { db } from "../db/database";
 import {
+  registerUser,
   updateUserProfileService,
   requestVerificationOtpService,
   confirmVerificationOtpService,
   resetPasswordService
 } from "../modules/auth/auth.service";
+import { registerSchema } from "../modules/auth/auth.schemas";
 import { createCustomProductForBusiness } from "../modules/business/business.service";
 import { cancelCustomerOrderBeforePayment, getOrderForUser } from "../modules/order/order.service";
 import { getMyEarnings, requestWithdrawal, reviewWithdrawal } from "../modules/earnings/earnings.service";
@@ -18,6 +20,57 @@ async function runAudit() {
   const results: { test: string; passed: boolean; message: string }[] = [];
 
   try {
+    // -------------------------------------------------------------
+    // Test 0: Legal Compliance & Mandatory Policy Acceptance
+    // -------------------------------------------------------------
+    console.log("▶ Running Test 0: Legal Policies & Terms Acceptance...");
+    const sampleRegistrationEmail = `compliance_${Date.now()}@squadlink.ng`;
+
+    // 1. Attempt registering without terms acceptance (should fail schema validation)
+    const invalidRegAttempt = registerSchema.safeParse({
+      email: sampleRegistrationEmail,
+      password: "Password123!",
+      firstName: "Legal",
+      lastName: "Tester",
+      termsAccepted: false
+    });
+    const termsBlocked = !invalidRegAttempt.success;
+
+    // 2. Register with termsAccepted: true
+    const validReg = await registerUser({
+      email: sampleRegistrationEmail,
+      password: "Password123!",
+      firstName: "Legal",
+      lastName: "Tester",
+      termsAccepted: true
+    });
+
+    const userTermsCheck = await db.query(
+      `SELECT terms_accepted, terms_accepted_at FROM public.users WHERE id = $1`,
+      [validReg.id]
+    );
+
+    const termsAcceptedSuccess =
+      validReg.termsAccepted === true &&
+      userTermsCheck.rows[0]?.terms_accepted === true &&
+      userTermsCheck.rows[0]?.terms_accepted_at !== null;
+
+    results.push({
+      test: "Registration Terms & Conditions Enforcement",
+      passed: termsBlocked,
+      message: termsBlocked ? "Registration strictly blocked when terms are not accepted" : "Failed: allowed registration without terms"
+    });
+
+    results.push({
+      test: "Legal Policy Acceptance & Audit Timestamping",
+      passed: termsAcceptedSuccess,
+      message: termsAcceptedSuccess ? `Recorded terms_accepted: true with legal timestamp ${userTermsCheck.rows[0]?.terms_accepted_at}` : "Failed: terms acceptance not recorded in db"
+    });
+
+    // Cleanup legal sample user
+    await db.query(`DELETE FROM public.notifications WHERE user_id = $1`, [validReg.id]);
+    await db.query(`DELETE FROM public.users WHERE id = $1`, [validReg.id]);
+
     // -------------------------------------------------------------
     // Test 1: User Profile, Unique Username & 7-Day Rate-Limiting
     // -------------------------------------------------------------

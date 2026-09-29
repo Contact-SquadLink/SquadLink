@@ -9,6 +9,7 @@ export interface RegisterPayload {
   lastName?: string;
   username?: string;
   phone?: string;
+  termsAccepted?: boolean;
 }
 
 export interface LoginPayload {
@@ -54,6 +55,7 @@ export const authApi = {
         firstName: payload.firstName?.trim() || undefined,
         lastName: payload.lastName?.trim() || undefined,
         username: payload.username?.trim() || undefined,
+        termsAccepted: Boolean(payload.termsAccepted)
       },
       skipAuth: true,
     }),
