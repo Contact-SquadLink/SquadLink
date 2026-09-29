@@ -603,8 +603,8 @@ export async function placeOrder(
           $8,
           $9,
           $10,
-          $10,
           $11,
+          $12,
           'NGN'
         )
         RETURNING id
@@ -620,6 +620,7 @@ export async function placeOrder(
         orderTotals.subtotal,
         deliveryFeeAmount,
         platformFeeAmount,
+        0,
         totalAmount
       ]
     );
@@ -904,26 +905,30 @@ export async function placeOrder(
     // We do NOT emit merchant notification events before payment clears.
     // Merchant will only be alerted once payment clears via PAYMENT_SUCCESSFUL outbox event.
 
-    // In-app notification for the customer confirming the order was placed
-    await createInAppNotification({
-      userId,
-      orderId,
-      type: "ORDER_CONFIRMED",
-      title: "Order Placed",
-      message: `Your order #${orderId.slice(0, 8)} has been placed and is awaiting payment confirmation.`,
-      eventKey: `order-placed:${orderId}`,
-      client,
-    });
+    // In-app notification for the customer confirming the order was placed (safeguarded)
+    try {
+      await createInAppNotification({
+        userId,
+        orderId,
+        type: "ORDER_CONFIRMED",
+        title: "Order Placed",
+        message: `Your order #${orderId.slice(0, 8)} has been placed and is awaiting payment confirmation.`,
+        eventKey: `order-placed:${orderId}`,
+        client,
+      });
 
-    // Alert admins of new pending order
-    await notifyAdmins({
-      type: "ORDER_CONFIRMED",
-      title: "New Order Initiated",
-      message: `Order #${orderId.slice(0, 8)} was placed and is awaiting payment.`,
-      orderId,
-      eventKeyPrefix: `admin-order-placed:${orderId}`,
-      client,
-    });
+      // Alert admins of new pending order
+      await notifyAdmins({
+        type: "ORDER_CONFIRMED",
+        title: "New Order Initiated",
+        message: `Order #${orderId.slice(0, 8)} was placed and is awaiting payment.`,
+        orderId,
+        eventKeyPrefix: `admin-order-placed:${orderId}`,
+        client,
+      });
+    } catch (notifyErr) {
+      console.warn("[ORDER PLACEMENT NOTIFICATION NON-BLOCKING WARNING]", notifyErr);
+    }
 
     await client.query(
       `
