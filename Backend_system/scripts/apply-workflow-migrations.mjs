@@ -201,6 +201,34 @@ try {
     );
   }
 
+  const profileSecurityMigration = await client.query(
+    "SELECT 1 FROM public.schema_migrations WHERE version = '101'"
+  );
+  if (profileSecurityMigration.rowCount === 0) {
+    const sql101 = await readFile(
+      new URL('../database/migrations/101_add_user_profile_security_and_verifications.sql', import.meta.url),
+      'utf8'
+    );
+    await client.query(sql101);
+    await client.query(
+      "INSERT INTO public.schema_migrations (version, name) VALUES ('101', 'add_user_profile_security_and_verifications')"
+    );
+  }
+
+  const customerEarningsMigration = await client.query(
+    "SELECT 1 FROM public.schema_migrations WHERE version = '102'"
+  );
+  if (customerEarningsMigration.rowCount === 0) {
+    const sql102 = await readFile(
+      new URL('../database/migrations/102_allow_customer_earnings_and_withdrawals.sql', import.meta.url),
+      'utf8'
+    );
+    await client.query(sql102);
+    await client.query(
+      "INSERT INTO public.schema_migrations (version, name) VALUES ('102', 'allow_customer_earnings_and_withdrawals')"
+    );
+  }
+
     await client.query(`
       INSERT INTO public.schema_migrations (version, name) VALUES
         ('004', 'create_businesses'),

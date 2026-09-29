@@ -1,6 +1,19 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
-import { Eye, EyeOff, ShoppingBag, Loader2 } from 'lucide-react';
+import {
+  Eye,
+  EyeOff,
+  ShoppingBag,
+  Loader2,
+  Bike,
+  ShieldCheck,
+  Zap,
+  Star,
+  Clock,
+  Sparkles,
+  CheckCircle2,
+  AtSign,
+} from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { formatNigerianPhone, isCompleteNigerianPhone, phoneDigits } from '@/utils/nigerian-phone';
 
@@ -50,6 +63,7 @@ export function RegisterPage() {
 
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
+  const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [password, setPassword] = useState('');
@@ -58,6 +72,12 @@ export function RegisterPage() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Auto-suggested username preview if user has not typed a custom username
+  const suggestedUsername = (
+    username.trim() ||
+    (firstName.trim() ? `${firstName.trim().toLowerCase().replace(/[^a-z0-9]/g, '')}_${Math.floor(1000 + Math.random() * 9000)}` : '')
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -111,19 +131,26 @@ export function RegisterPage() {
       const registeredUser = await register({
         firstName: firstName.trim() || undefined,
         lastName: lastName.trim() || undefined,
+        username: username.trim() || undefined,
         email: cleanEmail || undefined,
         phoneNumber: cleanPhone || undefined,
         password,
       });
 
       if (intent === 'business') {
-        const nextPath = registeredUser.role === 'BUSINESS_USER' ? '/business' : registeredUser.role === 'RIDER' ? '/rider' : '/business/register';
+        const nextPath =
+          registeredUser.role === 'BUSINESS_USER'
+            ? '/business'
+            : registeredUser.role === 'RIDER'
+            ? '/rider'
+            : '/business/register';
         navigate(nextPath);
       } else {
         navigate(safeRedirect(redirect) || '/dashboard');
       }
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Registration failed. Please check your details and try again.';
+      const message =
+        err instanceof Error ? err.message : 'Registration failed. Please check your details and try again.';
       setError(message);
     } finally {
       setIsLoading(false);
@@ -131,193 +158,345 @@ export function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      <div className="border-b border-gray-100 bg-white">
+    <div className="min-h-screen bg-slate-900 flex flex-col relative overflow-hidden">
+      <style>{`
+        @keyframes float-slow {
+          0%, 100% { transform: translateY(0px) rotate(0deg); }
+          50% { transform: translateY(-12px) rotate(1deg); }
+        }
+        @keyframes float-reverse {
+          0%, 100% { transform: translateY(0px) rotate(0deg); }
+          50% { transform: translateY(14px) rotate(-1deg); }
+        }
+        @keyframes pulse-radar {
+          0% { transform: scale(0.95); opacity: 0.8; }
+          50% { transform: scale(1.15); opacity: 0.3; }
+          100% { transform: scale(0.95); opacity: 0.8; }
+        }
+        .anim-float { animation: float-slow 6s ease-in-out infinite; }
+        .anim-float-rev { animation: float-reverse 7s ease-in-out infinite; }
+        .anim-radar { animation: pulse-radar 3s ease-in-out infinite; }
+      `}</style>
+
+      {/* Ambient background glows */}
+      <div className="absolute -top-40 -left-40 h-96 w-96 rounded-full bg-primary-600/20 blur-3xl pointer-events-none" />
+      <div className="absolute top-1/2 -right-40 h-96 w-96 rounded-full bg-emerald-500/15 blur-3xl pointer-events-none" />
+      <div className="absolute -bottom-40 left-1/3 h-96 w-96 rounded-full bg-cyan-600/15 blur-3xl pointer-events-none" />
+
+      {/* Top Navbar */}
+      <header className="relative z-20 border-b border-white/10 bg-slate-900/70 backdrop-blur-md">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-600 text-white">
-              <ShoppingBag className="h-5 w-5" />
-            </div>
-            <span className="font-display text-xl font-bold text-gray-900">
-              SQUA<span className="text-primary-600">LINK</span>
+            <img
+              src="/squadlink-logo.png"
+              alt="SquadLink"
+              className="h-9 w-9 object-contain drop-shadow-sm"
+            />
+            <span className="font-display text-xl font-bold text-white tracking-tight">
+              SQUAD<span className="text-primary-400">LINK</span>
             </span>
           </Link>
           <Link
             to={`/login?role=CUSTOMER${redirect ? `&redirect=${encodeURIComponent(redirect)}` : ''}`}
-            className="text-sm font-medium text-gray-500 hover:text-gray-900 transition-colors"
+            className="rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-xs sm:text-sm font-semibold text-white hover:bg-white/10 transition-colors"
           >
-            Already have an account? Sign In
+            Already have an account? <span className="text-primary-400 font-bold ml-1">Sign In</span>
           </Link>
         </div>
-      </div>
+      </header>
 
-      <div className="flex-1 flex items-center justify-center px-4 py-12">
-        <div className="w-full max-w-md">
-          <div className="text-center mb-8">
-            <h1 className="font-display text-3xl font-bold text-gray-900">
-              {intent === 'business' ? 'Create Business Account' : 'Create Customer Account'}
+      {/* Main Interactive Layout */}
+      <main className="relative z-10 flex-1 mx-auto max-w-7xl w-full px-4 sm:px-6 lg:px-8 py-8 lg:py-12 flex items-center">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 w-full items-center">
+          
+          {/* Left Column: Interactive Animated Showcase (Hero/Visuals) */}
+          <div className="lg:col-span-6 space-y-6 text-white order-2 lg:order-1">
+            <div className="inline-flex items-center gap-2 rounded-full border border-primary-500/30 bg-primary-500/10 px-3.5 py-1.5 text-xs font-semibold text-primary-300 backdrop-blur-sm">
+              <Sparkles className="h-3.5 w-3.5 text-primary-400 animate-spin" />
+              <span>Next-Gen Hyperlocal Campus & City Logistics</span>
+            </div>
+
+            <h1 className="font-display text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight leading-tight">
+              Join the fastest <br />
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary-400 via-emerald-300 to-cyan-400">
+                delivery network
+              </span> in town.
             </h1>
-            <p className="mt-2 text-gray-600">
-              {intent === 'business'
-                ? 'Create your account credentials to begin business registration'
-                : 'Join SquaLink to order from local stores'}
+
+            <p className="text-sm sm:text-base text-slate-300 max-w-lg leading-relaxed">
+              Experience seamless ordering from verified local restaurants, grocery markets, and merchants — with live courier tracking and protected payouts.
             </p>
-            {intent === 'admin' && (
-              <p className="mt-2 text-sm text-red-600">
-                Admin accounts are invited-only and cannot be created from this page.
-              </p>
-            )}
-          </div>
 
-          <div className="bg-white px-6 py-8 shadow-xl rounded-2xl border border-gray-100">
-            {error && (
-              <div className="mb-4 p-3 rounded-lg bg-red-50 text-red-600 text-sm border border-red-100">
-                {error}
-              </div>
-            )}
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label htmlFor="firstName" className="block text-sm font-medium text-gray-700 mb-1">
-                    First Name
-                  </label>
-                  <input
-                    id="firstName"
-                    type="text"
-                    value={firstName}
-                    onChange={(e) => setFirstName(e.target.value)}
-                    className="w-full px-3.5 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-all text-sm"
-                    placeholder="John"
-                  />
+            {/* Animated Interactive Delivery Status Cards */}
+            <div className="space-y-4 pt-2">
+              {/* Floating Card 1: Live Courier Dispatch */}
+              <div className="anim-float rounded-2xl border border-white/15 bg-white/10 p-4 backdrop-blur-md shadow-xl flex items-center gap-4 max-w-md">
+                <div className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-primary-600 to-emerald-500 text-white shadow-md">
+                  <Bike className="h-6 w-6" />
+                  <span className="anim-radar absolute -top-1 -right-1 h-3.5 w-3.5 rounded-full bg-emerald-400 ring-2 ring-slate-900" />
                 </div>
-                <div>
-                  <label htmlFor="lastName" className="block text-sm font-medium text-gray-700 mb-1">
-                    Last Name
-                  </label>
-                  <input
-                    id="lastName"
-                    type="text"
-                    value={lastName}
-                    onChange={(e) => setLastName(e.target.value)}
-                    className="w-full px-3.5 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-all text-sm"
-                    placeholder="Doe"
-                  />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-bold text-white">Courier En Route ⚡</p>
+                    <span className="text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                      Live GPS
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-300 truncate mt-0.5">
+                    Assigned courier accepted order · 18 mins to doorstep
+                  </p>
                 </div>
               </div>
 
-              <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                  Email Address
-                </label>
-                <input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full px-3.5 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-all text-sm"
-                  placeholder="you@example.com"
-                />
-              </div>
-
-              <div>
-                <label htmlFor="phoneNumber" className="block text-sm font-medium text-gray-700 mb-1">
-                  Phone Number
-                </label>
-                <div className="flex w-full rounded-lg border border-gray-300">
-                  <span className="flex items-center border-r border-gray-200 bg-gray-50 px-3 text-sm font-semibold text-gray-600">+234</span>
-                  <input
-                    id="phoneNumber"
-                    type="tel"
-                    value={phoneDigits(phoneNumber)}
-                    onChange={(e) => setPhoneNumber(formatNigerianPhone(e.target.value))}
-                    className="min-w-0 flex-1 rounded-r-lg px-3.5 py-2 text-sm outline-none focus:ring-2 focus:ring-primary-500"
-                    placeholder="9011390588"
-                    inputMode="numeric"
-                    maxLength={10}
-                  />
+              {/* Floating Card 2: Security & Escrow Protection */}
+              <div className="anim-float-rev rounded-2xl border border-white/15 bg-white/10 p-4 backdrop-blur-md shadow-xl flex items-center gap-4 max-w-md ml-auto lg:mr-8">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-cyan-600 to-primary-600 text-white shadow-md">
+                  <ShieldCheck className="h-6 w-6" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-bold text-white">Full Customer Protection 🛡️</p>
+                    <span className="text-[10px] font-semibold text-primary-300 bg-primary-500/10 px-2 py-0.5 rounded-full border border-primary-500/20">
+                      Verified
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-300 truncate mt-0.5">
+                    Cancel anytime before payment · 100% money back guarantee
+                  </p>
                 </div>
               </div>
+            </div>
 
-              <div>
-                <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-                  Password
-                </label>
-                <div className="relative">
-                  <input
-                    id="password"
-                    type={showPassword ? 'text' : 'password'}
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full px-3.5 py-2 pr-11 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-all text-sm"
-                    placeholder="At least 8 characters"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword((visible) => !visible)}
-                    className="absolute inset-y-0 right-0 flex items-center px-3 text-gray-500 hover:text-gray-700"
-                    aria-label={showPassword ? 'Hide password' : 'Show password'}
-                  >
-                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
-                </div>
+            {/* Live Platform Stats Ticker */}
+            <div className="grid grid-cols-3 gap-3 pt-4 max-w-md">
+              <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-center">
+                <p className="font-display text-xl sm:text-2xl font-black text-white">15k+</p>
+                <p className="text-[11px] text-slate-400 mt-0.5">Fulfilled Orders</p>
               </div>
-
-              <div>
-                <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
-                  Confirm Password
-                </label>
-                <div className="relative">
-                  <input
-                    id="confirmPassword"
-                    type={showConfirmPassword ? 'text' : 'password'}
-                    required
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="w-full px-3.5 py-2 pr-11 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-all text-sm"
-                    placeholder="Repeat your password"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowConfirmPassword((visible) => !visible)}
-                    className="absolute inset-y-0 right-0 flex items-center px-3 text-gray-500 hover:text-gray-700"
-                    aria-label={showConfirmPassword ? 'Hide confirmation password' : 'Show confirmation password'}
-                  >
-                    {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
-                </div>
+              <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-center">
+                <p className="font-display text-xl sm:text-2xl font-black text-emerald-400">&lt; 25m</p>
+                <p className="text-[11px] text-slate-400 mt-0.5">Avg Delivery</p>
               </div>
-
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="w-full mt-2 bg-primary-600 hover:bg-primary-700 text-white font-bold py-3 rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50 text-sm"
-              >
-                {isLoading ? (
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                ) : (
-                  'Create Account'
-                )}
-              </button>
-            </form>
-
-            <div className="mt-6 flex flex-col gap-3 text-center text-sm">
-              <Link
-                to={`/login?role=CUSTOMER${redirect ? `&redirect=${encodeURIComponent(redirect)}` : ''}`}
-                className="text-primary-600 hover:text-primary-700 font-semibold"
-              >
-                Already have an account? Sign In
-              </Link>
-              <button
-                onClick={() => navigate('/login')}
-                className="text-gray-500 hover:text-gray-700"
-              >
-                Back to role selection
-              </button>
+              <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-center">
+                <div className="flex items-center justify-center gap-1 font-display text-xl sm:text-2xl font-black text-amber-400">
+                  <span>4.9</span>
+                  <Star className="h-4 w-4 fill-amber-400" />
+                </div>
+                <p className="text-[11px] text-slate-400 mt-0.5">Customer Rating</p>
+              </div>
             </div>
           </div>
+
+          {/* Right Column: Account Creation Card */}
+          <div className="lg:col-span-6 order-1 lg:order-2">
+            <div className="w-full max-w-lg mx-auto rounded-3xl border border-white/15 bg-white/95 backdrop-blur-xl p-6 sm:p-8 shadow-2xl">
+              <div className="mb-6">
+                <h2 className="font-display text-2xl font-bold text-gray-900">
+                  {intent === 'business' ? 'Create Merchant Account' : 'Create Customer Account'}
+                </h2>
+                <p className="mt-1 text-xs text-gray-500">
+                  {intent === 'business'
+                    ? 'Register your account to begin managing your online store and catalogue'
+                    : 'Sign up to start ordering food, drinks, and packages on SquadLink'}
+                </p>
+              </div>
+
+              {error && (
+                <div className="mb-5 rounded-xl border border-red-200 bg-red-50 p-3.5 text-xs text-red-700 font-medium">
+                  {error}
+                </div>
+              )}
+
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label htmlFor="firstName" className="block text-xs font-semibold text-gray-700 mb-1">
+                      First Name
+                    </label>
+                    <input
+                      id="firstName"
+                      type="text"
+                      value={firstName}
+                      onChange={(e) => setFirstName(e.target.value)}
+                      placeholder="e.g. John"
+                      className="w-full rounded-xl border border-gray-300 px-3 py-2 text-xs focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-all"
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="lastName" className="block text-xs font-semibold text-gray-700 mb-1">
+                      Last Name
+                    </label>
+                    <input
+                      id="lastName"
+                      type="text"
+                      value={lastName}
+                      onChange={(e) => setLastName(e.target.value)}
+                      placeholder="e.g. Doe"
+                      className="w-full rounded-xl border border-gray-300 px-3 py-2 text-xs focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-all"
+                    />
+                  </div>
+                </div>
+
+                {/* Unique Username Field with Live Preview */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label htmlFor="username" className="block text-xs font-semibold text-gray-700">
+                      Unique Username <span className="text-gray-400 font-normal">(Optional)</span>
+                    </label>
+                    {suggestedUsername && (
+                      <span className="text-[10px] text-primary-600 font-mono font-medium">
+                        @{suggestedUsername}
+                      </span>
+                    )}
+                  </div>
+                  <div className="relative">
+                    <span className="absolute left-3 top-2 text-xs text-gray-400 font-mono">@</span>
+                    <input
+                      id="username"
+                      type="text"
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                      placeholder={suggestedUsername || 'unique_handle'}
+                      maxLength={30}
+                      className="w-full rounded-xl border border-gray-300 pl-7 pr-3 py-2 text-xs focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-all"
+                    />
+                  </div>
+                  <p className="text-[10px] text-gray-400 mt-1">
+                    Your unique handle across orders, deliveries, and communications.
+                  </p>
+                </div>
+
+                <div>
+                  <label htmlFor="email" className="block text-xs font-semibold text-gray-700 mb-1">
+                    Email Address
+                  </label>
+                  <input
+                    id="email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="you@example.com"
+                    className="w-full rounded-xl border border-gray-300 px-3.5 py-2 text-xs focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="phoneNumber" className="block text-xs font-semibold text-gray-700 mb-1">
+                    Phone Number
+                  </label>
+                  <div className="flex w-full rounded-xl border border-gray-300 overflow-hidden focus-within:ring-2 focus-within:ring-primary-500/20 focus-within:border-primary-500">
+                    <span className="flex items-center border-r border-gray-200 bg-gray-50 px-3 text-xs font-bold text-gray-600">
+                      +234
+                    </span>
+                    <input
+                      id="phoneNumber"
+                      type="tel"
+                      value={phoneDigits(phoneNumber)}
+                      onChange={(e) => setPhoneNumber(formatNigerianPhone(e.target.value))}
+                      placeholder="9011390588"
+                      inputMode="numeric"
+                      maxLength={10}
+                      className="min-w-0 flex-1 px-3 py-2 text-xs outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label htmlFor="password" className="block text-xs font-semibold text-gray-700 mb-1">
+                      Password
+                    </label>
+                    <div className="relative">
+                      <input
+                        id="password"
+                        type={showPassword ? 'text' : 'password'}
+                        required
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="Min. 8 characters"
+                        className="w-full rounded-xl border border-gray-300 px-3 py-2 pr-9 text-xs focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-all"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword((visible) => !visible)}
+                        className="absolute inset-y-0 right-0 flex items-center px-2.5 text-gray-400 hover:text-gray-600"
+                        aria-label={showPassword ? 'Hide password' : 'Show password'}
+                      >
+                        {showPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label htmlFor="confirmPassword" className="block text-xs font-semibold text-gray-700 mb-1">
+                      Confirm Password
+                    </label>
+                    <div className="relative">
+                      <input
+                        id="confirmPassword"
+                        type={showConfirmPassword ? 'text' : 'password'}
+                        required
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        placeholder="Repeat password"
+                        className="w-full rounded-xl border border-gray-300 px-3 py-2 pr-9 text-xs focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-all"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword((visible) => !visible)}
+                        className="absolute inset-y-0 right-0 flex items-center px-2.5 text-gray-400 hover:text-gray-600"
+                        aria-label={showConfirmPassword ? 'Hide confirmation password' : 'Show confirmation password'}
+                      >
+                        {showConfirmPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className="w-full mt-2 inline-flex items-center justify-center rounded-xl bg-primary-600 py-3 text-sm font-bold text-white shadow-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500/20 disabled:opacity-50 transition-all cursor-pointer"
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Creating Account...
+                    </>
+                  ) : (
+                    'Create Account'
+                  )}
+                </button>
+              </form>
+
+              {/* Alternate Registrations */}
+              <div className="mt-5 pt-4 border-t border-gray-100 flex flex-col items-center gap-2 text-center text-xs text-gray-500">
+                <p>
+                  Already have an account?{' '}
+                  <Link
+                    to={`/login?role=CUSTOMER${redirect ? `&redirect=${encodeURIComponent(redirect)}` : ''}`}
+                    className="font-semibold text-primary-600 hover:text-primary-700"
+                  >
+                    Sign In here
+                  </Link>
+                </p>
+
+                <div className="flex items-center gap-3 pt-1 text-[11px] text-gray-400">
+                  <Link to="/business/register" className="hover:text-primary-600 transition-colors">
+                    Merchant Sign Up &rarr;
+                  </Link>
+                  <span>·</span>
+                  <Link to="/rider/register" className="hover:text-primary-600 transition-colors">
+                    Rider Sign Up &rarr;
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
+
         </div>
-      </div>
+      </main>
     </div>
   );
 }

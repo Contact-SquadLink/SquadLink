@@ -59,3 +59,23 @@ export const updateBusinessCatalogItemSchema = z.object({
 
 export type UpdateBusinessCatalogItemInput =
   z.infer<typeof updateBusinessCatalogItemSchema>;
+
+export const createCustomBusinessProductSchema = z.object({
+  name: z.string().trim().min(2, "Product name must be at least 2 characters.").max(255),
+  description: z.string().trim().max(5000).nullable().optional(),
+  categoryId: z.string().uuid("Category ID must be a valid UUID."),
+  priceAmount: z.number().int().positive("Price must be a positive amount."),
+  quantityOnHand: z.number().int().nonnegative("Quantity must be 0 or more.").default(10),
+  imageUrl: imageUrlSchema,
+  currency: z
+    .string()
+    .trim()
+    .length(3)
+    .transform((value) => value.toUpperCase())
+    .refine((value) => value === "NGN", "Currency must be NGN.")
+    .default("NGN"),
+  isAvailable: z.boolean().default(true)
+});
+
+export type CreateCustomBusinessProductInput =
+  z.infer<typeof createCustomBusinessProductSchema>;

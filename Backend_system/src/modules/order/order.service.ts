@@ -24,6 +24,16 @@ function serializeOrderRow(row: {
   delivery_contact_phone: string | null;
   delivery_id: string | null;
   delivery_status: string | null;
+  rider_accepted?: boolean | null;
+  rider_info?: {
+    id: string;
+    firstName: string | null;
+    lastName: string | null;
+    username: string | null;
+    phoneNumber: string | null;
+    vehicleType: string | null;
+    vehicleRegistration: string | null;
+  } | null;
   items: Array<{
     productId: string;
     name: string;
@@ -43,7 +53,24 @@ function serializeOrderRow(row: {
     vat: Math.round(Number(row.subtotal_amount) * 0.075),
     total: Number(row.total_amount),
     deliveryContactPhone: row.delivery_contact_phone,
-    delivery: row.delivery_id ? { id: row.delivery_id, status: row.delivery_status } : null,
+    delivery: row.delivery_id
+      ? {
+          id: row.delivery_id,
+          status: row.delivery_status,
+          riderAccepted: Boolean(row.rider_accepted),
+          rider: row.rider_accepted && row.rider_info
+            ? {
+                id: row.rider_info.id,
+                firstName: row.rider_info.firstName,
+                lastName: row.rider_info.lastName,
+                username: row.rider_info.username,
+                phoneNumber: row.rider_info.phoneNumber,
+                vehicleType: row.rider_info.vehicleType,
+                vehicleRegistration: row.rider_info.vehicleRegistration
+              }
+            : null
+        }
+      : null,
     items: (row.items ?? []).map((item) => ({
       productId: item.productId,
       name: item.name,
@@ -67,6 +94,8 @@ export async function listOrdersForUser(userId: string) {
     delivery_contact_phone: string | null;
     delivery_id: string | null;
     delivery_status: string | null;
+    rider_accepted?: boolean | null;
+    rider_info?: any;
     items: Array<{
       productId: string;
       name: string;
@@ -86,6 +115,23 @@ export async function listOrdersForUser(userId: string) {
            o.delivery_contact_phone,
            d.id AS delivery_id,
            d.status AS delivery_status,
+           CASE
+             WHEN (latest_decision.status = 'ACCEPTED' OR d.status IN ('PICKED_UP', 'IN_TRANSIT', 'ARRIVED', 'DELIVERED')) THEN TRUE
+             ELSE FALSE
+           END AS rider_accepted,
+           CASE
+             WHEN (latest_decision.status = 'ACCEPTED' OR d.status IN ('PICKED_UP', 'IN_TRANSIT', 'ARRIVED', 'DELIVERED')) AND r.id IS NOT NULL THEN
+               json_build_object(
+                 'id', r.id,
+                 'firstName', ru.first_name,
+                 'lastName', ru.last_name,
+                 'username', ru.username,
+                 'phoneNumber', ru.phone_number,
+                 'vehicleType', COALESCE(vt.name, vt.code::text, 'Motorcycle'),
+                 'vehicleRegistration', v.registration_number
+               )
+             ELSE NULL
+           END AS rider_info,
            COALESCE(
              json_agg(
                json_build_object(
@@ -101,8 +147,19 @@ export async function listOrdersForUser(userId: string) {
     FROM public.orders o
     LEFT JOIN public.order_items oi ON oi.order_id = o.id
     LEFT JOIN public.deliveries d ON d.order_id = o.id
+    LEFT JOIN public.riders r ON r.id = d.rider_id
+    LEFT JOIN public.users ru ON ru.id = r.user_id
+    LEFT JOIN public.vehicles v ON v.id = d.vehicle_id
+    LEFT JOIN public.vehicle_types vt ON vt.id = v.vehicle_type_id
+    LEFT JOIN LATERAL (
+      SELECT dad.status
+      FROM public.delivery_assignment_decisions dad
+      WHERE dad.delivery_id = d.id AND dad.rider_id = d.rider_id
+      ORDER BY dad.created_at DESC
+      LIMIT 1
+    ) latest_decision ON TRUE
     WHERE o.user_id = $1
-    GROUP BY o.id, o.status, o.created_at, o.subtotal_amount, o.delivery_fee_amount, o.platform_fee_amount, o.business_fee_amount, o.total_amount, o.delivery_contact_phone, d.id, d.status
+    GROUP BY o.id, o.status, o.created_at, o.subtotal_amount, o.delivery_fee_amount, o.platform_fee_amount, o.business_fee_amount, o.total_amount, o.delivery_contact_phone, d.id, d.status, latest_decision.status, r.id, ru.first_name, ru.last_name, ru.username, ru.phone_number, vt.name, vt.code, v.registration_number
     ORDER BY o.created_at DESC
   `, [userId]);
 
@@ -122,6 +179,8 @@ export async function getOrderForUser(userId: string, orderId: string) {
     delivery_contact_phone: string | null;
     delivery_id: string | null;
     delivery_status: string | null;
+    rider_accepted?: boolean | null;
+    rider_info?: any;
     items: Array<{
       productId: string;
       name: string;
@@ -141,6 +200,23 @@ export async function getOrderForUser(userId: string, orderId: string) {
            o.delivery_contact_phone,
            d.id AS delivery_id,
            d.status AS delivery_status,
+           CASE
+             WHEN (latest_decision.status = 'ACCEPTED' OR d.status IN ('PICKED_UP', 'IN_TRANSIT', 'ARRIVED', 'DELIVERED')) THEN TRUE
+             ELSE FALSE
+           END AS rider_accepted,
+           CASE
+             WHEN (latest_decision.status = 'ACCEPTED' OR d.status IN ('PICKED_UP', 'IN_TRANSIT', 'ARRIVED', 'DELIVERED')) AND r.id IS NOT NULL THEN
+               json_build_object(
+                 'id', r.id,
+                 'firstName', ru.first_name,
+                 'lastName', ru.last_name,
+                 'username', ru.username,
+                 'phoneNumber', ru.phone_number,
+                 'vehicleType', COALESCE(vt.name, vt.code::text, 'Motorcycle'),
+                 'vehicleRegistration', v.registration_number
+               )
+             ELSE NULL
+           END AS rider_info,
            COALESCE(
              json_agg(
                json_build_object(
@@ -156,8 +232,19 @@ export async function getOrderForUser(userId: string, orderId: string) {
     FROM public.orders o
     LEFT JOIN public.order_items oi ON oi.order_id = o.id
     LEFT JOIN public.deliveries d ON d.order_id = o.id
+    LEFT JOIN public.riders r ON r.id = d.rider_id
+    LEFT JOIN public.users ru ON ru.id = r.user_id
+    LEFT JOIN public.vehicles v ON v.id = d.vehicle_id
+    LEFT JOIN public.vehicle_types vt ON vt.id = v.vehicle_type_id
+    LEFT JOIN LATERAL (
+      SELECT dad.status
+      FROM public.delivery_assignment_decisions dad
+      WHERE dad.delivery_id = d.id AND dad.rider_id = d.rider_id
+      ORDER BY dad.created_at DESC
+      LIMIT 1
+    ) latest_decision ON TRUE
     WHERE o.user_id = $1 AND o.id = $2
-    GROUP BY o.id, o.status, o.created_at, o.subtotal_amount, o.delivery_fee_amount, o.platform_fee_amount, o.business_fee_amount, o.total_amount, o.delivery_contact_phone, d.id, d.status
+    GROUP BY o.id, o.status, o.created_at, o.subtotal_amount, o.delivery_fee_amount, o.platform_fee_amount, o.business_fee_amount, o.total_amount, o.delivery_contact_phone, d.id, d.status, latest_decision.status, r.id, ru.first_name, ru.last_name, ru.username, ru.phone_number, vt.name, vt.code, v.registration_number
   `, [userId, orderId]);
 
   if (result.rows.length === 0) {
@@ -165,6 +252,124 @@ export async function getOrderForUser(userId: string, orderId: string) {
   }
 
   return serializeOrderRow(result.rows[0]);
+}
+
+export async function cancelCustomerOrderBeforePayment(
+  userId: string,
+  orderId: string,
+  reason?: string
+) {
+  return withTransaction(async (client) => {
+    const orderRes = await client.query<{ id: string; status: string; user_id: string }>(
+      `SELECT id, status, user_id FROM public.orders WHERE id = $1 AND user_id = $2 FOR UPDATE`,
+      [orderId, userId]
+    );
+
+    if (orderRes.rows.length === 0) {
+      throw new AppError("Order not found.", 404, "ORDER_NOT_FOUND");
+    }
+
+    const order = orderRes.rows[0];
+    if (order.status !== "PENDING") {
+      throw new AppError(
+        `Order is in status ${order.status} and cannot be cancelled before payment. Only unpaid pending orders can be cancelled.`,
+        409,
+        "ORDER_NOT_CANCELLABLE"
+      );
+    }
+
+    const cancelReason = reason || "Customer cancelled order before payment.";
+
+    // 1. Update order status to CANCELLED
+    await client.query(
+      `
+        UPDATE public.orders
+        SET status = 'CANCELLED',
+            cancelled_by = 'CUSTOMER',
+            cancellation_reason = 'CUSTOMER_REQUEST',
+            cancelled_at = NOW(),
+            updated_at = NOW()
+        WHERE id = $1
+      `,
+      [orderId]
+    );
+
+    // 2. Release reserved inventory
+    const reservations = await client.query<{ id: string; inventory_id: string; quantity: number }>(
+      `
+        SELECT id, inventory_id, quantity
+        FROM public.inventory_reservations
+        WHERE order_id = $1 AND status = 'ACTIVE'
+        FOR UPDATE
+      `,
+      [orderId]
+    );
+
+    for (const res of reservations.rows) {
+      await client.query(
+        `
+          UPDATE public.inventory
+          SET quantity_reserved = GREATEST(0, quantity_reserved - $1),
+              updated_at = NOW(),
+              last_updated_at = NOW()
+          WHERE id = $2
+        `,
+        [res.quantity, res.inventory_id]
+      );
+
+      await client.query(
+        `UPDATE public.inventory_reservations SET status = 'CANCELLED', updated_at = NOW() WHERE id = $1`,
+        [res.id]
+      );
+    }
+
+    // 3. Cancel fulfillments and deliveries
+    await client.query(
+      `UPDATE public.fulfillments SET status = 'FAILED', failed_at = NOW(), updated_at = NOW() WHERE order_id = $1`,
+      [orderId]
+    );
+
+    await client.query(
+      `UPDATE public.deliveries SET status = 'CANCELLED', updated_at = NOW() WHERE order_id = $1`,
+      [orderId]
+    );
+
+    // 4. Record order status history
+    await client.query(
+      `
+        INSERT INTO public.order_status_history (
+          order_id,
+          previous_status,
+          new_status,
+          changed_by,
+          reason
+        )
+        VALUES ($1, 'PENDING', 'CANCELLED', $2, $3)
+      `,
+      [orderId, userId, cancelReason]
+    );
+
+    // 5. In-app notification
+    try {
+      await createInAppNotification({
+        userId,
+        orderId,
+        type: "ORDER_CANCELLED",
+        title: "Order Cancelled",
+        message: `Your order #${orderId.slice(-8)} was cancelled successfully.`,
+        eventKey: `customer-cancelled:${orderId}:${Date.now()}`,
+        client
+      });
+    } catch {
+      // non-blocking
+    }
+
+    return {
+      orderId,
+      status: "CANCELLED",
+      message: "Order cancelled successfully."
+    };
+  });
 }
 
 function requestHash(input: PlaceOrderInput): string {

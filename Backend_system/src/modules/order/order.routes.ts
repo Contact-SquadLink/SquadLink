@@ -4,7 +4,12 @@ import { authenticate } from "../../middleware/authenticate";
 import { authorize } from "../../middleware/authorize";
 import { successResponse } from "../../utils/api-response";
 import { placeOrderSchema } from "./order.schemas";
-import { getOrderForUser, listOrdersForUser, placeOrder } from "./order.service";
+import {
+  cancelCustomerOrderBeforePayment,
+  getOrderForUser,
+  listOrdersForUser,
+  placeOrder
+} from "./order.service";
 
 export async function orderRoutes(
   app: FastifyInstance
@@ -73,6 +78,24 @@ export async function orderRoutes(
 
       return reply.status(201).send(
         successResponse(order, request.id)
+      );
+    }
+  );
+
+  app.post(
+    "/:orderId/cancel",
+    {
+      preHandler: [
+        authenticate,
+        authorize("CUSTOMER")
+      ]
+    },
+    async (request) => {
+      const { orderId } = request.params as { orderId: string };
+      const body = (request.body ?? {}) as { reason?: string };
+      return successResponse(
+        await cancelCustomerOrderBeforePayment(request.user.id, orderId, body.reason),
+        request.id
       );
     }
   );

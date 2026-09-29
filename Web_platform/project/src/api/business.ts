@@ -133,6 +133,9 @@ export const businessApi = {
   addCatalogItem: (payload: { productId: string; priceAmount: number; description?: string | null; imageUrl?: string | null; currency?: string; isAvailable?: boolean }) =>
     apiRequest<ApiResponseEnvelope<BusinessCatalogItem>>('/api/v1/businesses/me/catalog', { method: 'POST', body: payload }),
 
+  createCustomProduct: (payload: { name: string; description?: string | null; categoryId: string; priceAmount: number; quantityOnHand: number; imageUrl?: string | null; currency?: string; isAvailable?: boolean }) =>
+    apiRequest<ApiResponseEnvelope<BusinessCatalogItem>>('/api/v1/businesses/me/catalog/custom', { method: 'POST', body: payload }),
+
   listInventory: () =>
     apiRequest<ApiResponseEnvelope<InventoryItem[]>>('/api/v1/inventory/me'),
 

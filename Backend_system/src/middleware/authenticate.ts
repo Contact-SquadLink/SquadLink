@@ -14,6 +14,11 @@ export interface AuthenticatedUser {
   phoneNumber: string | null;
   firstName: string | null;
   lastName: string | null;
+  username: string | null;
+  avatarUrl: string | null;
+  emailVerifiedAt: Date | null;
+  phoneVerifiedAt: Date | null;
+  profileUpdatedAt: Date | null;
   role: string;
 }
 
@@ -119,6 +124,11 @@ export async function authenticate(
     phoneNumber: user.phoneNumber,
     firstName: user.firstName,
     lastName: user.lastName,
+    username: user.username,
+    avatarUrl: user.avatarUrl,
+    emailVerifiedAt: user.emailVerifiedAt,
+    phoneVerifiedAt: user.phoneVerifiedAt,
+    profileUpdatedAt: user.profileUpdatedAt,
     role: user.role
   };
 }

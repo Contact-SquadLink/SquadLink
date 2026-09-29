@@ -10,6 +10,10 @@ export async function ensureWorkflowSchema(): Promise<void> {
   try {
     await db.query(`ALTER TYPE public.notification_type ADD VALUE IF NOT EXISTS 'ACCOUNT_CREATED'`);
     await db.query(`ALTER TYPE public.notification_type ADD VALUE IF NOT EXISTS 'BUSINESS_APPLICATION_SUBMITTED'`);
+    await db.query(`ALTER TYPE public.notification_type ADD VALUE IF NOT EXISTS 'GENERAL'`);
+    await db.query(`ALTER TYPE public.notification_type ADD VALUE IF NOT EXISTS 'WITHDRAWAL_REQUESTED'`);
+    await db.query(`ALTER TYPE public.notification_type ADD VALUE IF NOT EXISTS 'WITHDRAWAL_APPROVED'`);
+    await db.query(`ALTER TYPE public.notification_type ADD VALUE IF NOT EXISTS 'WITHDRAWAL_REJECTED'`);
   } catch {
     // Already exists or unsupported inside sub-transaction
   }

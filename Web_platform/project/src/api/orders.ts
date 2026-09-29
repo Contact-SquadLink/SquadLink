@@ -56,4 +56,13 @@ export const ordersApi = {
 
   getById: (id: string) =>
     apiRequest<ApiSingleResponse<Order>>(`/api/v1/orders/${id}`),
+
+  cancel: (orderId: string, reason?: string) =>
+    apiRequest<ApiSingleResponse<{ orderId: string; status: string; message: string }>>(
+      `/api/v1/orders/${orderId}/cancel`,
+      {
+        method: 'POST',
+        body: { reason },
+      }
+    ),
 };

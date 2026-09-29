@@ -58,6 +58,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         phone: me.phoneNumber ?? undefined,
         firstName: me.firstName ?? undefined,
         lastName: me.lastName ?? undefined,
+        username: me.username ?? undefined,
+        avatarUrl: me.avatarUrl ?? null,
+        emailVerifiedAt: me.emailVerifiedAt ?? null,
+        phoneVerifiedAt: me.phoneVerifiedAt ?? null,
+        profileUpdatedAt: me.profileUpdatedAt ?? null,
         role: me.role as Role,
       };
 
@@ -96,6 +101,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           phone: me.phoneNumber ?? undefined,
           firstName: me.firstName ?? undefined,
           lastName: me.lastName ?? undefined,
+          username: me.username ?? undefined,
+          avatarUrl: me.avatarUrl ?? null,
+          emailVerifiedAt: me.emailVerifiedAt ?? null,
+          phoneVerifiedAt: me.phoneVerifiedAt ?? null,
+          profileUpdatedAt: me.profileUpdatedAt ?? null,
           role: me.role as Role,
         });
       } catch {

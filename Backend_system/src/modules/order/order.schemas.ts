@@ -27,4 +27,9 @@ export const placeOrderSchema = z.object({
   deliveryContactPhone
 });
 
+export const cancelOrderSchema = z.object({
+  reason: z.string().trim().max(500).optional()
+});
+
 export type PlaceOrderInput = z.infer<typeof placeOrderSchema>;
+export type CancelOrderInput = z.infer<typeof cancelOrderSchema>;

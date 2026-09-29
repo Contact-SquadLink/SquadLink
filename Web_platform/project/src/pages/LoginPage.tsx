@@ -11,6 +11,7 @@ import {
   ArrowLeft,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { ForgotPasswordModal } from '@/components/auth/ForgotPasswordModal';
 import type { Role } from '@/types';
 
 const roleTabs: { role: Role; label: string; icon: typeof User }[] = [
@@ -55,6 +56,7 @@ export function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isForgotPasswordOpen, setIsForgotPasswordOpen] = useState(false);
   const { login } = useAuth();
 
   useEffect(() => {
@@ -216,6 +218,13 @@ export function LoginPage() {
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="block text-xs font-semibold text-gray-700">Password</label>
+              <button
+                type="button"
+                onClick={() => setIsForgotPasswordOpen(true)}
+                className="text-xs font-semibold text-primary-600 hover:text-primary-700 transition-colors"
+              >
+                Forgot password?
+              </button>
             </div>
             <div className="relative">
               <input
@@ -266,6 +275,12 @@ export function LoginPage() {
           </p>
         </div>
       </div>
+
+      <ForgotPasswordModal
+        isOpen={isForgotPasswordOpen}
+        onClose={() => setIsForgotPasswordOpen(false)}
+        initialIdentifier={identifier}
+      />
     </div>
   );
 }

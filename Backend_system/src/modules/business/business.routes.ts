@@ -20,6 +20,7 @@ import {
 import { z } from "zod";
 import {
   createBusinessCatalogItemSchema,
+  createCustomBusinessProductSchema,
   updateBusinessCatalogItemSchema
 } from "./business-catalog.schemas";
 
@@ -37,6 +38,7 @@ import {
   updateOperatingHoursForOwner,
   getBusinessCatalogForOwner,
   addProductToBusinessCatalog,
+  createCustomProductForBusiness,
   updateBusinessCatalogForOwner,
   updateBusinessLocationForOwner,
   deleteBusinessCatalogForOwner
@@ -502,6 +504,50 @@ export async function businessRoutes(
       return reply.status(201).send(
         successResponse(
           catalogItem,
+          request.id
+        )
+      );
+    }
+  );
+
+  /**
+   * Create a custom product and add it directly to business catalog with inventory.
+   */
+  app.post(
+    "/me/catalog/custom",
+    {
+      preHandler: businessOwnerPreHandler
+    },
+    async (
+      request: FastifyRequest,
+      reply: FastifyReply
+    ) => {
+      const parsed =
+        createCustomBusinessProductSchema.safeParse(
+          request.body
+        );
+
+      if (!parsed.success) {
+        return reply.status(400).send({
+          success: false,
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "Invalid custom product data.",
+            details: parsed.error.flatten()
+          },
+          requestId: request.id
+        });
+      }
+
+      const item =
+        await createCustomProductForBusiness(
+          request.user.id,
+          parsed.data
+        );
+
+      return reply.status(201).send(
+        successResponse(
+          item,
           request.id
         )
       );

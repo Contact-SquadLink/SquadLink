@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Shield,
@@ -14,10 +15,16 @@ import {
   Ban,
   RotateCcw,
   Trash2,
+  Banknote,
+  Check,
+  X,
+  AlertCircle,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/States';
 import { adminApi, type PlatformAccount } from '@/api/admin';
+import { earningsApi, type AdminWithdrawalRequest } from '@/api/earnings';
+import { formatDate, formatPrice } from '@/utils/format';
 import type { BusinessVerificationRecord } from '@/types';
 
 function getStatusBadgeVariant(status: BusinessVerificationRecord['status']) {
@@ -48,10 +55,36 @@ function getStatusLabel(status: BusinessVerificationRecord['status']) {
 
 export function AdminDashboard() {
   const queryClient = useQueryClient();
+  const [withdrawalFilter, setWithdrawalFilter] = useState<'ALL' | 'PENDING' | 'APPROVED' | 'PAID' | 'REJECTED'>('ALL');
+  const [withdrawalActionLoading, setWithdrawalActionLoading] = useState<string | null>(null);
+
   const { data, isLoading, error } = useQuery({
     queryKey: ['admin-business-verifications'],
     queryFn: adminApi.listBusinesses,
   });
+
+  const withdrawalsQuery = useQuery({
+    queryKey: ['admin-withdrawals'],
+    queryFn: () => earningsApi.listWithdrawals(),
+  });
+
+  const handleReviewWithdrawal = async (id: string, status: 'APPROVED' | 'REJECTED' | 'PAID') => {
+    let reason: string | undefined;
+    if (status === 'REJECTED') {
+      const inputReason = window.prompt('Please provide a reason for declining this withdrawal:');
+      if (inputReason === null) return;
+      reason = inputReason.trim() || 'Declined during administrative review';
+    }
+    setWithdrawalActionLoading(id);
+    try {
+      await earningsApi.reviewWithdrawal(id, status, reason);
+      await queryClient.invalidateQueries({ queryKey: ['admin-withdrawals'] });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to update withdrawal');
+    } finally {
+      setWithdrawalActionLoading(null);
+    }
+  };
 
   const businesses = Array.isArray(data?.data) ? (data.data as BusinessVerificationRecord[]) : [];
   const summaryQuery = useQuery({ queryKey: ['platform-summary'], queryFn: adminApi.getPlatformSummary, retry: false });
@@ -226,6 +259,140 @@ export function AdminDashboard() {
                 </Badge>
               </Link>
             ))}
+          </div>
+        )}
+      </div>
+
+      {/* Withdrawal Requests & Payouts Review */}
+      <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm mb-8">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
+              <Banknote className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="font-display text-lg font-bold text-gray-900">Withdrawal Requests (Payouts)</h2>
+              <p className="text-xs text-gray-500">Review and authorize payouts for riders, merchants, and customers.</p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-1 rounded-xl bg-gray-100 p-1">
+            {(['ALL', 'PENDING', 'APPROVED', 'PAID', 'REJECTED'] as const).map((st) => (
+              <button
+                key={st}
+                type="button"
+                onClick={() => setWithdrawalFilter(st)}
+                className={`rounded-lg px-2.5 py-1 text-xs font-bold transition-all cursor-pointer ${
+                  withdrawalFilter === st
+                    ? 'bg-white text-gray-900 shadow-xs'
+                    : 'text-gray-500 hover:text-gray-900'
+                }`}
+              >
+                {st}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {withdrawalsQuery.isLoading ? (
+          <p className="text-sm text-gray-600">Loading withdrawal requests...</p>
+        ) : withdrawalsQuery.isError ? (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-800">
+            Platform withdrawal requests are only accessible to the primary administrator.
+          </div>
+        ) : !withdrawalsQuery.data?.data || withdrawalsQuery.data.data.length === 0 ? (
+          <EmptyState
+            icon={<Banknote className="h-7 w-7 text-gray-400" />}
+            title="No withdrawal requests"
+            description="When users or couriers request withdrawals, they will appear here for verification and payout."
+          />
+        ) : (
+          <div className="space-y-3">
+            {withdrawalsQuery.data.data
+              .filter((w) => (withdrawalFilter === 'ALL' ? true : w.status === withdrawalFilter))
+              .map((item) => (
+                <div
+                  key={item.id}
+                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-xl border border-gray-100 p-4 hover:border-gray-200 transition-all bg-gray-50/40"
+                >
+                  <div className="space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-bold text-gray-900">
+                        {item.firstName && item.lastName ? `${item.firstName} ${item.lastName}` : item.email}
+                      </span>
+                      {item.username && (
+                        <span className="rounded-md bg-primary-50 px-1.5 py-0.5 text-xs font-semibold text-primary-700">
+                          @{item.username}
+                        </span>
+                      )}
+                      <Badge variant="neutral">{item.role}</Badge>
+                      <Badge
+                        variant={
+                          item.status === 'PAID'
+                            ? 'success'
+                            : item.status === 'APPROVED'
+                            ? 'primary'
+                            : item.status === 'REJECTED'
+                            ? 'error'
+                            : 'warning'
+                        }
+                      >
+                        {item.status}
+                      </Badge>
+                    </div>
+
+                    <div className="text-xs text-gray-600 space-y-0.5">
+                      <p>
+                        <span className="font-semibold text-gray-700">Bank:</span> {item.payoutDetails?.bankName || 'N/A'} ·{' '}
+                        <span className="font-semibold text-gray-700">Acct No:</span> {item.payoutDetails?.accountNumber || 'N/A'} ·{' '}
+                        <span className="font-semibold text-gray-700">Name:</span> {item.payoutDetails?.accountName || 'N/A'}
+                      </p>
+                      <p className="text-[11px] text-gray-400">Requested: {formatDate(item.createdAt)}</p>
+                      {item.reviewReason && (
+                        <p className="text-red-600 font-medium">Reason: {item.reviewReason}</p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 sm:self-center">
+                    <div className="text-right sm:mr-3">
+                      <p className="text-base font-extrabold text-gray-900">{formatPrice(Number(item.amount))}</p>
+                      <p className="text-[10px] text-gray-400 uppercase tracking-wider">{item.currency || 'NGN'}</p>
+                    </div>
+
+                    {item.status === 'PENDING' && (
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          disabled={withdrawalActionLoading === item.id}
+                          onClick={() => handleReviewWithdrawal(item.id, 'APPROVED')}
+                          className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-emerald-700 disabled:opacity-50 transition-colors cursor-pointer"
+                        >
+                          <Check className="h-3.5 w-3.5" /> Approve
+                        </button>
+                        <button
+                          type="button"
+                          disabled={withdrawalActionLoading === item.id}
+                          onClick={() => handleReviewWithdrawal(item.id, 'REJECTED')}
+                          className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50 transition-colors cursor-pointer"
+                        >
+                          <X className="h-3.5 w-3.5" /> Reject
+                        </button>
+                      </div>
+                    )}
+
+                    {item.status === 'APPROVED' && (
+                      <button
+                        type="button"
+                        disabled={withdrawalActionLoading === item.id}
+                        onClick={() => handleReviewWithdrawal(item.id, 'PAID')}
+                        className="inline-flex items-center gap-1 rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-primary-700 disabled:opacity-50 transition-colors cursor-pointer"
+                      >
+                        <Check className="h-3.5 w-3.5" /> Mark Paid
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
           </div>
         )}
       </div>

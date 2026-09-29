@@ -1,4 +1,5 @@
 import { AppError } from "../../utils/app-error";
+import { withTransaction } from "../../db/transaction";
 
 import {
   createBusiness,
@@ -37,6 +38,7 @@ import type {
 
 import type {
   CreateBusinessCatalogItemInput,
+  CreateCustomBusinessProductInput,
   UpdateBusinessCatalogItemInput
 } from "./business-catalog.schemas";
 
@@ -469,4 +471,107 @@ export async function updateBusinessLocationForOwner(
 ): Promise<BusinessRecord> {
   const business = await getBusinessForOwner(ownerUserId);
   return updateBusinessLocation(business.id, input);
+}
+
+export async function createCustomProductForBusiness(
+  ownerUserId: string,
+  input: CreateCustomBusinessProductInput
+) {
+  const business = await getBusinessForOwner(ownerUserId);
+  if (!business.isActive || business.status !== "ACTIVE") {
+    throw new AppError("This business is not currently active.", 409, "BUSINESS_NOT_ACTIVE");
+  }
+
+  return withTransaction(async (client) => {
+    // 1. Check or insert product into public.products
+    const productRes = await client.query<{ id: string }>(
+      `SELECT id FROM public.products WHERE category_id = $1 AND LOWER(name) = LOWER($2) LIMIT 1`,
+      [input.categoryId, input.name]
+    );
+
+    let productId: string;
+    if (productRes.rows.length > 0) {
+      productId = productRes.rows[0].id;
+    } else {
+      const newProd = await client.query<{ id: string }>(
+        `INSERT INTO public.products (category_id, name, description, image_url, suggested_price_amount)
+         VALUES ($1, $2, $3, $4, $5)
+         RETURNING id`,
+        [input.categoryId, input.name, input.description ?? null, input.imageUrl ?? null, input.priceAmount]
+      );
+      productId = newProd.rows[0].id;
+    }
+
+    // 2. Check if business already has this product enrolled
+    const existingBp = await client.query<{ id: string }>(
+      `SELECT id FROM public.business_products WHERE business_id = $1 AND product_id = $2`,
+      [business.id, productId]
+    );
+
+    let businessProductId: string;
+    if (existingBp.rows.length > 0) {
+      businessProductId = existingBp.rows[0].id;
+      await client.query(
+        `UPDATE public.business_products
+         SET price_amount = $1, description = $2, image_url = $3, is_available = $4, updated_at = NOW()
+         WHERE id = $5`,
+        [input.priceAmount, input.description ?? null, input.imageUrl ?? null, input.isAvailable, businessProductId]
+      );
+    } else {
+      const newBp = await client.query<{ id: string }>(
+        `INSERT INTO public.business_products (business_id, product_id, price_amount, currency, is_available, description, image_url)
+         VALUES ($1, $2, $3, 'NGN', $4, $5, $6)
+         RETURNING id`,
+        [business.id, productId, input.priceAmount, input.isAvailable, input.description ?? null, input.imageUrl ?? null]
+      );
+      businessProductId = newBp.rows[0].id;
+    }
+
+    // 3. Insert or update inventory
+    const existingInv = await client.query<{ id: string }>(
+      `SELECT id FROM public.inventory WHERE business_product_id = $1`,
+      [businessProductId]
+    );
+
+    if (existingInv.rows.length > 0) {
+      await client.query(
+        `UPDATE public.inventory
+         SET quantity_on_hand = $1, updated_at = NOW(), last_updated_at = NOW()
+         WHERE id = $2`,
+        [input.quantityOnHand, existingInv.rows[0].id]
+      );
+    } else {
+      await client.query(
+        `INSERT INTO public.inventory (business_product_id, quantity_on_hand, quantity_reserved)
+         VALUES ($1, $2, 0)`,
+        [businessProductId, input.quantityOnHand]
+      );
+    }
+
+    // 4. Mark catalog_configured = true on business if not already
+    await client.query(
+      `UPDATE public.businesses
+       SET catalog_configured = TRUE,
+           catalog_configured_at = COALESCE(catalog_configured_at, NOW()),
+           inventory_configured = TRUE,
+           inventory_configured_at = COALESCE(inventory_configured_at, NOW()),
+           updated_at = NOW()
+       WHERE id = $1`,
+      [business.id]
+    );
+
+    return {
+      id: businessProductId,
+      businessId: business.id,
+      productId,
+      productName: input.name,
+      productDescription: input.description ?? null,
+      productImageUrl: input.imageUrl ?? null,
+      priceAmount: input.priceAmount,
+      currency: "NGN",
+      isAvailable: input.isAvailable,
+      quantityOnHand: input.quantityOnHand,
+      createdAt: new Date()
+    };
+  });
 }

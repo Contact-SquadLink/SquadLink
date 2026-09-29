@@ -15,10 +15,13 @@ export interface User {
   id: string;
   email?: string | null;
   phoneNumber?: string | null;
+  username?: string | null;
+  avatarUrl?: string | null;
   role: Role;
   isActive?: boolean;
   emailVerifiedAt?: string | null;
   phoneVerifiedAt?: string | null;
+  profileUpdatedAt?: string | null;
   createdAt?: string;
   updatedAt?: string;
   firstName?: string;
@@ -210,6 +213,16 @@ export interface OrderItem {
   subtotal: number;
 }
 
+export interface OrderRiderInfo {
+  id: string;
+  firstName: string | null;
+  lastName: string | null;
+  username: string | null;
+  phoneNumber: string | null;
+  vehicleType: string | null;
+  vehicleRegistration: string | null;
+}
+
 export interface Order {
   id: string;
   status: OrderStatus;
@@ -225,6 +238,8 @@ export interface Order {
   delivery?: {
     id: string;
     status: DeliveryStatus;
+    riderAccepted?: boolean;
+    rider?: OrderRiderInfo | null;
   } | null;
   createdAt: string;
   updatedAt?: string;
