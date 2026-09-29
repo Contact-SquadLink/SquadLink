@@ -7,12 +7,6 @@ import {
   Loader2,
   Bike,
   ShieldCheck,
-  Zap,
-  Star,
-  Clock,
-  Sparkles,
-  CheckCircle2,
-  AtSign,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { formatNigerianPhone, isCompleteNigerianPhone, phoneDigits } from '@/utils/nigerian-phone';
@@ -185,23 +179,16 @@ export function RegisterPage() {
         .anim-radar { animation: pulse-radar 3s ease-in-out infinite; }
       `}</style>
 
-      {/* High Quality SquadLink Photographic Hero Background */}
+      {/* Scenic University Campus & Delivery Backdrop */}
       <div className="absolute inset-0 z-0">
         <img
-          src="/images/squadlink-signup-hero.jpg"
-          alt="SquadLink Logistics & Delivery Network"
-          className="h-full w-full object-cover object-center filter brightness-[0.34] contrast-[1.12] scale-[1.02] transform transition-transform duration-1000"
+          src="/images/squadlink-scenery.jpg"
+          alt="SquadLink Campus & Community Logistics Scenery"
+          className="h-full w-full object-cover object-center"
         />
-        {/* Cinematic Multi-layered Overlays matching SquadLink Green/Cyan/Slate Palette */}
-        <div className="absolute inset-0 bg-gradient-to-r from-slate-950/95 via-slate-950/80 to-slate-950/90" />
-        <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-slate-950/80" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-primary-900/35 via-transparent to-transparent" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_right,_var(--tw-gradient-stops))] from-emerald-900/30 via-transparent to-transparent" />
-
-        {/* Ambient atmospheric glows */}
-        <div className="absolute -top-40 -left-40 h-[500px] w-[500px] rounded-full bg-primary-500/20 blur-[120px] pointer-events-none" />
-        <div className="absolute top-1/2 -right-40 h-[500px] w-[500px] rounded-full bg-emerald-500/15 blur-[120px] pointer-events-none" />
-        <div className="absolute -bottom-40 left-1/3 h-[500px] w-[500px] rounded-full bg-cyan-600/15 blur-[120px] pointer-events-none" />
+        {/* Subtle translucent overlay to enhance scenery visibility while maintaining readability */}
+        <div className="absolute inset-0 bg-gradient-to-r from-slate-950/85 via-slate-950/50 to-slate-950/65" />
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-slate-950/30" />
       </div>
 
       {/* Top Navbar */}
@@ -230,90 +217,86 @@ export function RegisterPage() {
       <main className="relative z-10 flex-1 mx-auto max-w-7xl w-full px-4 sm:px-6 lg:px-8 py-8 lg:py-12 flex items-center">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 w-full items-center">
           
-          {/* Left Column: Interactive Animated Showcase (Hero/Visuals) */}
+          {/* Left Column: Factual, Transparent Platform Overview */}
           <div className="lg:col-span-6 space-y-6 text-white order-2 lg:order-1">
-            <div className="inline-flex items-center gap-2 rounded-full border border-primary-500/30 bg-primary-500/10 px-3.5 py-1.5 text-xs font-semibold text-primary-300 backdrop-blur-sm">
-              <Sparkles className="h-3.5 w-3.5 text-primary-400 animate-spin" />
-              <span>Next-Gen Hyperlocal Campus & City Logistics</span>
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-slate-900/60 px-3.5 py-1.5 text-xs font-semibold text-emerald-300 backdrop-blur-md">
+              <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span>Campus & Community Delivery Coordination</span>
             </div>
 
-            <h1 className="font-display text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight leading-tight">
-              Join the fastest <br />
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary-400 via-emerald-300 to-cyan-400">
-                delivery network
-              </span> in town.
+            <h1 className="font-display text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight leading-tight drop-shadow-md">
+              Connecting campus <br />
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-300 via-teal-200 to-cyan-300">
+                communities & local stores.
+              </span>
             </h1>
 
-            <p className="text-sm sm:text-base text-slate-300 max-w-lg leading-relaxed">
-              Experience seamless ordering from verified local restaurants, grocery markets, and merchants — with live courier tracking and protected payouts.
+            <p className="text-sm sm:text-base text-slate-200 max-w-lg leading-relaxed drop-shadow-sm">
+              SquadLink provides a hyperlocal coordination platform designed for university campuses and nearby neighbourhoods, enabling direct ordering from local merchants and independent dispatch riders.
             </p>
 
-            {/* Animated Interactive Delivery Status Cards */}
-            <div className="space-y-4 pt-2">
-              {/* Floating Card 1: Live Courier Dispatch */}
-              <div className="anim-float rounded-2xl border border-white/15 bg-white/10 p-4 backdrop-blur-md shadow-xl flex items-center gap-4 max-w-md">
-                <div className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-primary-600 to-emerald-500 text-white shadow-md">
-                  <Bike className="h-6 w-6" />
-                  <span className="anim-radar absolute -top-1 -right-1 h-3.5 w-3.5 rounded-full bg-emerald-400 ring-2 ring-slate-900" />
+            {/* Factual Platform Operational Features (No unfulfilled marketing claims) */}
+            <div className="space-y-3 pt-1">
+              <div className="rounded-2xl border border-white/15 bg-slate-900/60 p-4 backdrop-blur-md shadow-lg flex items-start gap-3.5 max-w-lg">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                  <ShoppingBag className="h-5 w-5" />
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs font-bold text-white">Courier En Route ⚡</p>
-                    <span className="text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
-                      Live GPS
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-slate-300 truncate mt-0.5">
-                    Assigned courier accepted order · 18 mins to doorstep
+                <div>
+                  <h3 className="text-xs font-bold text-white">Direct Local Merchant Orders</h3>
+                  <p className="text-[11px] text-slate-300 mt-0.5 leading-relaxed">
+                    Order directly from registered campus food spots, eateries, and neighbourhood vendors with transparent pricing.
                   </p>
                 </div>
               </div>
 
-              {/* Floating Card 2: Security & Escrow Protection */}
-              <div className="anim-float-rev rounded-2xl border border-white/15 bg-white/10 p-4 backdrop-blur-md shadow-xl flex items-center gap-4 max-w-md ml-auto lg:mr-8">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-cyan-600 to-primary-600 text-white shadow-md">
-                  <ShieldCheck className="h-6 w-6" />
+              <div className="rounded-2xl border border-white/15 bg-slate-900/60 p-4 backdrop-blur-md shadow-lg flex items-start gap-3.5 max-w-lg">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-500/20 text-teal-300 border border-teal-500/30">
+                  <Bike className="h-5 w-5" />
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs font-bold text-white">Full Customer Protection 🛡️</p>
-                    <span className="text-[10px] font-semibold text-primary-300 bg-primary-500/10 px-2 py-0.5 rounded-full border border-primary-500/20">
-                      Verified
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-slate-300 truncate mt-0.5">
-                    Cancel anytime before payment · 100% money back guarantee
+                <div>
+                  <h3 className="text-xs font-bold text-white">Rider Acceptance & Progress</h3>
+                  <p className="text-[11px] text-slate-300 mt-0.5 leading-relaxed">
+                    Follow the progression of your order once an independent delivery rider accepts and picks up your package.
+                  </p>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-white/15 bg-slate-900/60 p-4 backdrop-blur-md shadow-lg flex items-start gap-3.5 max-w-lg">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+                  <ShieldCheck className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-xs font-bold text-white">Customer Control & Cancellation</h3>
+                  <p className="text-[11px] text-slate-300 mt-0.5 leading-relaxed">
+                    Review total costs prior to payment, cancel orders before processing, and manage your delivery addresses securely.
                   </p>
                 </div>
               </div>
             </div>
 
-            {/* Live Platform Stats Ticker */}
-            <div className="grid grid-cols-3 gap-3 pt-4 max-w-md">
-              <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-center">
-                <p className="font-display text-xl sm:text-2xl font-black text-white">15k+</p>
-                <p className="text-[11px] text-slate-400 mt-0.5">Fulfilled Orders</p>
+            {/* Practical Platform Coverage Indicators (Factual, grounded details) */}
+            <div className="grid grid-cols-3 gap-3 pt-2 max-w-lg">
+              <div className="rounded-xl border border-white/15 bg-slate-900/50 p-3 text-center backdrop-blur-sm">
+                <p className="text-xs font-bold text-emerald-300">Gwallameji & Yelwa</p>
+                <p className="text-[10px] text-slate-300 mt-0.5">Pilot Service Areas</p>
               </div>
-              <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-center">
-                <p className="font-display text-xl sm:text-2xl font-black text-emerald-400">&lt; 25m</p>
-                <p className="text-[11px] text-slate-400 mt-0.5">Avg Delivery</p>
+              <div className="rounded-xl border border-white/15 bg-slate-900/50 p-3 text-center backdrop-blur-sm">
+                <p className="text-xs font-bold text-white">Direct Verification</p>
+                <p className="text-[10px] text-slate-300 mt-0.5">Participating Merchants</p>
               </div>
-              <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-center">
-                <div className="flex items-center justify-center gap-1 font-display text-xl sm:text-2xl font-black text-amber-400">
-                  <span>4.9</span>
-                  <Star className="h-4 w-4 fill-amber-400" />
-                </div>
-                <p className="text-[11px] text-slate-400 mt-0.5">Customer Rating</p>
+              <div className="rounded-xl border border-white/15 bg-slate-900/50 p-3 text-center backdrop-blur-sm">
+                <p className="text-xs font-bold text-teal-300">Clear Pricing</p>
+                <p className="text-[10px] text-slate-300 mt-0.5">Calculated Upfront</p>
               </div>
             </div>
           </div>
 
           {/* Right Column: Account Creation Card */}
           <div className="lg:col-span-6 order-1 lg:order-2">
-            <div className="w-full max-w-lg mx-auto rounded-3xl border border-white/40 bg-white/95 backdrop-blur-2xl p-6 sm:p-8 shadow-2xl shadow-slate-950/40 ring-1 ring-black/5">
+            <div className="w-full max-w-lg mx-auto rounded-3xl border border-white/60 bg-white/95 backdrop-blur-2xl p-6 sm:p-8 shadow-2xl shadow-slate-950/40 ring-1 ring-black/5">
               <div className="mb-6">
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-700 border border-emerald-200 mb-2.5">
-                  {intent === 'business' ? '🏬 Merchant Partner Network' : '⚡ Swift Hyperlocal Delivery'}
+                  {intent === 'business' ? '🏬 Merchant Account Registration' : '👤 Customer Account Registration'}
                 </span>
                 <h2 className="font-display text-2xl font-bold text-gray-900 tracking-tight">
                   {intent === 'business' ? 'Create Merchant Account' : 'Create Customer Account'}
