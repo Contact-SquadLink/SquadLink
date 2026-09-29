@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -54,26 +54,81 @@ export function RiderDeliveryDetailPage() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [credentialMessage, setCredentialMessage] = useState<string | null>(null);
   const [isActing, setIsActing] = useState(false);
+  const [timeLeftSeconds, setTimeLeftSeconds] = useState<number | null>(null);
+
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['rider-delivery', deliveryId],
     queryFn: () => riderApi.getDelivery(deliveryId as string),
     enabled: Boolean(deliveryId),
+    retry: 1,
   });
   const delivery = data?.data as Delivery | undefined;
+
+  // Live countdown for pending task offer acceptance
+  useEffect(() => {
+    if (!delivery?.assignmentExpiresAt || delivery.status !== 'ASSIGNED' || delivery.assignmentStatus !== 'PENDING') {
+      setTimeLeftSeconds(null);
+      return;
+    }
+
+    const targetTime = new Date(delivery.assignmentExpiresAt).getTime();
+    const updateCountdown = () => {
+      const now = Date.now();
+      const diff = Math.max(0, Math.floor((targetTime - now) / 1000));
+      setTimeLeftSeconds(diff);
+      if (diff === 0) {
+        void queryClient.invalidateQueries({ queryKey: ['rider-deliveries'] });
+      }
+    };
+
+    updateCountdown();
+    const timer = setInterval(updateCountdown, 1000);
+    return () => clearInterval(timer);
+  }, [delivery?.assignmentExpiresAt, delivery?.status, delivery?.assignmentStatus, queryClient]);
 
   if (isLoading) {
     return <p className="mx-auto max-w-3xl px-4 py-8 text-sm text-gray-600">Loading delivery...</p>;
   }
 
   if (isError) {
+    const errorMsg = error instanceof Error ? error.message : '';
+    const isReassignedOrNotFound =
+      errorMsg.includes('assigned to another rider') ||
+      errorMsg.includes('not found') ||
+      errorMsg.includes('ASSIGNED_TO_ANOTHER_RIDER') ||
+      errorMsg.includes('DELIVERY_NOT_FOUND') ||
+      errorMsg.includes('no longer active');
+
     return (
       <div className="mx-auto max-w-3xl px-4 py-8">
         <Link to="/rider" className="inline-flex items-center gap-2 text-sm font-semibold text-gray-600 hover:text-primary-700 mb-6">
           <ArrowLeft className="h-4 w-4" />
           Back to Deliveries
         </Link>
-        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-          {error instanceof Error ? error.message : 'This delivery could not be loaded. Please refresh and try again.'}
+        <div className={`rounded-2xl border p-6 ${isReassignedOrNotFound ? 'border-amber-200 bg-amber-50/80 text-amber-950' : 'border-red-200 bg-red-50 text-red-700'}`}>
+          <div className="flex items-start gap-3">
+            <Clock className={`h-6 w-6 shrink-0 mt-0.5 ${isReassignedOrNotFound ? 'text-amber-600' : 'text-red-500'}`} />
+            <div>
+              <h2 className="font-bold text-base">
+                {isReassignedOrNotFound
+                  ? 'Task Offer Expired or Reassigned'
+                  : 'Unable to Load Delivery'}
+              </h2>
+              <p className="text-xs text-gray-600 mt-1">
+                {isReassignedOrNotFound
+                  ? 'The acceptance window for this task offer has passed, or it has been accepted by or reassigned to another courier. You can return to your dashboard to review available tasks.'
+                  : (errorMsg || 'This delivery could not be loaded. Please refresh and try again.')}
+              </p>
+              <div className="mt-4">
+                <Link
+                  to="/rider"
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-primary-600 px-4 py-2 text-xs font-semibold text-white hover:bg-primary-700 transition-colors shadow-sm"
+                >
+                  <ArrowLeft className="h-3.5 w-3.5" /> Return to Rider Dashboard
+                </Link>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -138,7 +193,23 @@ export function RiderDeliveryDetailPage() {
         navigate('/rider', { replace: true });
       }
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : 'Unable to update assignment.');
+      const msg = error instanceof Error ? error.message : 'Unable to update assignment.';
+      const isReassignedOrExpired =
+        msg.includes('expired') ||
+        msg.includes('assigned to another rider') ||
+        msg.includes('ASSIGNMENT_EXPIRED') ||
+        msg.includes('ASSIGNED_TO_ANOTHER_RIDER') ||
+        msg.includes('no longer awaiting');
+
+      if (isReassignedOrExpired) {
+        setActionError('This task offer has expired or was assigned to another courier. Returning to your dashboard...');
+        await queryClient.invalidateQueries({ queryKey: ['rider-deliveries'] });
+        setTimeout(() => {
+          navigate('/rider', { replace: true });
+        }, 2200);
+      } else {
+        setActionError(msg);
+      }
     } finally {
       setIsActing(false);
     }
@@ -178,21 +249,37 @@ export function RiderDeliveryDetailPage() {
             Order #{delivery.orderId.slice(-6).toUpperCase()}
           </p>
         </div>
-        <Badge
-          variant={
-            delivery.status === 'ASSIGNED' && delivery.assignmentStatus === 'PENDING'
-              ? 'warning'
+        <div className="flex flex-col items-end gap-1.5">
+          <Badge
+            variant={
+              delivery.status === 'ASSIGNED' && delivery.assignmentStatus === 'PENDING'
+                ? 'warning'
+                : delivery.status === 'ASSIGNED' && delivery.assignmentStatus === 'ACCEPTED'
+                ? 'success'
+                : statusVariants[delivery.status]
+            }
+          >
+            {delivery.status === 'ASSIGNED' && delivery.assignmentStatus === 'PENDING'
+              ? 'AWAITING YOUR ACCEPTANCE'
               : delivery.status === 'ASSIGNED' && delivery.assignmentStatus === 'ACCEPTED'
-              ? 'success'
-              : statusVariants[delivery.status]
-          }
-        >
-          {delivery.status === 'ASSIGNED' && delivery.assignmentStatus === 'PENDING'
-            ? 'AWAITING YOUR ACCEPTANCE'
-            : delivery.status === 'ASSIGNED' && delivery.assignmentStatus === 'ACCEPTED'
-            ? 'ACCEPTED · READY FOR PICKUP'
-            : delivery.status.replace(/_/g, ' ')}
-        </Badge>
+              ? 'ACCEPTED · READY FOR PICKUP'
+              : delivery.status.replace(/_/g, ' ')}
+          </Badge>
+          {timeLeftSeconds !== null && delivery.status === 'ASSIGNED' && delivery.assignmentStatus === 'PENDING' && (
+            <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold ${
+              timeLeftSeconds > 60
+                ? 'bg-amber-100 text-amber-800'
+                : timeLeftSeconds > 0
+                ? 'bg-red-100 text-red-850 animate-pulse'
+                : 'bg-gray-100 text-gray-700'
+            }`}>
+              <Clock className="h-3 w-3" />
+              {timeLeftSeconds > 0
+                ? `${Math.floor(timeLeftSeconds / 60)}m ${timeLeftSeconds % 60}s remaining`
+                : 'Time expired'}
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Delivery timeline */}

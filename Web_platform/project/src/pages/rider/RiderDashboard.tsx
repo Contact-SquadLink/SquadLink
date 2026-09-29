@@ -29,7 +29,16 @@ export function RiderDashboard() {
   });
 
   const deliveries = (data?.data ?? []) as Delivery[];
-  const isPendingAcceptance = (d: Delivery) => d.status === 'ASSIGNED' && d.assignmentStatus === 'PENDING';
+  const isPendingAcceptance = (d: Delivery) => {
+    if (d.status !== 'ASSIGNED' || d.assignmentStatus !== 'PENDING') return false;
+    if (d.assignmentExpiresAt) {
+      const expiresAt = new Date(d.assignmentExpiresAt).getTime();
+      if (!Number.isNaN(expiresAt) && expiresAt <= Date.now()) {
+        return false;
+      }
+    }
+    return true;
+  };
   const pendingDeliveries = deliveries.filter(isPendingAcceptance);
   const inProgressDeliveries = deliveries.filter((d) => 
     ['PICKED_UP', 'IN_TRANSIT', 'ARRIVED'].includes(d.status) || 
@@ -175,6 +184,16 @@ export function RiderDashboard() {
                       Delivery #{delivery.id.slice(-6).toUpperCase()}
                     </p>
                     <Badge variant="warning">AWAITING YOUR ACCEPTANCE</Badge>
+                    {delivery.assignmentExpiresAt && (
+                      <span className="inline-flex items-center gap-1 text-xs font-semibold text-amber-900 bg-amber-200/70 px-2 py-0.5 rounded-md">
+                        <Clock className="h-3 w-3" />
+                        {(() => {
+                          const diff = Math.max(0, Math.floor((new Date(delivery.assignmentExpiresAt).getTime() - Date.now()) / 1000));
+                          if (diff <= 0) return 'Expired';
+                          return `${Math.floor(diff / 60)}m ${diff % 60}s left`;
+                        })()}
+                      </span>
+                    )}
                   </div>
                   <p className="text-xs text-amber-800 font-medium mt-1">
                     Click to review pickup and drop-off details, then accept or decline this offer.

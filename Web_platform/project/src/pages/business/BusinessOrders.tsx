@@ -7,6 +7,8 @@ import {
   Package,
   Store,
   ClipboardList,
+  XCircle,
+  AlertTriangle,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/States';
@@ -92,6 +94,8 @@ export function BusinessOrderDetailPage() {
   const [pickupCredential, setPickupCredential] = useState<string | null>(null);
   const [assignmentMessage, setAssignmentMessage] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['business-orders'],
@@ -143,6 +147,17 @@ export function BusinessOrderDetailPage() {
     onError: (caughtError) => setActionError(caughtError instanceof Error ? caughtError.message : 'Unable to reissue pickup credential.'),
   });
 
+  const cancelMutation = useMutation({
+    mutationFn: (reason?: string) => businessApi.cancelOrder(orderId as string, reason),
+    onMutate: () => setActionError(null),
+    onSuccess: () => {
+      setShowCancelModal(false);
+      setCancelReason('');
+      return queryClient.invalidateQueries({ queryKey: ['business-orders'] });
+    },
+    onError: (caughtError) => setActionError(caughtError instanceof Error ? caughtError.message : 'Unable to cancel order.'),
+  });
+
   if (isLoading) {
     return <div className="mx-auto max-w-3xl px-4 py-8 text-sm text-gray-600">Loading order details…</div>;
   }
@@ -190,40 +205,81 @@ export function BusinessOrderDetailPage() {
         {actionError && <p role="alert" className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{actionError}</p>}
         {assignmentMessage && <p role="status" className={`mb-4 rounded-lg border p-3 text-sm ${assignmentMessage.startsWith('A rider') ? 'border-success-200 bg-success-50 text-success-800' : 'border-amber-200 bg-amber-50 text-amber-900'}`}>{assignmentMessage}</p>}
 
-        {order.status === 'CONFIRMED' && (
-          <button
-            onClick={() => acceptMutation.mutate()}
-            disabled={acceptMutation.isPending}
-            className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-primary-600 px-6 text-sm font-semibold text-white hover:bg-primary-700 transition-colors disabled:opacity-50"
-          >
-            <CheckCircle2 className="h-4 w-4" /> Accept Order
-          </button>
-        )}
+        <div className="flex flex-wrap items-center gap-3">
+          {order.status === 'CONFIRMED' && (
+            <button
+              onClick={() => acceptMutation.mutate()}
+              disabled={acceptMutation.isPending || cancelMutation.isPending}
+              className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-primary-600 px-6 text-sm font-semibold text-white hover:bg-primary-700 transition-colors disabled:opacity-50"
+            >
+              <CheckCircle2 className="h-4 w-4" /> Accept Order
+            </button>
+          )}
 
-        {order.status === 'PREPARING' && (
-          <button
-            onClick={() => readyMutation.mutate()}
-            disabled={readyMutation.isPending}
-            className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-secondary-500 px-6 text-sm font-semibold text-secondary-950 hover:bg-secondary-400 transition-colors disabled:opacity-50"
-          >
-            <Store className="h-4 w-4" /> Mark Ready for Pickup
-          </button>
-        )}
+          {order.status === 'PREPARING' && (
+            <button
+              onClick={() => readyMutation.mutate()}
+              disabled={readyMutation.isPending || cancelMutation.isPending}
+              className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-secondary-500 px-6 text-sm font-semibold text-secondary-950 hover:bg-secondary-400 transition-colors disabled:opacity-50"
+            >
+              <Store className="h-4 w-4" /> Mark Ready for Pickup
+            </button>
+          )}
 
-        {order.status === 'READY_FOR_PICKUP' && <button type="button" onClick={() => retryRiderMutation.mutate()} disabled={retryRiderMutation.isPending} className="mb-3 inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-primary-200 px-5 text-sm font-semibold text-primary-700 disabled:opacity-50">{retryRiderMutation.isPending ? 'Searching...' : 'Retry rider assignment'}</button>}
+          {order.status === 'READY_FOR_PICKUP' && (
+            <button
+              type="button"
+              onClick={() => retryRiderMutation.mutate()}
+              disabled={retryRiderMutation.isPending || cancelMutation.isPending}
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-primary-200 px-5 text-sm font-semibold text-primary-700 hover:bg-primary-50 transition-colors disabled:opacity-50"
+            >
+              {retryRiderMutation.isPending ? 'Searching...' : 'Retry rider assignment'}
+            </button>
+          )}
 
-        {order.status === 'READY_FOR_PICKUP' && <button type="button" onClick={() => reissueCredentialMutation.mutate()} disabled={reissueCredentialMutation.isPending} className="mb-3 ml-2 inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-amber-200 px-5 text-sm font-semibold text-amber-800 disabled:opacity-50">{reissueCredentialMutation.isPending ? 'Issuing...' : 'Reissue pickup code'}</button>}
+          {order.status === 'READY_FOR_PICKUP' && (
+            <button
+              type="button"
+              onClick={() => reissueCredentialMutation.mutate()}
+              disabled={reissueCredentialMutation.isPending || cancelMutation.isPending}
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-amber-200 px-5 text-sm font-semibold text-amber-800 hover:bg-amber-50 transition-colors disabled:opacity-50"
+            >
+              {reissueCredentialMutation.isPending ? 'Issuing...' : 'Reissue pickup code'}
+            </button>
+          )}
 
-        {(order.status === 'READY_FOR_PICKUP' || order.status === 'OUT_FOR_DELIVERY' || order.status === 'DELIVERED') && (
+          {/* Cancellation button for cancellable business order stages */}
+          {['CONFIRMED', 'PREPARING', 'READY_FOR_PICKUP'].includes(order.status) && (
+            <button
+              type="button"
+              onClick={() => setShowCancelModal(true)}
+              disabled={cancelMutation.isPending}
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-5 text-sm font-semibold text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
+            >
+              <XCircle className="h-4 w-4 text-red-500" /> Cancel Request
+            </button>
+          )}
+        </div>
+
+        {(order.status === 'OUT_FOR_DELIVERY' || order.status === 'DELIVERED') && (
           <div className="flex items-center gap-2 rounded-xl bg-success-50 border border-success-200 p-4">
             <CheckCircle2 className="h-5 w-5 text-success-600" />
             <p className="text-sm font-semibold text-success-800">
-              {order.status === 'READY_FOR_PICKUP' ? 'Order is ready for rider pickup.' : order.status === 'OUT_FOR_DELIVERY' ? 'Order is out for delivery.' : 'Order has been delivered.'}
+              {order.status === 'OUT_FOR_DELIVERY' ? 'Order is out for delivery with the courier.' : 'Order has been delivered.'}
             </p>
           </div>
         )}
 
-        {pickupCredential && (
+        {order.status === 'CANCELLED' && (
+          <div className="flex items-center gap-2 rounded-xl bg-red-50 border border-red-200 p-4">
+            <XCircle className="h-5 w-5 text-red-600" />
+            <p className="text-sm font-semibold text-red-800">
+              This order has been cancelled. Any reserved inventory and courier assignments have been released.
+            </p>
+          </div>
+        )}
+
+        {pickupCredential && order.status === 'READY_FOR_PICKUP' && (
           <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
             <p className="text-sm font-semibold text-amber-950">Pickup code for the assigned rider</p>
             <p className="mt-2 font-mono text-2xl font-bold tracking-[0.25em] text-amber-950">
@@ -235,6 +291,81 @@ export function BusinessOrderDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Cancel Order Modal */}
+      {showCancelModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm animate-fade-in">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+            <div className="flex items-center gap-3 text-red-600 mb-4">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-100">
+                <AlertTriangle className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="font-display text-lg font-bold text-gray-900">Cancel Delivery Request</h3>
+                <p className="text-xs text-gray-500">Order #{order.orderId.slice(-6).toUpperCase()}</p>
+              </div>
+            </div>
+
+            <p className="text-sm text-gray-600 mb-4">
+              Cancelling this order will release all reserved inventory items back to your store catalog, cancel any active courier search or assignment, and notify the customer.
+            </p>
+
+            <div className="space-y-3 mb-5">
+              <label className="block text-xs font-bold uppercase tracking-wider text-gray-700">Reason for Cancellation</label>
+              <div className="space-y-1.5">
+                {[
+                  'Items or ingredients currently out of stock',
+                  'Store closing or kitchen emergency',
+                  'Delivery address unreachable / outside coverage',
+                  'Customer requested order cancellation',
+                ].map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => setCancelReason(preset)}
+                    className={`w-full text-left rounded-lg px-3 py-2 text-xs transition-colors border ${
+                      cancelReason === preset
+                        ? 'border-primary-600 bg-primary-50 text-primary-900 font-semibold'
+                        : 'border-gray-200 bg-gray-50 text-gray-700 hover:bg-gray-100'
+                    }`}
+                  >
+                    {preset}
+                  </button>
+                ))}
+              </div>
+              <input
+                type="text"
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                placeholder="Or specify another reason..."
+                className="w-full rounded-xl border border-gray-300 px-3.5 py-2.5 text-sm focus:border-primary-500 focus:outline-none"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCancelModal(false);
+                  setCancelReason('');
+                }}
+                disabled={cancelMutation.isPending}
+                className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
+              >
+                Go Back
+              </button>
+              <button
+                type="button"
+                onClick={() => cancelMutation.mutate(cancelReason)}
+                disabled={cancelMutation.isPending}
+                className="rounded-xl bg-red-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center gap-1.5 shadow-sm"
+              >
+                {cancelMutation.isPending ? 'Cancelling...' : 'Confirm Cancellation'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
         <h2 className="font-display text-lg font-bold text-gray-900 mb-4">Summary</h2>

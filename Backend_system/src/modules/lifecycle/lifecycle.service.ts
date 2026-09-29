@@ -954,7 +954,32 @@ export async function listBusinessOrders(userId: string) {
 }
 
 export async function listRiderDeliveries(userId: string) {
-  const result = await (await import("../../db/database")).db.query(
+  const { db } = await import("../../db/database");
+
+  // Proactive cleanup: expire any overdue pending assignment decisions and release riders
+  try {
+    await db.query(`
+      UPDATE public.delivery_assignment_decisions
+      SET status = 'EXPIRED', decided_at = NOW(), updated_at = NOW()
+      WHERE status = 'PENDING' AND expires_at <= NOW()
+    `);
+
+    await db.query(`
+      UPDATE public.deliveries d
+      SET rider_id = NULL, vehicle_id = NULL, status = 'SEARCHING_RIDER', assigned_at = NULL, updated_at = NOW()
+      WHERE d.status = 'ASSIGNED'
+        AND NOT EXISTS (
+          SELECT 1 FROM public.delivery_assignment_decisions dad
+          WHERE dad.delivery_id = d.id
+            AND dad.rider_id = d.rider_id
+            AND (dad.status = 'ACCEPTED' OR (dad.status = 'PENDING' AND dad.expires_at > NOW()))
+        )
+    `);
+  } catch (err) {
+    console.error("[SWEEP EXPIRED ASSIGNMENTS ERROR]", err);
+  }
+
+  const result = await db.query(
     `
       SELECT d.id,
              d.status,
@@ -986,6 +1011,11 @@ export async function listRiderDeliveries(userId: string) {
       LEFT JOIN public.businesses b ON b.id = f.business_id
       WHERE r.user_id = $1
         AND d.status IN ('ASSIGNED', 'PICKED_UP', 'IN_TRANSIT', 'ARRIVED', 'DELIVERED')
+        AND (
+          d.status != 'ASSIGNED'
+          OR dad.status = 'ACCEPTED'
+          OR (dad.status = 'PENDING' AND (dad.expires_at IS NULL OR dad.expires_at > NOW()))
+        )
       ORDER BY d.updated_at DESC
     `,
     [userId]
@@ -1024,9 +1054,10 @@ export async function getRiderDelivery(userId: string, deliveryId: string) {
              o.delivery_city AS "deliveryCity",
              o.delivery_state AS "deliveryState",
              o.delivery_contact_phone AS "deliveryContactPhone",
-             o.user_id AS "customerUserId"
+             o.user_id AS "customerUserId",
+             r.user_id AS "riderUserId"
       FROM public.deliveries d
-      INNER JOIN public.riders r ON r.id = d.rider_id
+      LEFT JOIN public.riders r ON r.id = d.rider_id
       INNER JOIN public.orders o ON o.id = d.order_id
       LEFT JOIN LATERAL (
         SELECT status, expires_at
@@ -1037,16 +1068,19 @@ export async function getRiderDelivery(userId: string, deliveryId: string) {
       ) dad ON TRUE
       LEFT JOIN public.fulfillments f ON f.order_id = o.id
       LEFT JOIN public.businesses b ON b.id = f.business_id
-      WHERE r.user_id = $1 AND d.id = $2
+      WHERE d.id = $1
     `,
-    [userId, deliveryId]
+    [deliveryId]
   );
 
   if (result.rows.length === 0) {
-    throw new AppError("Delivery not found for this rider.", 404, "DELIVERY_NOT_FOUND");
+    throw new AppError("Delivery not found.", 404, "DELIVERY_NOT_FOUND");
   }
 
   const row = result.rows[0];
+  if (!row.riderUserId || row.riderUserId !== userId) {
+    throw new AppError("This task has already been assigned to another rider or is no longer active.", 409, "ASSIGNED_TO_ANOTHER_RIDER");
+  }
   return {
     id: row.id,
     orderId: row.orderId,
@@ -1203,6 +1237,182 @@ export async function retryRiderAssignment(userId: string, orderId: string) {
       status: "READY_FOR_PICKUP",
       delivery
     };
+  });
+}
+
+/**
+ * Business Order Cancellation
+ * Allows the merchant to cancel an order before courier pickup, releasing reserved inventory,
+ * resetting rider dispatch, and notifying stakeholders.
+ */
+export async function cancelBusinessOrder(userId: string, orderId: string, reason?: string) {
+  return withTransaction(async (client) => {
+    const order = await loadBusinessOrder(client, orderId, userId);
+
+    if (order.order_status === "CANCELLED") {
+      fail("This order is already cancelled.", 409, "ORDER_ALREADY_CANCELLED");
+    }
+
+    if (order.order_status === "DELIVERED") {
+      fail("Delivered orders cannot be cancelled.", 409, "ORDER_ALREADY_DELIVERED");
+    }
+
+    // Check delivery status if delivery exists
+    const deliveryResult = await client.query<{
+      id: string;
+      rider_id: string | null;
+      vehicle_id: string | null;
+      status: string;
+    }>(
+      `SELECT id, rider_id, vehicle_id, status FROM public.deliveries WHERE order_id = $1 FOR UPDATE`,
+      [orderId]
+    );
+
+    if (deliveryResult.rows.length > 0) {
+      const delivery = deliveryResult.rows[0];
+      if (["PICKED_UP", "IN_TRANSIT", "ARRIVED"].includes(delivery.status)) {
+        fail("Cannot cancel order after the rider has picked up the items.", 409, "ORDER_IN_TRANSIT");
+      }
+    }
+
+    const cancelReason = reason?.trim() || "Business was unable to fulfill this order.";
+
+    // 1. Update order status to CANCELLED
+    await client.query(
+      `UPDATE public.orders
+       SET status = 'CANCELLED'::public.order_status,
+           cancelled_by = 'BUSINESS',
+           cancellation_reason = $2,
+           cancelled_at = NOW(),
+           updated_at = NOW()
+       WHERE id = $1`,
+      [orderId, cancelReason]
+    );
+
+    // 2. Release reserved inventory
+    const reservations = await client.query<{ id: string; inventory_id: string; quantity: number }>(
+      `SELECT id, inventory_id, quantity
+       FROM public.inventory_reservations
+       WHERE order_id = $1 AND status = 'ACTIVE'
+       FOR UPDATE`,
+      [orderId]
+    );
+
+    for (const res of reservations.rows) {
+      await client.query(
+        `UPDATE public.inventory
+         SET quantity_reserved = GREATEST(0, quantity_reserved - $1),
+             updated_at = NOW(),
+             last_updated_at = NOW()
+         WHERE id = $2`,
+        [res.quantity, res.inventory_id]
+      );
+
+      await client.query(
+        `UPDATE public.inventory_reservations SET status = 'CANCELLED', updated_at = NOW() WHERE id = $1`,
+        [res.id]
+      );
+    }
+
+    // 3. Cancel fulfillments
+    await client.query(
+      `UPDATE public.fulfillments SET status = 'CANCELLED', updated_at = NOW() WHERE order_id = $1`,
+      [orderId]
+    );
+
+    // 4. Handle delivery cleanup
+    if (deliveryResult.rows.length > 0) {
+      const existing = deliveryResult.rows[0];
+
+      // Release rider if assigned
+      if (existing.rider_id) {
+        await client.query(
+          `UPDATE public.riders SET is_available = TRUE, updated_at = NOW() WHERE id = $1`,
+          [existing.rider_id]
+        );
+        await client.query(
+          `INSERT INTO public.delivery_assignment_history (
+             delivery_id, rider_id, vehicle_id, action, changed_by, reason
+           ) VALUES ($1, $2, $3, 'UNASSIGNED', $4, 'Order cancelled by business.')`,
+          [existing.id, existing.rider_id, existing.vehicle_id, userId]
+        );
+      }
+
+      // Expire any pending assignment decisions
+      await client.query(
+        `UPDATE public.delivery_assignment_decisions
+         SET status = 'EXPIRED', decided_at = NOW(), updated_at = NOW()
+         WHERE delivery_id = $1 AND status = 'PENDING'`,
+        [existing.id]
+      );
+
+      // Invalidate active pickup verifications
+      await client.query(
+        `UPDATE public.pickup_verifications
+         SET status = 'INVALIDATED', updated_at = NOW()
+         WHERE delivery_id = $1 AND status = 'ACTIVE'`,
+        [existing.id]
+      );
+
+      // Mark delivery as CANCELLED
+      await client.query(
+        `UPDATE public.deliveries
+         SET status = 'CANCELLED'::public.delivery_status, updated_at = NOW()
+         WHERE id = $1`,
+        [existing.id]
+      );
+
+      await writeDeliveryHistory(
+        client,
+        existing.id,
+        existing.status,
+        "CANCELLED",
+        userId,
+        `Order cancelled by business: ${cancelReason}`
+      );
+    }
+
+    // 5. History, Outbox, and Audit
+    await writeOrderHistory(client, orderId, order.order_status, "CANCELLED", userId, `Business cancelled order: ${cancelReason}`);
+    await writeOutbox(client, "ORDER_CANCELLED", "ORDER", orderId, { orderId, reason: cancelReason, cancelledBy: "BUSINESS" });
+    await writeAudit(client, userId, "ORDER_CANCELLED", "ORDER", orderId, `Business cancelled order: ${cancelReason}`);
+
+    // 6. In-App Notifications
+    const customerResult = await client.query<{ user_id: string }>(
+      `SELECT user_id FROM public.orders WHERE id = $1`,
+      [orderId]
+    );
+    if (customerResult.rows[0]?.user_id) {
+      await createInAppNotification({
+        userId: customerResult.rows[0].user_id,
+        orderId,
+        type: "ORDER_CANCELLED",
+        title: "Order Cancelled by Merchant",
+        message: `Your order #${orderId.slice(0, 8)} was cancelled by the merchant (${cancelReason}).`,
+        eventKey: `customer-order-cancelled:${orderId}:${Date.now()}`,
+        client,
+      });
+    }
+
+    if (deliveryResult.rows.length > 0 && deliveryResult.rows[0].rider_id) {
+      const riderUser = await client.query<{ user_id: string }>(
+        `SELECT user_id FROM public.riders WHERE id = $1`,
+        [deliveryResult.rows[0].rider_id]
+      );
+      if (riderUser.rows[0]?.user_id) {
+        await createInAppNotification({
+          userId: riderUser.rows[0].user_id,
+          orderId,
+          type: "ORDER_CANCELLED",
+          title: "Delivery Request Cancelled",
+          message: `The delivery request for Order #${orderId.slice(0, 8)} has been cancelled by the merchant.`,
+          eventKey: `rider-order-cancelled:${orderId}:${Date.now()}`,
+          client,
+        });
+      }
+    }
+
+    return { orderId, status: "CANCELLED", reason: cancelReason };
   });
 }
 
@@ -1466,17 +1676,32 @@ async function loadRiderDelivery(client: PoolClient, deliveryId: string, userId:
     delivery_status: string;
     order_id: string;
     order_status: string;
-    rider_id: string;
-    rider_user_id: string;
+    rider_id: string | null;
+    rider_user_id: string | null;
     business_owner_user_id: string | null;
   }>(
-    `SELECT d.id AS delivery_id, d.status AS delivery_status, d.order_id, o.status AS order_status, r.id AS rider_id, r.user_id AS rider_user_id, b.owner_user_id AS business_owner_user_id FROM public.deliveries d INNER JOIN public.orders o ON o.id = d.order_id INNER JOIN public.riders r ON r.id = d.rider_id LEFT JOIN public.fulfillments f ON f.order_id = o.id LEFT JOIN public.businesses b ON b.id = f.business_id WHERE d.id = $1 AND r.user_id = $2 FOR UPDATE OF d, o`,
-    [deliveryId, userId]
+    `SELECT d.id AS delivery_id, d.status AS delivery_status, d.order_id, o.status AS order_status, r.id AS rider_id, r.user_id AS rider_user_id, b.owner_user_id AS business_owner_user_id
+     FROM public.deliveries d
+     INNER JOIN public.orders o ON o.id = d.order_id
+     LEFT JOIN public.riders r ON r.id = d.rider_id
+     LEFT JOIN public.fulfillments f ON f.order_id = o.id
+     LEFT JOIN public.businesses b ON b.id = f.business_id
+     WHERE d.id = $1
+     FOR UPDATE OF d, o`,
+    [deliveryId]
   );
   if (result.rows.length === 0) {
-    fail("Delivery not found for this rider.", 404, "DELIVERY_NOT_FOUND");
+    fail("Delivery not found.", 404, "DELIVERY_NOT_FOUND");
   }
-  return result.rows[0];
+  const row = result.rows[0];
+  if (!row.rider_user_id || row.rider_user_id !== userId) {
+    fail("This task has already been assigned to another rider or is no longer available.", 409, "ASSIGNED_TO_ANOTHER_RIDER");
+  }
+  return {
+    ...row,
+    rider_id: row.rider_id!,
+    rider_user_id: row.rider_user_id!,
+  };
 }
 
 export async function acceptRiderAssignment(

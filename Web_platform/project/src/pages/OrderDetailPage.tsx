@@ -36,7 +36,12 @@ const orderStages: Record<string, string[]> = {
 export function OrderDetailPage() {
   const { orderId } = useParams<{ orderId: string }>();
   const [searchParams] = useSearchParams();
-  const paymentReference = searchParams.get('reference') || searchParams.get('trxref');
+  const paymentReference =
+    searchParams.get('reference') ||
+    searchParams.get('trxref') ||
+    searchParams.get('tx_ref') ||
+    searchParams.get('transaction_id');
+  const paymentStatusParam = searchParams.get('status');
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['customer-order', orderId],
@@ -51,6 +56,7 @@ export function OrderDetailPage() {
   const [isVerifyingPayment, setIsVerifyingPayment] = useState(false);
   const [paymentNotice, setPaymentNotice] = useState<string | null>(null);
   const [isInitiatingPayment, setIsInitiatingPayment] = useState(false);
+  const [selectedGateway, setSelectedGateway] = useState<'PAYSTACK' | 'FLUTTERWAVE'>('PAYSTACK');
 
   // Cancellation state
   const [showCancelModal, setShowCancelModal] = useState(false);
@@ -60,8 +66,13 @@ export function OrderDetailPage() {
 
   const order = (data?.data ?? null) as Order | null;
 
-  // Auto-verify payment if returning from Paystack / gateway with reference
+  // Auto-verify payment if returning from Paystack / Flutterwave with reference
   useEffect(() => {
+    if (paymentStatusParam === 'cancelled') {
+      setPaymentNotice('Payment was cancelled at the gateway checkout. You can retry payment below at any time.');
+      return;
+    }
+
     if (paymentReference && order && order.status === 'PENDING' && !isVerifyingPayment) {
       setIsVerifyingPayment(true);
       setPaymentNotice('Verifying payment clearance with gateway...');
@@ -80,9 +91,9 @@ export function OrderDetailPage() {
           setIsVerifyingPayment(false);
         });
     }
-  }, [paymentReference, order?.status]);
+  }, [paymentReference, paymentStatusParam, order?.status]);
 
-  const handlePayNow = async () => {
+  const handlePayNow = async (gateway: 'PAYSTACK' | 'FLUTTERWAVE' = selectedGateway) => {
     if (!orderId) return;
     setIsInitiatingPayment(true);
     setPaymentNotice(null);
@@ -90,7 +101,7 @@ export function OrderDetailPage() {
       const callbackUrl = `${window.location.origin}/orders/${orderId}`;
       const res = await paymentApi.initialize({
         orderId,
-        gateway: 'PAYSTACK',
+        gateway,
         callbackUrl,
       });
       if (res.data.checkoutUrl) {
@@ -238,12 +249,12 @@ export function OrderDetailPage() {
                   )}
                 </div>
               </div>
-              <div className="flex flex-col sm:flex-row gap-2 shrink-0">
+              <div className="flex flex-col sm:flex-row flex-wrap gap-2 shrink-0">
                 <button
                   type="button"
-                  onClick={handlePayNow}
+                  onClick={() => void handlePayNow('PAYSTACK')}
                   disabled={isInitiatingPayment}
-                  className="rounded-xl bg-primary-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-primary-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5 shadow-sm"
+                  className="rounded-xl bg-primary-600 px-3.5 py-2.5 text-xs font-bold text-white hover:bg-primary-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5 shadow-sm"
                 >
                   {isInitiatingPayment ? (
                     <>
@@ -251,7 +262,22 @@ export function OrderDetailPage() {
                       Connecting...
                     </>
                   ) : (
-                    <>Pay {formatPrice(order.total)} with Paystack</>
+                    <>Pay with Paystack</>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handlePayNow('FLUTTERWAVE')}
+                  disabled={isInitiatingPayment}
+                  className="rounded-xl bg-amber-600 px-3.5 py-2.5 text-xs font-bold text-white hover:bg-amber-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5 shadow-sm"
+                >
+                  {isInitiatingPayment ? (
+                    <>
+                      <span className="h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                      Connecting...
+                    </>
+                  ) : (
+                    <>Pay with Flutterwave</>
                   )}
                 </button>
                 <button
@@ -347,7 +373,7 @@ export function OrderDetailPage() {
                 <div className="rounded-xl bg-blue-100/60 p-3.5 text-xs text-blue-900">
                   <p className="font-semibold">
                     {delivery.status === 'ASSIGNED' && '🛵 Rider accepted and is heading to the store to pick up your package.'}
-                    {delivery.status === 'RIDER_AT_PICKUP' && '🏪 Rider has arrived at the store and is collecting your order.'}
+                    {(delivery.status as string) === 'RIDER_AT_PICKUP' && '🏪 Rider has arrived at the store and is collecting your order.'}
                     {delivery.status === 'PICKED_UP' && '📦 Package collected! Rider is preparing to depart toward your location.'}
                     {delivery.status === 'IN_TRANSIT' && '🚀 Rider is on the way with your package! Keep your phone nearby.'}
                     {delivery.status === 'ARRIVED' && '📍 Rider has arrived at your delivery address! Request your delivery OTP below.'}

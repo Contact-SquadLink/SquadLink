@@ -4,6 +4,22 @@ import { withTransaction } from "../../db/transaction";
 import { AppError } from "../../utils/app-error";
 import { processProviderPayment } from "../lifecycle/lifecycle.service";
 
+export function getFlutterwaveSecretKey(): string | undefined {
+  return (
+    process.env.FLUTTERWAVE_SECRET_KEY ||
+    process.env.FLW_SECRET_KEY ||
+    process.env.FLW_SECK
+  );
+}
+
+export function getFlutterwaveSecretHash(): string | undefined {
+  return (
+    process.env.FLUTTERWAVE_SECRET_HASH ||
+    process.env.FLW_SECRET_HASH ||
+    process.env.FLW_HASH
+  );
+}
+
 export type PaymentGatewayProvider = "PAYSTACK" | "FLUTTERWAVE";
 
 export interface InitializePaymentInput {
@@ -129,7 +145,7 @@ export async function initializePaymentGatewayTransaction(
     }
   } else {
     // Flutterwave
-    const flwSecret = process.env.FLUTTERWAVE_SECRET_KEY;
+    const flwSecret = getFlutterwaveSecretKey();
     if (flwSecret && !flwSecret.includes("YOUR_")) {
       try {
         const response = await fetch("https://api.flutterwave.com/v3/payments", {
@@ -169,14 +185,15 @@ export async function initializePaymentGatewayTransaction(
         if (data.status === "success" && data.data?.link) {
           checkoutUrl = data.data.link;
         } else {
-          checkoutUrl = `https://ravemodal-dev.herokuapp.com/simulate/${reference}`;
+          console.warn("[FLUTTERWAVE INITIALIZE API WARNING]", data);
+          checkoutUrl = `https://checkout.flutterwave.com/v3/hosted/pay/${reference}`;
         }
       } catch (err) {
         console.error("[FLUTTERWAVE INITIALIZE ERROR]", err);
-        checkoutUrl = `https://ravemodal-dev.herokuapp.com/simulate/${reference}`;
+        checkoutUrl = `https://checkout.flutterwave.com/v3/hosted/pay/${reference}`;
       }
     } else {
-      checkoutUrl = `https://ravemodal-dev.herokuapp.com/simulate/${reference}?amount=${totalAmount}`;
+      checkoutUrl = `https://checkout.flutterwave.com/v3/hosted/pay/${reference}?amount=${totalAmount}&email=${encodeURIComponent(email)}`;
     }
   }
 
@@ -214,8 +231,8 @@ export function verifyPaystackSignature(rawBody: string, signature: string): boo
  * Secret token / hash verification for Flutterwave webhooks
  */
 export function verifyFlutterwaveSignature(receivedHash: string): boolean {
-  const secretHash = process.env.FLUTTERWAVE_SECRET_HASH || "sqlink_flw_secret_token";
-  return receivedHash === secretHash;
+  const secretHash = getFlutterwaveSecretHash() || "sqlink_flw_secret_token";
+  return Boolean(receivedHash) && receivedHash === secretHash;
 }
 
 /**
@@ -349,7 +366,7 @@ export async function verifyPaymentReference(reference: string, userId: string) 
   // Direct Paystack verification fallback if payment hasn't cleared yet via webhook
   if (currentPaymentStatus === "PENDING" || currentOrderStatus === "PENDING") {
     const paystackSecret = process.env.PAYSTACK_SECRET_KEY;
-    if (paystackSecret && !paystackSecret.includes("YOUR_")) {
+    if (paystackSecret && !paystackSecret.includes("YOUR_") && (row.provider === "paystack" || reference.startsWith("sqlink_paystack"))) {
       try {
         const response = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`, {
           method: "GET",
@@ -378,6 +395,58 @@ export async function verifyPaymentReference(reference: string, userId: string) 
         }
       } catch (err) {
         console.error("[PAYSTACK DIRECT VERIFY ERROR]", err);
+      }
+    }
+
+    // Direct Flutterwave verification fallback
+    const flwSecret = getFlutterwaveSecretKey();
+    if (
+      flwSecret &&
+      !flwSecret.includes("YOUR_") &&
+      (currentPaymentStatus === "PENDING" || currentOrderStatus === "PENDING") &&
+      (row.provider === "flutterwave" || reference.startsWith("sqlink_flutterwave") || /^\d+$/.test(reference))
+    ) {
+      try {
+        const isNumericId = /^\d+$/.test(reference);
+        const flwVerifyUrl = isNumericId
+          ? `https://api.flutterwave.com/v3/transactions/${encodeURIComponent(reference)}/verify`
+          : `https://api.flutterwave.com/v3/transactions/verify_by_reference?tx_ref=${encodeURIComponent(reference)}`;
+
+        const response = await fetch(flwVerifyUrl, {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${flwSecret}`,
+            "Content-Type": "application/json",
+          },
+        });
+
+        const flwData = (await response.json()) as {
+          status: string;
+          data?: { status: string; tx_ref: string; id: number; amount: number };
+        };
+
+        if (
+          flwData.status === "success" &&
+          (flwData.data?.status === "successful" || flwData.data?.status === "success")
+        ) {
+          const matchedTxRef = flwData.data.tx_ref || reference;
+          const attempt =
+            (await findPaymentAttemptByReference(reference)) ||
+            (await findPaymentAttemptByReference(matchedTxRef));
+
+          if (attempt && attempt.status !== "SUCCESS") {
+            await processProviderPayment(userId, attempt.payment_id, {
+              providerEventId: `flw-verify-${reference}`,
+              paymentAttemptId: attempt.id,
+              status: "SUCCESS",
+              providerReference: matchedTxRef,
+            });
+            currentPaymentStatus = "AUTHORIZED";
+            currentOrderStatus = "CONFIRMED";
+          }
+        }
+      } catch (err) {
+        console.error("[FLUTTERWAVE DIRECT VERIFY ERROR]", err);
       }
     }
   }

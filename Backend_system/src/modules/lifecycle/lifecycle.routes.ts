@@ -18,6 +18,7 @@ import {
 } from "./lifecycle.schemas";
 import {
   acceptBusinessOrder,
+  cancelBusinessOrder,
   confirmDelivery,
   getRiderDelivery,
   getRiderProfile,
@@ -92,6 +93,19 @@ export async function lifecycleRoutes(app: FastifyInstance): Promise<void> {
       const { orderId } = orderIdParamsSchema.parse(request.params);
       return successResponse(
         await reissuePickupCredentialForBusiness(request.user.id, orderId),
+        request.id
+      );
+    }
+  );
+
+  app.post(
+    "/business/orders/:orderId/cancel",
+    { preHandler: [authenticate, authorize("BUSINESS_USER")] },
+    async (request) => {
+      const { orderId } = orderIdParamsSchema.parse(request.params);
+      const body = (typeof request.body === "object" && request.body !== null ? request.body : {}) as { reason?: string };
+      return successResponse(
+        await cancelBusinessOrder(request.user.id, orderId, body.reason),
         request.id
       );
     }

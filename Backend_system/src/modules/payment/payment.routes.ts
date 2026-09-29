@@ -61,8 +61,12 @@ export async function paymentRoutes(app: FastifyInstance): Promise<void> {
     "/flutterwave/webhook",
     async (request, reply) => {
       const receivedHash = (request.headers["verif-hash"] as string) || "";
+      const flwSecretHash =
+        process.env.FLUTTERWAVE_SECRET_HASH ||
+        process.env.FLW_SECRET_HASH ||
+        process.env.FLW_HASH;
 
-      if (process.env.FLUTTERWAVE_SECRET_HASH && !verifyFlutterwaveSignature(receivedHash)) {
+      if (flwSecretHash && !verifyFlutterwaveSignature(receivedHash)) {
         return reply.status(401).send({
           success: false,
           error: { code: "INVALID_WEBHOOK_HASH", message: "Flutterwave verification hash mismatch." },

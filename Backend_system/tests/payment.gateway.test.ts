@@ -48,6 +48,21 @@ describe("Payment Gateway Integration & Cryptographic Webhooks", () => {
 
     const isInvalid = verifyFlutterwaveSignature("tampered_hash_token");
     assert.equal(isInvalid, false, "Mismatched hash should be rejected");
+
+    // Test FLW_SECRET_HASH alias
+    delete process.env.FLUTTERWAVE_SECRET_HASH;
+    process.env.FLW_SECRET_HASH = "alias_flw_hash_123";
+    assert.equal(verifyFlutterwaveSignature("alias_flw_hash_123"), true, "FLW_SECRET_HASH alias should be recognized");
+    assert.equal(verifyFlutterwaveSignature("other_hash"), false);
+
+    // Test FLW_HASH alias
+    delete process.env.FLW_SECRET_HASH;
+    process.env.FLW_HASH = "alias_flw_hash_456";
+    assert.equal(verifyFlutterwaveSignature("alias_flw_hash_456"), true, "FLW_HASH alias should be recognized");
+
+    // Restore original
+    delete process.env.FLW_HASH;
+    process.env.FLUTTERWAVE_SECRET_HASH = flwHash;
   });
 
   it("rejects unauthorized Paystack webhook requests with 401 when signature is invalid", async () => {

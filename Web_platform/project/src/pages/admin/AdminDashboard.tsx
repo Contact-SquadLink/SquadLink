@@ -331,7 +331,7 @@ export function AdminDashboard() {
                           item.status === 'PAID'
                             ? 'success'
                             : item.status === 'APPROVED'
-                            ? 'primary'
+                            ? 'info'
                             : item.status === 'REJECTED'
                             ? 'error'
                             : 'warning'

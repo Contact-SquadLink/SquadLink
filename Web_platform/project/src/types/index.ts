@@ -318,6 +318,11 @@ export interface Business {
   name: string;
   description?: string;
   address?: string;
+  addressLine?: string;
+  city?: string;
+  state?: string;
+  latitude?: number | string | null;
+  longitude?: number | string | null;
   phone?: string;
   email?: string;
   isVerified: boolean;
