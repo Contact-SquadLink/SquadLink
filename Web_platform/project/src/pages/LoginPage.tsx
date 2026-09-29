@@ -22,15 +22,33 @@ const roleTabs: { role: Role; label: string; icon: typeof User }[] = [
 ];
 
 function safeRedirect(value: string | null): string | null {
-  return value && value.startsWith('/') && !value.startsWith('//') ? value : null;
+  if (!value || !value.startsWith('/') || value.startsWith('//')) {
+    return null;
+  }
+  const clean = value.split('?')[0];
+  if (['/unauthorized', '/login', '/register'].includes(clean)) {
+    return null;
+  }
+  return value;
 }
 
 function roleCanOpenPath(role: Role, path: string): boolean {
+  if (path === '/unauthorized' || path.startsWith('/unauthorized')) return false;
   if (role === 'SUPER_ADMIN') return true;
-  if (path.startsWith('/business')) return role === 'BUSINESS_USER' || role === 'ADMIN';
-  if (path.startsWith('/rider')) return role === 'RIDER' || role === 'ADMIN';
-  if (path.startsWith('/admin')) return role === 'ADMIN';
-  if (path.startsWith('/earnings')) return role === 'BUSINESS_USER' || role === 'RIDER';
+  if (role === 'ADMIN') {
+    return !path.startsWith('/customer');
+  }
+  if (role === 'BUSINESS_USER') {
+    return path.startsWith('/business') || path.startsWith('/earnings') || path.startsWith('/profile') || path.startsWith('/notifications') || path === '/' || path.startsWith('/browse');
+  }
+  if (role === 'RIDER') {
+    return path.startsWith('/rider') || path.startsWith('/earnings') || path.startsWith('/profile') || path.startsWith('/notifications') || path === '/' || path.startsWith('/browse');
+  }
+  // CUSTOMER
+  if (path.startsWith('/business/register') || path.startsWith('/rider/register')) return true;
+  if (path.startsWith('/business') || path.startsWith('/rider') || path.startsWith('/admin') || path.startsWith('/earnings')) {
+    return false;
+  }
   return true;
 }
 

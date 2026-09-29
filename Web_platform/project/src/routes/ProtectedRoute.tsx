@@ -10,22 +10,33 @@ interface ProtectedRouteProps {
   allowedRoles?: Role[];
 }
 
+function getDefaultRouteForRole(role: Role): string {
+  if (role === 'SUPER_ADMIN') return '/admin/control-center';
+  if (role === 'ADMIN') return '/admin';
+  if (role === 'BUSINESS_USER') return '/business';
+  if (role === 'RIDER') return '/rider';
+  return '/dashboard';
+}
+
 export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {
   const { user, isLoading, refreshUser } = useAuth();
   const location = useLocation();
-  const [refreshKey, setRefreshKey] = useState<string | null>(null);
-  const roleKey = `${location.pathname}:${allowedRoles?.join(',') ?? ''}`;
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [attemptedRefresh, setAttemptedRefresh] = useState(false);
 
   useEffect(() => {
-    if (!user || !allowedRoles || user.role === 'SUPER_ADMIN' || allowedRoles.includes(user.role) || refreshKey === roleKey) {
+    if (!user || !allowedRoles || user.role === 'SUPER_ADMIN' || allowedRoles.includes(user.role) || attemptedRefresh) {
       return;
     }
 
-    setRefreshKey(roleKey);
-    void refreshUser();
-  }, [allowedRoles, refreshKey, refreshUser, roleKey, user]);
+    setAttemptedRefresh(true);
+    setIsVerifying(true);
+    refreshUser().finally(() => {
+      setIsVerifying(false);
+    });
+  }, [allowedRoles, attemptedRefresh, refreshUser, user]);
 
-  if (isLoading) {
+  if (isLoading || isVerifying) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <Spinner size="lg" />
@@ -44,12 +55,9 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
   }
 
   if (allowedRoles && !allowedRoles.includes(user.role)) {
-    if (refreshKey === roleKey) {
-      return (
-        <div className="flex min-h-screen items-center justify-center">
-          <Spinner size="lg" />
-        </div>
-      );
+    const fallbackPath = getDefaultRouteForRole(user.role);
+    if (fallbackPath !== location.pathname) {
+      return <Navigate to={fallbackPath} replace />;
     }
     return <Navigate to="/unauthorized" replace />;
   }

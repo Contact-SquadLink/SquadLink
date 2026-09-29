@@ -88,6 +88,14 @@ export function Header() {
             : '/dashboard'
     : '/login';
 
+  const ordersPath = user
+    ? user.role === 'BUSINESS_USER'
+      ? '/business/orders'
+      : user.role === 'RIDER'
+        ? '/rider'
+        : '/orders'
+    : '/login';
+
   return (
     <>
       <header
@@ -181,7 +189,7 @@ export function Header() {
                       Dashboard
                     </Link>
                     <Link
-                      to="/orders"
+                      to={ordersPath}
                       className="flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
                     >
                       <ShoppingBag className="h-4 w-4 text-gray-400" />
@@ -270,7 +278,7 @@ export function Header() {
                     Dashboard
                   </Link>
                   <Link
-                    to="/orders"
+                    to={ordersPath}
                     onClick={() => setMobileOpen(false)}
                     className="block w-full rounded-lg px-3 py-3 text-center text-base font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
                   >
