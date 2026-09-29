@@ -185,19 +185,33 @@ export function RegisterPage() {
         .anim-radar { animation: pulse-radar 3s ease-in-out infinite; }
       `}</style>
 
-      {/* Ambient background glows */}
-      <div className="absolute -top-40 -left-40 h-96 w-96 rounded-full bg-primary-600/20 blur-3xl pointer-events-none" />
-      <div className="absolute top-1/2 -right-40 h-96 w-96 rounded-full bg-emerald-500/15 blur-3xl pointer-events-none" />
-      <div className="absolute -bottom-40 left-1/3 h-96 w-96 rounded-full bg-cyan-600/15 blur-3xl pointer-events-none" />
+      {/* High Quality SquadLink Photographic Hero Background */}
+      <div className="absolute inset-0 z-0">
+        <img
+          src="/images/squadlink-signup-hero.jpg"
+          alt="SquadLink Logistics & Delivery Network"
+          className="h-full w-full object-cover object-center filter brightness-[0.34] contrast-[1.12] scale-[1.02] transform transition-transform duration-1000"
+        />
+        {/* Cinematic Multi-layered Overlays matching SquadLink Green/Cyan/Slate Palette */}
+        <div className="absolute inset-0 bg-gradient-to-r from-slate-950/95 via-slate-950/80 to-slate-950/90" />
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-slate-950/80" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-primary-900/35 via-transparent to-transparent" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_right,_var(--tw-gradient-stops))] from-emerald-900/30 via-transparent to-transparent" />
+
+        {/* Ambient atmospheric glows */}
+        <div className="absolute -top-40 -left-40 h-[500px] w-[500px] rounded-full bg-primary-500/20 blur-[120px] pointer-events-none" />
+        <div className="absolute top-1/2 -right-40 h-[500px] w-[500px] rounded-full bg-emerald-500/15 blur-[120px] pointer-events-none" />
+        <div className="absolute -bottom-40 left-1/3 h-[500px] w-[500px] rounded-full bg-cyan-600/15 blur-[120px] pointer-events-none" />
+      </div>
 
       {/* Top Navbar */}
-      <header className="relative z-20 border-b border-white/10 bg-slate-900/70 backdrop-blur-md">
+      <header className="relative z-20 border-b border-white/10 bg-slate-950/75 backdrop-blur-md">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2.5">
+          <Link to="/" className="flex items-center gap-2.5 group">
             <img
               src="/squadlink-logo.png"
               alt="SquadLink"
-              className="h-9 w-9 object-contain drop-shadow-sm"
+              className="h-9 w-9 object-contain drop-shadow-sm group-hover:scale-105 transition-transform"
             />
             <span className="font-display text-xl font-bold text-white tracking-tight">
               SQUAD<span className="text-primary-400">LINK</span>
@@ -205,7 +219,7 @@ export function RegisterPage() {
           </Link>
           <Link
             to={`/login?role=CUSTOMER${redirect ? `&redirect=${encodeURIComponent(redirect)}` : ''}`}
-            className="rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-xs sm:text-sm font-semibold text-white hover:bg-white/10 transition-colors"
+            className="rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-xs sm:text-sm font-semibold text-white hover:bg-white/10 hover:border-white/25 transition-all"
           >
             Already have an account? <span className="text-primary-400 font-bold ml-1">Sign In</span>
           </Link>
@@ -296,9 +310,12 @@ export function RegisterPage() {
 
           {/* Right Column: Account Creation Card */}
           <div className="lg:col-span-6 order-1 lg:order-2">
-            <div className="w-full max-w-lg mx-auto rounded-3xl border border-white/15 bg-white/95 backdrop-blur-xl p-6 sm:p-8 shadow-2xl">
+            <div className="w-full max-w-lg mx-auto rounded-3xl border border-white/40 bg-white/95 backdrop-blur-2xl p-6 sm:p-8 shadow-2xl shadow-slate-950/40 ring-1 ring-black/5">
               <div className="mb-6">
-                <h2 className="font-display text-2xl font-bold text-gray-900">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-700 border border-emerald-200 mb-2.5">
+                  {intent === 'business' ? '🏬 Merchant Partner Network' : '⚡ Swift Hyperlocal Delivery'}
+                </span>
+                <h2 className="font-display text-2xl font-bold text-gray-900 tracking-tight">
                   {intent === 'business' ? 'Create Merchant Account' : 'Create Customer Account'}
                 </h2>
                 <p className="mt-1 text-xs text-gray-500">
@@ -488,7 +505,7 @@ export function RegisterPage() {
                 <button
                   type="submit"
                   disabled={!agreedToTerms || isLoading}
-                  className="w-full mt-3 inline-flex items-center justify-center rounded-xl bg-primary-600 py-3 text-sm font-bold text-white shadow-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500/20 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
+                  className="w-full mt-3 inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-primary-600 via-emerald-600 to-teal-600 py-3.5 text-sm font-bold text-white shadow-lg shadow-emerald-950/20 hover:from-primary-500 hover:to-teal-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 active:scale-[0.99] disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
                 >
                   {isLoading ? (
                     <>
