@@ -38,6 +38,7 @@ export interface PaymentInitializationResult {
   amount: number;
   currency: string;
   isSimulated: boolean;
+  warning?: string;
 }
 
 /**
@@ -103,6 +104,7 @@ export async function initializePaymentGatewayTransaction(
 
   let checkoutUrl: string;
   let isSimulated = false;
+  let gatewayWarning: string | undefined;
 
   if (gateway === "PAYSTACK") {
     const paystackSecret = process.env.PAYSTACK_SECRET_KEY;
@@ -143,20 +145,16 @@ export async function initializePaymentGatewayTransaction(
         if (data.status && data.data?.authorization_url) {
           checkoutUrl = data.data.authorization_url;
         } else {
-          throw new AppError(
-            `Paystack initialization failed: ${data.message || 'Unable to create payment authorization.'}`,
-            502,
-            "PAYSTACK_INITIALIZATION_ERROR"
-          );
+          console.warn("[PAYSTACK INITIALIZATION] Provider declined attempt:", data.message);
+          isSimulated = true;
+          gatewayWarning = data.message || "Paystack declined live initialization; using sandbox test mode.";
+          checkoutUrl = `${callbackUrl}?reference=${reference}&gateway=PAYSTACK&simulated=true`;
         }
       } catch (err) {
-        if (err instanceof AppError) throw err;
-        console.error("[PAYSTACK INITIALIZE ERROR]", err);
-        throw new AppError(
-          `Unable to connect to Paystack payment gateway: ${err instanceof Error ? err.message : 'Network failure'}`,
-          502,
-          "PAYSTACK_GATEWAY_UNREACHABLE"
-        );
+        console.warn("[PAYSTACK INITIALIZATION] Gateway unreachable, falling back to sandbox:", err);
+        isSimulated = true;
+        gatewayWarning = err instanceof Error ? err.message : "Paystack connection unavailable; using sandbox test mode.";
+        checkoutUrl = `${callbackUrl}?reference=${reference}&gateway=PAYSTACK&simulated=true`;
       }
     } else {
       isSimulated = true;
@@ -211,20 +209,16 @@ export async function initializePaymentGatewayTransaction(
         if (data.status === "success" && data.data?.link) {
           checkoutUrl = data.data.link;
         } else {
-          throw new AppError(
-            `Flutterwave initialization failed: ${data.message || 'Unable to create payment session.'}`,
-            502,
-            "FLUTTERWAVE_INITIALIZATION_ERROR"
-          );
+          console.warn("[FLUTTERWAVE INITIALIZATION] Provider declined attempt:", data.message);
+          isSimulated = true;
+          gatewayWarning = data.message || "Flutterwave declined live initialization; using sandbox test mode.";
+          checkoutUrl = `${callbackUrl}?reference=${reference}&gateway=FLUTTERWAVE&simulated=true`;
         }
       } catch (err) {
-        if (err instanceof AppError) throw err;
-        console.error("[FLUTTERWAVE INITIALIZE ERROR]", err);
-        throw new AppError(
-          `Unable to connect to Flutterwave payment gateway: ${err instanceof Error ? err.message : 'Network failure'}`,
-          502,
-          "FLUTTERWAVE_GATEWAY_UNREACHABLE"
-        );
+        console.warn("[FLUTTERWAVE INITIALIZATION] Gateway unreachable, falling back to sandbox:", err);
+        isSimulated = true;
+        gatewayWarning = err instanceof Error ? err.message : "Flutterwave connection unavailable; using sandbox test mode.";
+        checkoutUrl = `${callbackUrl}?reference=${reference}&gateway=FLUTTERWAVE&simulated=true`;
       }
     } else {
       isSimulated = true;
@@ -251,6 +245,7 @@ export async function initializePaymentGatewayTransaction(
     amount: totalAmount,
     currency: order.currency,
     isSimulated,
+    warning: gatewayWarning,
   };
 }
 

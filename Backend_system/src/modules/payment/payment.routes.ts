@@ -36,6 +36,23 @@ export async function paymentRoutes(app: FastifyInstance): Promise<void> {
     }
   );
 
+  // Informative endpoint for GET /initialize requests (e.g. from browser address bar or direct navigation)
+  app.get(
+    "/initialize",
+    async (request, reply) => {
+      return reply.status(200).send({
+        success: true,
+        data: {
+          service: "SquadLink Payment Gateway API",
+          status: "ONLINE",
+          usage: "Payment checkout is initialized via authenticated HTTP POST to /api/v1/payments/initialize with { orderId, gateway, callbackUrl }.",
+          supportedGateways: ["PAYSTACK", "FLUTTERWAVE"],
+        },
+        requestId: request.id,
+      });
+    }
+  );
+
   // Paystack Webhook endpoint with Cryptographic HMAC SHA-512 Verification
   app.post(
     "/paystack/webhook",
