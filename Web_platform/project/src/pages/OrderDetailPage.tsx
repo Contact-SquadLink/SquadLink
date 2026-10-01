@@ -450,8 +450,7 @@ export function OrderDetailPage() {
               <div className="mt-3 space-y-2 text-sm text-gray-600">
                 <div className="flex items-center justify-between"><span>Subtotal</span><span>{formatPrice(order.subtotal)}</span></div>
                 <div className="flex items-center justify-between"><span>Delivery fee</span><span>{formatPrice(order.deliveryFee)}</span></div>
-                <div className="flex items-center justify-between"><span>Platform fee</span><span>{formatPrice(order.platformFee ?? 0)}</span></div>
-                <div className="flex items-center justify-between"><span>VAT</span><span>{formatPrice(order.vat ?? 0)}</span></div>
+                <div className="flex items-center justify-between"><span>Platform fee</span><span>{formatPrice(order.platformFee ?? 150)}</span></div>
                 <div className="border-t border-gray-200 pt-2 flex items-center justify-between font-semibold text-gray-900"><span>Total</span><span>{formatPrice(order.total)}</span></div>
               </div>
             </div>

@@ -1654,7 +1654,7 @@ async function assignRider(
         [orderId]
       );
       const detail = details.rows[0];
-      const payout = Math.max(300, Math.round(Number(detail?.delivery_fee_amount ?? 500) * 0.8));
+      const payout = Math.max(400, Math.round(Number(detail?.delivery_fee_amount ?? 500) * 0.8));
       void notifyFeaturePhoneRiderAssignment({
         riderPhone: rider.phone_number,
         orderId,

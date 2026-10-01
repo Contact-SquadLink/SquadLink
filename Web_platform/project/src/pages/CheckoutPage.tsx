@@ -17,8 +17,8 @@ import { normalizePhoneNumber } from '@/utils/phone';
 import { formatNigerianPhone, phoneDigits } from '@/utils/nigerian-phone';
 import type { CheckoutPreview, OrderItem } from '@/types';
 
-const DELIVERY_FEE = 500;
-const VAT_RATE = 0.075;
+const DELIVERY_FEE = 250;
+const PLATFORM_FEE = 150;
 
 export function CheckoutPage() {
   const navigate = useNavigate();
@@ -129,11 +129,9 @@ export function CheckoutPage() {
   }, [items.length, orderPlaced, placingOrder, navigate]);
 
   const estimatedDeliveryFee = items.length > 0 ? DELIVERY_FEE : 0;
-  const estimatedVat = items.length > 0 ? Math.round(subtotal * VAT_RATE) : 0;
   const deliveryFee = preview?.deliveryFee ?? estimatedDeliveryFee;
-  const platformFee = preview?.platformFee ?? (items.length > 0 ? 150 : 0);
-  const vat = preview?.vat ?? estimatedVat;
-  const total = preview?.total ?? subtotal + deliveryFee + platformFee + vat;
+  const platformFee = preview?.platformFee ?? (items.length > 0 ? PLATFORM_FEE : 0);
+  const total = preview?.total ?? subtotal + deliveryFee + platformFee;
 
   const orderItems: OrderItem[] = items.map((i) => ({
     productId: i.productId,
@@ -470,16 +468,19 @@ export function CheckoutPage() {
                   <span className="font-semibold text-gray-900">{formatPrice(preview?.subtotal ?? subtotal)}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-gray-600">Delivery fee</span>
-                  <span className="text-gray-700">{formatPrice(deliveryFee)}</span>
+                  <span className="text-gray-600">
+                    Delivery fee
+                    {preview?.estimatedRoadDistanceKm != null && preview.estimatedRoadDistanceKm > 0 && (
+                      <span className="ml-1 text-xs text-gray-500 font-normal">
+                        (~{preview.estimatedRoadDistanceKm} km)
+                      </span>
+                    )}
+                  </span>
+                  <span className="font-semibold text-gray-700">{formatPrice(deliveryFee)}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-gray-600">Platform fee</span>
-                  <span className="text-gray-700">{formatPrice(platformFee)}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-600">VAT (7.5%)</span>
-                  <span className="text-gray-700">{formatPrice(vat)}</span>
+                  <span className="font-semibold text-gray-700">{formatPrice(platformFee)}</span>
                 </div>
                 <div className="border-t border-gray-100 pt-3 flex items-center justify-between">
                   <span className="font-bold text-gray-900">Total</span>

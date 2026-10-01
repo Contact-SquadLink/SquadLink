@@ -63,7 +63,7 @@ export async function calculateAndRecordOrderSettlement(
   const order = orderResult.rows[0];
   const gmv = Number(order?.subtotal_amount ?? 0);
   const deliveryFee = Number(order?.delivery_fee_amount ?? 0);
-  const customerPlatformFee = Number(order?.platform_fee_amount ?? 120); // Pilot target: ₦100 - ₦150
+  const customerPlatformFee = Number(order?.platform_fee_amount ?? 150); // Mandatory platform fee: ₦150
   const businessFeeAmount = Number(order?.business_fee_amount ?? 0);
   const totalCustomerPaid = Number(order?.total_amount ?? (gmv + deliveryFee + customerPlatformFee));
 
@@ -74,8 +74,8 @@ export async function calculateAndRecordOrderSettlement(
   // Gateway cost: 1.5% of total payment processed
   const gatewayFee = Math.max(0, Math.round(totalCustomerPaid * 0.015));
 
-  // Rider payout: 80% of delivery fee (min ₦300 or delivery fee)
-  const riderPayout = deliveryFee > 0 ? Math.max(300, Math.round(deliveryFee * 0.8)) : Math.max(300, Math.round(gmv * 0.10));
+  // Rider payout: 80% of delivery fee (min ₦400 or delivery fee)
+  const riderPayout = deliveryFee > 0 ? Math.max(400, Math.round(deliveryFee * 0.8)) : Math.max(400, Math.round(gmv * 0.10));
 
   // Net Platform Contribution per Order:
   // Contribution = (Customer Fee + Merchant Commission + Delivery Fee) - (Rider Payout + Gateway Fee)
@@ -246,11 +246,11 @@ export async function getFinancialObservabilitySummary() {
       COALESCE(SUM(o.platform_fee_amount + o.business_fee_amount) FILTER (WHERE o.status = 'DELIVERED'), 0)::text AS total_platform_revenue,
       COALESCE(SUM(
         (o.platform_fee_amount + o.business_fee_amount + o.delivery_fee_amount) - 
-        (GREATEST(300, ROUND(o.delivery_fee_amount * 0.8)) + ROUND(o.total_amount * 0.015))
+        (GREATEST(400, ROUND(o.delivery_fee_amount * 0.8)) + ROUND(o.total_amount * 0.015))
       ) FILTER (WHERE o.status = 'DELIVERED'), 0)::text AS total_net_contribution,
       COUNT(*) FILTER (WHERE o.status = 'DELIVERED')::text AS completed_orders_count,
       COALESCE(SUM(ROUND(o.total_amount * 0.015)) FILTER (WHERE o.status = 'DELIVERED'), 0)::text AS total_gateway_fees,
-      COALESCE(SUM(GREATEST(300, ROUND(o.delivery_fee_amount * 0.8))) FILTER (WHERE o.status = 'DELIVERED'), 0)::text AS total_rider_payouts,
+      COALESCE(SUM(GREATEST(400, ROUND(o.delivery_fee_amount * 0.8))) FILTER (WHERE o.status = 'DELIVERED'), 0)::text AS total_rider_payouts,
       COALESCE(SUM(GREATEST(0, o.subtotal_amount - o.business_fee_amount)) FILTER (WHERE o.status = 'DELIVERED'), 0)::text AS total_merchant_payouts
     FROM public.orders o
   `);

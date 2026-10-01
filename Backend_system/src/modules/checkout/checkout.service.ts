@@ -11,6 +11,7 @@ import type {
   CheckoutPreviewInput
 } from "./checkout.schemas";
 import { expireInventoryReservations } from "../inventory/inventory.maintenance";
+import { calculateDeliveryPricing } from "../order/delivery-pricing";
 
 const SEARCH_RADIUS_BANDS_METERS = [
   2000,
@@ -220,13 +221,19 @@ export async function previewCheckout(
     );
   }
 
-  const distanceKm = qualifyingBusiness.distanceMeters > 0
-    ? qualifyingBusiness.distanceMeters / 1000
-    : 1;
-  const deliveryFeeAmount = Math.max(500, Math.round(350 + distanceKm * 50));
-  const platformFeeAmount = 150;
-  const vatAmount = Math.round(qualifyingBusiness.subtotalAmount * 0.075);
-  const totalAmount = qualifyingBusiness.subtotalAmount + deliveryFeeAmount + platformFeeAmount + vatAmount;
+  const pricing = calculateDeliveryPricing(qualifyingBusiness.distanceMeters);
+  if (!pricing.isWithinServiceLimit) {
+    throw new AppError(
+      "Delivery location exceeds our maximum 20 km road service limit.",
+      400,
+      "OUT_OF_SERVICE_AREA",
+      true
+    );
+  }
+  const deliveryFeeAmount = pricing.deliveryFee;
+  const platformFeeAmount = pricing.customerServiceFee; // 150
+  const vatAmount = 0;
+  const totalAmount = qualifyingBusiness.subtotalAmount + deliveryFeeAmount + platformFeeAmount;
 
   return {
     subtotal: qualifyingBusiness.subtotalAmount,
@@ -245,6 +252,16 @@ export async function previewCheckout(
         qualifyingBusiness.businessName,
       distanceMeters:
         qualifyingBusiness.distanceMeters,
+      roadKm:
+        pricing.roadKm,
+      radialKm:
+        pricing.radialKm,
+      roadDistanceMeters:
+        pricing.roadDistanceMeters,
+      estimatedDurationSeconds:
+        pricing.estimatedDurationSeconds,
+      pricingVersion:
+        pricing.pricingVersion,
       searchRadiusMeters:
         selectedRadius
     },

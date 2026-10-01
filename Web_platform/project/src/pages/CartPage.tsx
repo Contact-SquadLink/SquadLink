@@ -152,13 +152,13 @@ export function CartPage() {
                   <span className="text-gray-500">Calculated at checkout</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-gray-600">VAT</span>
-                  <span className="text-gray-500">Calculated at checkout</span>
+                  <span className="text-gray-600">Platform fee</span>
+                  <span className="font-semibold text-gray-900">{formatPrice(150)}</span>
                 </div>
                 <div className="border-t border-gray-100 pt-3 flex items-center justify-between">
                   <span className="font-bold text-gray-900">Estimated total</span>
                   <span className="font-display text-lg font-bold text-gray-900">
-                    {formatPrice(subtotal)}
+                    {formatPrice(subtotal + 150)}
                   </span>
                 </div>
               </div>

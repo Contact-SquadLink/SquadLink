@@ -9,6 +9,7 @@ import {
 } from "./order.repository";
 import type { PlaceOrderInput } from "./order.schemas";
 import { createInAppNotification, notifyAdmins } from "../notification/notification.service";
+import { calculateDeliveryPricing } from "./delivery-pricing";
 
 const IDEMPOTENCY_ENDPOINT = "POST /api/v1/orders";
 
@@ -567,13 +568,19 @@ export async function placeOrder(
       }
     );
 
-    const distanceKm = business.distanceMeters > 0
-      ? business.distanceMeters / 1000
-      : 1;
-    const deliveryFeeAmount = Math.max(500, Math.round(350 + distanceKm * 50));
-    const platformFeeAmount = 150;
-    const vatAmount = Math.round(orderTotals.subtotal * 0.075);
-    const totalAmount = orderTotals.subtotal + deliveryFeeAmount + platformFeeAmount + vatAmount;
+    const pricing = calculateDeliveryPricing(business.distanceMeters);
+    if (!pricing.isWithinServiceLimit) {
+      throw new AppError(
+        "Delivery location exceeds our maximum 20 km road service limit.",
+        400,
+        "OUT_OF_SERVICE_AREA",
+        true
+      );
+    }
+    const deliveryFeeAmount = pricing.deliveryFee;
+    const platformFeeAmount = pricing.customerServiceFee; // 150
+    const vatAmount = 0;
+    const totalAmount = orderTotals.subtotal + deliveryFeeAmount + platformFeeAmount;
 
     const orderResult = await client.query<{ id: string }>(
       `

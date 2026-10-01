@@ -196,6 +196,8 @@ export interface CheckoutPreview {
     name: string;
   };
   availabilityErrors?: string[];
+  straightLineDistanceKm?: number;
+  estimatedRoadDistanceKm?: number;
 }
 
 export type OrderStatus =
