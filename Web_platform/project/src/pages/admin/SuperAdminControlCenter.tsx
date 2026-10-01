@@ -432,7 +432,7 @@ export function SuperAdminControlCenter() {
                             {ord.deliveryStatus || 'UNASSIGNED'}
                           </td>
                           <td className="px-4 py-3.5 font-semibold text-white">
-                            ₦{Number(ord.financials.totalAmount).toLocaleString()}
+                            ₦{Number(ord?.financials?.totalAmount ?? 0).toLocaleString()}
                           </td>
                           <td className="px-4 py-3.5 text-slate-400">
                             {new Date(ord.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -481,13 +481,13 @@ export function SuperAdminControlCenter() {
                   <div className="grid grid-cols-2 gap-4 text-xs relative z-10">
                     <div className="rounded-2xl border border-slate-800 bg-slate-950/80 p-4">
                       <p className="text-slate-400 font-semibold">Customer</p>
-                      <p className="text-white font-medium mt-1">{selectedOrder.customer.name || 'Anonymous'}</p>
-                      <p className="text-slate-400">{selectedOrder.customer.phone || 'No phone'}</p>
+                      <p className="text-white font-medium mt-1">{selectedOrder.customer?.name || 'Anonymous'}</p>
+                      <p className="text-slate-400">{selectedOrder.customer?.phone || 'No phone'}</p>
                     </div>
                     <div className="rounded-2xl border border-slate-800 bg-slate-950/80 p-4">
                       <p className="text-slate-400 font-semibold">Financials & Pricing</p>
-                      <p className="text-emerald-400 font-bold mt-1">₦{Number(selectedOrder.financials.totalAmount).toLocaleString()}</p>
-                      <p className="text-slate-400">Delivery: ₦{selectedOrder.financials.deliveryFee} · Fee: ₦{selectedOrder.financials.platformFee}</p>
+                      <p className="text-emerald-400 font-bold mt-1">₦{Number(selectedOrder.financials?.totalAmount ?? 0).toLocaleString()}</p>
+                      <p className="text-slate-400">Delivery: ₦{selectedOrder.financials?.deliveryFee ?? 0} · Fee: ₦{selectedOrder.financials?.platformFee ?? 0}</p>
                     </div>
                   </div>
 

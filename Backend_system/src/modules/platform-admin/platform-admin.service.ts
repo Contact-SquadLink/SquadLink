@@ -921,13 +921,16 @@ export async function listCustomers(
   return result.rows.map((r) => ({
     id: r.id,
     name: [r.first_name, r.last_name].filter(Boolean).join(" ") || "Unnamed Customer",
+    firstName: r.first_name,
+    lastName: r.last_name,
     email: r.email,
     phoneNumber: r.phone_number,
     isActive: r.is_active,
     suspendedAt: r.suspended_at,
     suspensionReason: r.suspension_reason,
-    ordersCount: Number(r.orders_count),
-    totalSpend: Number(r.total_spend),
+    ordersCount: Number(r.orders_count || 0),
+    totalSpend: Number(r.total_spend || 0),
+    totalSpent: Number(r.total_spend || 0),
     createdAt: r.created_at,
   }));
 }
@@ -970,24 +973,39 @@ export async function getCustomerDetails(request: FastifyRequest, customerId: st
     LIMIT 20
   `, [customerId]);
 
+  const orders = ordersRes.rows.map((o) => ({
+    id: o.id,
+    businessName: o.business_name || "Unknown Business",
+    status: o.status,
+    totalAmount: Number(o.total_amount || 0),
+    createdAt: o.created_at,
+  }));
+
+  const customerObj = {
+    id: user.id,
+    name: [user.first_name, user.last_name].filter(Boolean).join(" ") || "Unnamed Customer",
+    firstName: user.first_name,
+    lastName: user.last_name,
+    email: user.email,
+    phoneNumber: user.phone_number,
+    isActive: user.is_active,
+    suspendedAt: user.suspended_at,
+    suspensionReason: user.suspension_reason,
+    createdAt: user.created_at,
+  };
+
+  const totalSpentVal = orders
+    .filter((o) => o.status === "DELIVERED")
+    .reduce((sum, o) => sum + o.totalAmount, 0);
+
   return {
-    customer: {
-      id: user.id,
-      name: [user.first_name, user.last_name].filter(Boolean).join(" ") || "Unnamed Customer",
-      email: user.email,
-      phoneNumber: user.phone_number,
-      isActive: user.is_active,
-      suspendedAt: user.suspended_at,
-      suspensionReason: user.suspension_reason,
-      createdAt: user.created_at,
-    },
-    orders: ordersRes.rows.map((o) => ({
-      id: o.id,
-      businessName: o.business_name || "Unknown Business",
-      status: o.status,
-      totalAmount: Number(o.total_amount),
-      createdAt: o.created_at,
-    }))
+    customer: customerObj,
+    orders,
+    ...customerObj,
+    ordersCount: orders.length,
+    totalSpent: totalSpentVal,
+    totalSpend: totalSpentVal,
+    recentOrders: orders,
   };
 }
 

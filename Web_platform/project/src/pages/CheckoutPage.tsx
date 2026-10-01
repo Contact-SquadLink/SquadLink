@@ -603,7 +603,7 @@ export function CheckoutPage() {
                   <div className="mt-3 rounded-lg bg-white p-3 border border-primary-200 space-y-1 text-xs">
                     <div className="flex justify-between">
                       <span className="text-gray-500">Amount:</span>
-                      <span className="font-bold text-gray-900">₦{gatewayInitData.amount.toLocaleString()}</span>
+                      <span className="font-bold text-gray-900">₦{Number(gatewayInitData?.amount ?? 0).toLocaleString()}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-500">Ref:</span>

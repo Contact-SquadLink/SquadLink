@@ -201,53 +201,58 @@ export function AdminCustomersPage() {
                   </td>
                 </tr>
               ) : (
-                customers.map((c) => (
-                  <tr key={c.id} className="hover:bg-gray-50/60 transition-colors">
-                    <td className="px-5 py-4">
-                      <div>
-                        <p className="font-semibold text-gray-900">
-                          {[c.firstName, c.lastName].filter(Boolean).join(' ') || 'Unnamed Customer'}
-                        </p>
-                        <p className="text-xs text-gray-400 font-mono">ID: {c.id.slice(0, 8)}...</p>
-                      </div>
-                    </td>
-                    <td className="px-5 py-4">
-                      <div className="space-y-0.5 text-xs text-gray-600">
-                        {c.email && (
-                          <div className="flex items-center gap-1.5">
-                            <Mail className="h-3 w-3 text-gray-400" />
-                            <span>{c.email}</span>
-                          </div>
+                customers.map((c) => {
+                  const customerName =
+                    c.name ||
+                    [c.firstName, c.lastName].filter(Boolean).join(' ') ||
+                    c.email ||
+                    'Unnamed Customer';
+                  const totalSpentAmount = (c as any).totalSpend ?? (c as any).totalSpent ?? 0;
+                  return (
+                    <tr key={c.id} className="hover:bg-gray-50/60 transition-colors">
+                      <td className="px-5 py-4">
+                        <div>
+                          <p className="font-semibold text-gray-900">{customerName}</p>
+                          <p className="text-xs text-gray-400 font-mono">ID: {c.id.slice(0, 8)}...</p>
+                        </div>
+                      </td>
+                      <td className="px-5 py-4">
+                        <div className="space-y-0.5 text-xs text-gray-600">
+                          {c.email && (
+                            <div className="flex items-center gap-1.5">
+                              <Mail className="h-3 w-3 text-gray-400" />
+                              <span>{c.email}</span>
+                            </div>
+                          )}
+                          {c.phoneNumber && (
+                            <div className="flex items-center gap-1.5">
+                              <Phone className="h-3 w-3 text-gray-400" />
+                              <span>{c.phoneNumber}</span>
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-5 py-4">
+                        {c.isActive ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 border border-emerald-200">
+                            <UserCheck className="h-3 w-3" /> Active
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2.5 py-0.5 text-xs font-semibold text-rose-700 border border-rose-200">
+                            <UserX className="h-3 w-3" /> Suspended
+                          </span>
                         )}
-                        {c.phoneNumber && (
-                          <div className="flex items-center gap-1.5">
-                            <Phone className="h-3 w-3 text-gray-400" />
-                            <span>{c.phoneNumber}</span>
-                          </div>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-5 py-4">
-                      {c.isActive ? (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 border border-emerald-200">
-                          <UserCheck className="h-3 w-3" /> Active
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2.5 py-0.5 text-xs font-semibold text-rose-700 border border-rose-200">
-                          <UserX className="h-3 w-3" /> Suspended
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-5 py-4 font-semibold text-gray-900">
-                      {c.ordersCount}
-                    </td>
-                    <td className="px-5 py-4 font-semibold text-gray-900">
-                      {formatPrice(c.totalSpent)}
-                    </td>
-                    <td className="px-5 py-4 text-xs text-gray-500">
-                      {formatDate(c.createdAt)}
-                    </td>
-                    <td className="px-5 py-4 text-right">
+                      </td>
+                      <td className="px-5 py-4 font-semibold text-gray-900">
+                        {c.ordersCount ?? 0}
+                      </td>
+                      <td className="px-5 py-4 font-semibold text-gray-900">
+                        {formatPrice(totalSpentAmount)}
+                      </td>
+                      <td className="px-5 py-4 text-xs text-gray-500">
+                        {formatDate(c.createdAt)}
+                      </td>
+                      <td className="px-5 py-4 text-right">
                       <div className="inline-flex items-center gap-2">
                         <button
                           type="button"
@@ -278,9 +283,10 @@ export function AdminCustomersPage() {
                       </div>
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
+                );
+              })
+            )}
+          </tbody>
           </table>
         </div>
 
@@ -337,83 +343,96 @@ export function AdminCustomersPage() {
 
             {customerDetailQuery.isLoading ? (
               <p className="py-8 text-center text-sm text-gray-500">Loading customer details...</p>
-            ) : detailData ? (
-              <div className="space-y-6">
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <div className="rounded-xl border border-gray-100 bg-gray-50/50 p-3">
-                    <p className="text-[11px] font-medium text-gray-400 uppercase">Status</p>
-                    <p className="mt-1 font-bold text-gray-900">
-                      {detailData.isActive ? (
-                        <span className="text-emerald-600">Active</span>
-                      ) : (
-                        <span className="text-rose-600">Suspended</span>
-                      )}
+            ) : detailData ? (() => {
+              const raw = detailData as any;
+              const customerObj = raw.customer ?? raw;
+              const ordersList: any[] = raw.orders ?? raw.recentOrders ?? [];
+              const totalOrdersCount = raw.ordersCount ?? ordersList.length;
+              const totalSpentAmount =
+                raw.totalSpent ??
+                raw.totalSpend ??
+                ordersList.reduce((sum: number, o: any) => sum + (Number(o.totalAmount || o.total_amount) || 0), 0);
+              const displayName =
+                customerObj.name ||
+                [customerObj.firstName, customerObj.lastName].filter(Boolean).join(' ') ||
+                'N/A';
+
+              return (
+                <div className="space-y-6">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="rounded-xl border border-gray-100 bg-gray-50/50 p-3">
+                      <p className="text-[11px] font-medium text-gray-400 uppercase">Status</p>
+                      <p className="mt-1 font-bold text-gray-900">
+                        {customerObj.isActive ? (
+                          <span className="text-emerald-600">Active</span>
+                        ) : (
+                          <span className="text-rose-600">Suspended</span>
+                        )}
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-gray-100 bg-gray-50/50 p-3">
+                      <p className="text-[11px] font-medium text-gray-400 uppercase">Total Orders</p>
+                      <p className="mt-1 font-bold text-gray-900">{totalOrdersCount}</p>
+                    </div>
+                    <div className="rounded-xl border border-gray-100 bg-gray-50/50 p-3">
+                      <p className="text-[11px] font-medium text-gray-400 uppercase">Total Spent</p>
+                      <p className="mt-1 font-bold text-gray-900">{formatPrice(totalSpentAmount)}</p>
+                    </div>
+                    <div className="rounded-xl border border-gray-100 bg-gray-50/50 p-3">
+                      <p className="text-[11px] font-medium text-gray-400 uppercase">Joined</p>
+                      <p className="mt-1 font-semibold text-gray-900 text-xs">{formatDate(customerObj.createdAt)}</p>
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-gray-100 bg-gray-50/50 p-4 space-y-2">
+                    <p className="text-xs font-bold text-gray-700 uppercase tracking-wider">Account Credentials</p>
+                    <p className="text-sm">
+                      <span className="text-gray-500">Name:</span>{' '}
+                      <span className="font-semibold text-gray-900">{displayName}</span>
+                    </p>
+                    <p className="text-sm">
+                      <span className="text-gray-500">Email:</span>{' '}
+                      <span className="font-mono text-gray-900">{customerObj.email || 'N/A'}</span>
+                    </p>
+                    <p className="text-sm">
+                      <span className="text-gray-500">Phone:</span>{' '}
+                      <span className="font-mono text-gray-900">{customerObj.phoneNumber || 'N/A'}</span>
                     </p>
                   </div>
-                  <div className="rounded-xl border border-gray-100 bg-gray-50/50 p-3">
-                    <p className="text-[11px] font-medium text-gray-400 uppercase">Total Orders</p>
-                    <p className="mt-1 font-bold text-gray-900">{detailData.ordersCount}</p>
-                  </div>
-                  <div className="rounded-xl border border-gray-100 bg-gray-50/50 p-3">
-                    <p className="text-[11px] font-medium text-gray-400 uppercase">Total Spent</p>
-                    <p className="mt-1 font-bold text-gray-900">{formatPrice(detailData.totalSpent)}</p>
-                  </div>
-                  <div className="rounded-xl border border-gray-100 bg-gray-50/50 p-3">
-                    <p className="text-[11px] font-medium text-gray-400 uppercase">Joined</p>
-                    <p className="mt-1 font-semibold text-gray-900 text-xs">{formatDate(detailData.createdAt)}</p>
-                  </div>
-                </div>
 
-                <div className="rounded-xl border border-gray-100 bg-gray-50/50 p-4 space-y-2">
-                  <p className="text-xs font-bold text-gray-700 uppercase tracking-wider">Account Credentials</p>
-                  <p className="text-sm">
-                    <span className="text-gray-500">Name:</span>{' '}
-                    <span className="font-semibold text-gray-900">
-                      {[detailData.firstName, detailData.lastName].filter(Boolean).join(' ') || 'N/A'}
-                    </span>
-                  </p>
-                  <p className="text-sm">
-                    <span className="text-gray-500">Email:</span>{' '}
-                    <span className="font-mono text-gray-900">{detailData.email || 'N/A'}</span>
-                  </p>
-                  <p className="text-sm">
-                    <span className="text-gray-500">Phone:</span>{' '}
-                    <span className="font-mono text-gray-900">{detailData.phoneNumber || 'N/A'}</span>
-                  </p>
-                </div>
-
-                <div>
-                  <h4 className="text-sm font-bold text-gray-900 mb-2 flex items-center gap-1.5">
-                    <ShoppingBag className="h-4 w-4 text-slate-700" /> Recent Order History
-                  </h4>
-                  {detailData.recentOrders.length === 0 ? (
-                    <p className="text-xs text-gray-400 py-3">No orders placed by this customer yet.</p>
-                  ) : (
-                    <div className="space-y-2 max-h-56 overflow-y-auto">
-                      {detailData.recentOrders.map((ord) => (
-                        <div
-                          key={ord.id}
-                          className="flex items-center justify-between rounded-lg border border-gray-100 p-2.5 text-xs hover:bg-gray-50"
-                        >
-                          <div>
-                            <p className="font-semibold text-gray-900">{ord.businessName}</p>
-                            <p className="text-[11px] text-gray-400 font-mono">
-                              #{ord.id.slice(0, 8)} · {formatDate(ord.createdAt)}
-                            </p>
+                  <div>
+                    <h4 className="text-sm font-bold text-gray-900 mb-2 flex items-center gap-1.5">
+                      <ShoppingBag className="h-4 w-4 text-slate-700" /> Recent Order History
+                    </h4>
+                    {ordersList.length === 0 ? (
+                      <p className="text-xs text-gray-400 py-3">No orders placed by this customer yet.</p>
+                    ) : (
+                      <div className="space-y-2 max-h-56 overflow-y-auto">
+                        {ordersList.map((ord: any) => (
+                          <div
+                            key={ord.id}
+                            className="flex items-center justify-between rounded-lg border border-gray-100 p-2.5 text-xs hover:bg-gray-50"
+                          >
+                            <div>
+                              <p className="font-semibold text-gray-900">{ord.businessName || ord.business_name || 'Store'}</p>
+                              <p className="text-[11px] text-gray-400 font-mono">
+                                #{String(ord.id).slice(0, 8)} · {formatDate(ord.createdAt || ord.created_at)}
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <p className="font-bold text-gray-900">{formatPrice(ord.totalAmount || ord.total_amount)}</p>
+                              <span className="inline-block rounded-md bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-600">
+                                {ord.status}
+                              </span>
+                            </div>
                           </div>
-                          <div className="text-right">
-                            <p className="font-bold text-gray-900">{formatPrice(ord.totalAmount)}</p>
-                            <span className="inline-block rounded-md bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-600">
-                              {ord.status}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ) : null}
+              );
+            })() : null}
           </div>
         </div>
       )}
