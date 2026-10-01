@@ -40,13 +40,12 @@ async function clearDatabase() {
     'cart_items',
     'carts',
 
-    // 4. Products & Inventory
+    // 4. Inventory & Merchant Catalog (Keep platform master template products in public.products)
     'inventory_reservation_history',
     'inventory_reservations',
     'inventory_adjustments',
     'inventory',
     'business_products',
-    'products',
 
     // 5. Riders
     'rider_wallets',
