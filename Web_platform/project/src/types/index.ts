@@ -421,3 +421,199 @@ export interface ApiResponseEnvelope<T> {
   data: T;
   requestId?: string;
 }
+
+export type AdminPermission =
+  | 'CUSTOMER_VIEW'
+  | 'CUSTOMER_SUSPEND'
+  | 'BUSINESS_VIEW'
+  | 'BUSINESS_VERIFY'
+  | 'BUSINESS_REJECT'
+  | 'BUSINESS_SUSPEND'
+  | 'RIDER_VIEW'
+  | 'RIDER_VERIFY'
+  | 'RIDER_REJECT'
+  | 'RIDER_SUSPEND'
+  | 'ORDER_VIEW'
+  | 'ORDER_INTERVENE'
+  | 'ORDER_CANCEL'
+  | 'DELIVERY_VIEW'
+  | 'DELIVERY_INTERVENE'
+  | 'WITHDRAWAL_VIEW'
+  | 'WITHDRAWAL_APPROVE'
+  | 'SUPPORT_VIEW'
+  | 'SUPPORT_RESOLVE'
+  | 'ANALYTICS_VIEW'
+  | 'ADMIN_VIEW'
+  | 'ADMIN_CREATE'
+  | 'ADMIN_DISABLE'
+  | 'ADMIN_PERMISSION_MANAGE'
+  | 'PLATFORM_CONFIG_VIEW'
+  | 'PLATFORM_CONFIG_UPDATE'
+  | 'AUDIT_LOG_VIEW'
+  | 'SECURITY_VIEW';
+
+export interface PlatformSummaryData {
+  timeFilter: 'today' | '7d' | '30d' | '90d' | 'all';
+  population: {
+    customers: { total: number; active: number };
+    businesses: { total: number; active: number; pending: number };
+    riders: { total: number; verified: number; activeAvailable: number; pending: number };
+    admins: { total: number } | null;
+  };
+  orders: {
+    total: number;
+    today: number;
+    thisWeek: number;
+    thisMonth: number;
+    stages: Record<string, number>;
+  };
+  attentionNeeded: {
+    pendingBusinesses: number;
+    pendingRiders: number;
+    unassignedOrders: number;
+    delayedOrders: number;
+    pendingWithdrawals: number;
+  };
+  financials: {
+    gmv: number;
+    platformRevenue: number;
+    platformFeeRevenue: number;
+    merchantCommission: number;
+    deliveryFeeRevenue: number;
+    riderPayouts: number;
+    estimatedContribution: number;
+  } | null;
+  // Backward compatibility:
+  customers?: number;
+  businesses?: number;
+  riders?: number;
+  admins?: number;
+  gross_completed_value?: number;
+  recipient_earnings?: number;
+  platform_earnings?: number;
+  completed_transactions?: number;
+  pending_transactions?: number;
+  in_transit_transactions?: number;
+  assigned_transactions?: number;
+}
+
+export interface LiveOperationItem {
+  orderId: string;
+  orderStatus: string;
+  deliveryStatus: string | null;
+  customerName: string;
+  customerPhone: string | null;
+  businessName: string;
+  businessPhone: string | null;
+  riderName: string;
+  riderPhone: string | null;
+  totalAmount: number;
+  createdAt: string;
+  updatedAt: string;
+  issueType: string;
+  severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  title: string;
+  description: string;
+  suggestedAction: string;
+}
+
+export interface CustomerSummary {
+  id: string;
+  name: string;
+  email: string | null;
+  phoneNumber: string | null;
+  isActive: boolean;
+  suspendedAt: string | null;
+  suspensionReason: string | null;
+  ordersCount: number;
+  totalSpend: number;
+  createdAt: string;
+}
+
+export interface CustomerDetail {
+  customer: {
+    id: string;
+    name: string;
+    email: string | null;
+    phoneNumber: string | null;
+    isActive: boolean;
+    suspendedAt: string | null;
+    suspensionReason: string | null;
+    createdAt: string;
+  };
+  orders: Array<{
+    id: string;
+    businessName: string;
+    status: string;
+    totalAmount: number;
+    createdAt: string;
+  }>;
+}
+
+export interface AdminUserItem {
+  id: string;
+  email: string;
+  name: string;
+  firstName: string | null;
+  lastName: string | null;
+  phoneNumber: string | null;
+  role: string;
+  isActive: boolean;
+  adminApproved: boolean;
+  isSuperAdmin: boolean;
+  permissions: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DeliveryMonitorItem {
+  deliveryId: string;
+  orderId: string;
+  orderStatus: string;
+  deliveryStatus: string;
+  businessName: string;
+  riderName: string;
+  riderPhone: string | null;
+  customerName: string;
+  assignedAt: string | null;
+  pickedUpAt: string | null;
+  deliveredAt: string | null;
+  deliveryFee: number;
+  totalAmount: number;
+  createdAt: string;
+}
+
+export interface OperationalIssueItem {
+  id: string;
+  orderId: string | null;
+  issueType: string;
+  status: 'OPEN' | 'IN_PROGRESS' | 'RESOLVED';
+  severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  title: string;
+  description: string | null;
+  assignedAdminId: string | null;
+  assignedAdminName: string | null;
+  resolutionNotes: string | null;
+  resolvedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SystemHealthData {
+  status: 'OPERATIONAL' | 'DEGRADED' | 'UNAVAILABLE';
+  timestamp: string;
+  components: {
+    api: { status: string; description?: string };
+    database: { status: string; latencyMs: number; description?: string };
+    authentication: { status: string; description?: string };
+    notifications: { status: string; description?: string };
+    backgroundJobs: { status: string; description?: string };
+  };
+  metrics: {
+    uptimeSeconds: number;
+    activeOrdersInFlight: number;
+    availableRiders: number;
+    memoryRssMb: number;
+    memoryHeapUsedMb: number;
+  };
+}

@@ -50,6 +50,10 @@ import { AdminBusinessesPage, AdminBusinessDetailPage } from '@/pages/admin/Admi
 import { AdminOperationsPage } from '@/pages/admin/AdminOperations';
 import { AdminAccessPage } from '@/pages/admin/AdminAccessPage';
 import { AdminRidersPage } from '@/pages/admin/AdminRiders';
+import { AdminCustomersPage } from '@/pages/admin/AdminCustomers';
+import { AdminDeliveriesPage } from '@/pages/admin/AdminDeliveriesPage';
+import { AdminSupportPage } from '@/pages/admin/AdminSupportPage';
+import { AdminManagementPage } from '@/pages/admin/AdminManagementPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -205,7 +209,7 @@ export default function App() {
                 <Route
                   path="/admin/control-center"
                   element={
-                    <ProtectedRoute allowedRoles={['ADMIN', 'SUPER_ADMIN']}>
+                    <ProtectedRoute allowedRoles={['SUPER_ADMIN']}>
                       <SuperAdminControlCenter />
                     </ProtectedRoute>
                   }
@@ -215,6 +219,14 @@ export default function App() {
                   element={
                     <ProtectedRoute allowedRoles={['ADMIN', 'SUPER_ADMIN']}>
                       <AdminDashboard />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin/customers"
+                  element={
+                    <ProtectedRoute allowedRoles={['ADMIN', 'SUPER_ADMIN']}>
+                      <AdminCustomersPage />
                     </ProtectedRoute>
                   }
                 />
@@ -231,6 +243,22 @@ export default function App() {
                   element={
                     <ProtectedRoute allowedRoles={['ADMIN', 'SUPER_ADMIN']}>
                       <AdminRidersPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin/deliveries"
+                  element={
+                    <ProtectedRoute allowedRoles={['ADMIN', 'SUPER_ADMIN']}>
+                      <AdminDeliveriesPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin/support"
+                  element={
+                    <ProtectedRoute allowedRoles={['ADMIN', 'SUPER_ADMIN']}>
+                      <AdminSupportPage />
                     </ProtectedRoute>
                   }
                 />
@@ -253,8 +281,16 @@ export default function App() {
                 <Route
                   path="/admin/access"
                   element={
-                    <ProtectedRoute allowedRoles={['ADMIN', 'SUPER_ADMIN']}>
+                    <ProtectedRoute allowedRoles={['SUPER_ADMIN']}>
                       <AdminAccessPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin/management"
+                  element={
+                    <ProtectedRoute allowedRoles={['SUPER_ADMIN']}>
+                      <AdminManagementPage />
                     </ProtectedRoute>
                   }
                 />

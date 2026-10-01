@@ -7,6 +7,7 @@ import { db } from "../src/db/database";
 import { env } from "../src/config/env";
 
 const SUPER_ADMIN_ID = "88888888-8888-4888-8888-888888888888";
+const ORDINARY_ADMIN_ID = "77777777-7777-4777-8777-777777777777";
 const CUSTOMER_ID = "33333333-3333-4333-8333-333333333333";
 const BUSINESS_OWNER_ID = "44444444-4444-4444-8444-444444444444";
 const RIDER_ID = "55555555-5555-4555-8555-555555555555";
@@ -27,10 +28,18 @@ function auth(userId: string, role: string) {
 async function seedSuperAdminFixtures() {
   // 1. Create Super Admin user
   await db.query(
-    `INSERT INTO public.users (id, email, phone_number, password_hash, role, is_active, first_name, last_name)
-     VALUES ($1, $2, $3, $4, 'SUPER_ADMIN', TRUE, 'SquadLink', 'SuperAdmin')
+    `INSERT INTO public.users (id, email, phone_number, password_hash, role, is_active, admin_approved, first_name, last_name)
+     VALUES ($1, $2, $3, $4, 'SUPER_ADMIN', TRUE, TRUE, 'SquadLink', 'SuperAdmin')
      ON CONFLICT (id) DO UPDATE SET role = 'SUPER_ADMIN', is_active = TRUE`,
     [SUPER_ADMIN_ID, "superadmin@squadlink.app", "+2348000000001", "password-hash"]
+  );
+
+  // Create Ordinary Admin user
+  await db.query(
+    `INSERT INTO public.users (id, email, phone_number, password_hash, role, is_active, admin_approved, first_name, last_name)
+     VALUES ($1, $2, $3, $4, 'ADMIN', TRUE, TRUE, 'Ops', 'Admin')
+     ON CONFLICT (id) DO UPDATE SET role = 'ADMIN', is_active = TRUE`,
+    [ORDINARY_ADMIN_ID, "ops.admin@squadlink.app", "+2348000000009", "password-hash"]
   );
 
   // 2. Create customer, business, rider
@@ -205,5 +214,117 @@ describe("Super Admin Absolute Authority Control Center & Ledger Invariant", () 
     assert.equal(putRes.statusCode, 200);
     const updated = putRes.json().data;
     assert.equal(updated.value.minFee, 120);
+  });
+
+  it("enforces backend authorization: ordinary ADMIN is denied access to Super Admin endpoints with 403", async () => {
+    // 1. Ordinary Admin attempted access to Super Admin observability
+    const obsRes = await app.inject({
+      method: "GET",
+      url: "/api/v1/admin/platform/observability",
+      headers: auth(ORDINARY_ADMIN_ID, "ADMIN"),
+    });
+    assert.equal(obsRes.statusCode, 403);
+    assert.equal(obsRes.json().error.code, "SUPER_ADMIN_REQUIRED");
+
+    // 2. Ordinary Admin attempted access to admin management
+    const adminMgmtRes = await app.inject({
+      method: "GET",
+      url: "/api/v1/admin/platform/admin-users",
+      headers: auth(ORDINARY_ADMIN_ID, "ADMIN"),
+    });
+    assert.equal(adminMgmtRes.statusCode, 403);
+    assert.equal(adminMgmtRes.json().error.code, "SUPER_ADMIN_REQUIRED");
+
+    // 3. Ordinary Admin attempted modification of platform configuration
+    const configRes = await app.inject({
+      method: "PUT",
+      url: "/api/v1/admin/platform/config",
+      headers: auth(ORDINARY_ADMIN_ID, "ADMIN"),
+      payload: {
+        key: "PILOT_CUSTOMER_FEES",
+        value: { minFee: 200 },
+        reason: "Unauthorized attempt",
+      },
+    });
+    assert.equal(configRes.statusCode, 403);
+    assert.equal(configRes.json().error.code, "SUPER_ADMIN_REQUIRED");
+  });
+
+  it("differentiates summary statistics: hides admin population from ordinary ADMIN while revealing to SUPER_ADMIN", async () => {
+    // 1. Ordinary Admin summary
+    const adminSummaryRes = await app.inject({
+      method: "GET",
+      url: "/api/v1/admin/platform/summary",
+      headers: auth(ORDINARY_ADMIN_ID, "ADMIN"),
+    });
+    assert.equal(adminSummaryRes.statusCode, 200);
+    const adminData = adminSummaryRes.json().data;
+    assert.equal(adminData.population.admins, null, "Ordinary Admin must NOT see administrator count");
+
+    // 2. Super Admin summary
+    const superSummaryRes = await app.inject({
+      method: "GET",
+      url: "/api/v1/admin/platform/summary",
+      headers: auth(SUPER_ADMIN_ID, "SUPER_ADMIN"),
+    });
+    assert.equal(superSummaryRes.statusCode, 200);
+    const superData = superSummaryRes.json().data;
+    assert.ok(superData.population.admins !== null, "Super Admin must see administrator count");
+    assert.equal(typeof superData.population.admins.total, "number");
+  });
+
+  it("allows operational access to customers and live operations queue for permitted ADMIN", async () => {
+    // Live operations
+    const liveOpsRes = await app.inject({
+      method: "GET",
+      url: "/api/v1/admin/platform/live-ops",
+      headers: auth(ORDINARY_ADMIN_ID, "ADMIN"),
+    });
+    assert.equal(liveOpsRes.statusCode, 200);
+    assert.ok(Array.isArray(liveOpsRes.json().data));
+
+    // Customers list
+    const customersRes = await app.inject({
+      method: "GET",
+      url: "/api/v1/admin/platform/customers",
+      headers: auth(ORDINARY_ADMIN_ID, "ADMIN"),
+    });
+    assert.equal(customersRes.statusCode, 200);
+    assert.ok(Array.isArray(customersRes.json().data));
+  });
+
+  it("permits SUPER_ADMIN to list admin users and manage granular permissions", async () => {
+    // 1. List admins
+    const listRes = await app.inject({
+      method: "GET",
+      url: "/api/v1/admin/platform/admin-users",
+      headers: auth(SUPER_ADMIN_ID, "SUPER_ADMIN"),
+    });
+    assert.equal(listRes.statusCode, 200);
+    assert.ok(Array.isArray(listRes.json().data));
+
+    // 2. Update permissions for ordinary admin
+    const updatePermsRes = await app.inject({
+      method: "PUT",
+      url: `/api/v1/admin/platform/admin-users/${ORDINARY_ADMIN_ID}/permissions`,
+      headers: auth(SUPER_ADMIN_ID, "SUPER_ADMIN"),
+      payload: {
+        permissions: ["CUSTOMER_VIEW", "BUSINESS_VIEW", "BUSINESS_VERIFY", "RIDER_VIEW"],
+      },
+    });
+    assert.equal(updatePermsRes.statusCode, 200);
+    assert.equal(updatePermsRes.json().data.targetUserId, ORDINARY_ADMIN_ID);
+
+    // 3. Toggle admin status
+    const statusRes = await app.inject({
+      method: "POST",
+      url: `/api/v1/admin/platform/admin-users/${ORDINARY_ADMIN_ID}/status`,
+      headers: auth(SUPER_ADMIN_ID, "SUPER_ADMIN"),
+      payload: {
+        isActive: true,
+        reason: "Active operations manager",
+      },
+    });
+    assert.equal(statusRes.statusCode, 200);
   });
 });

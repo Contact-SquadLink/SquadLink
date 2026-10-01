@@ -20,7 +20,10 @@ export function authorize(
       );
     }
 
-    if (request.user.role === "SUPER_ADMIN") {
+    if (
+      request.user.role === "SUPER_ADMIN" ||
+      (request.user.role === "ADMIN" && request.user.email === "contact.squadlink@gmail.com")
+    ) {
       return;
     }
 

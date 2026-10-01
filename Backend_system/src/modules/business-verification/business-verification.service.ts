@@ -45,18 +45,34 @@ export async function getBusinessVerification(
   };
 }
 
+import { db } from "../../db/database";
+
 export async function reviewBusinessVerification(
   businessId: string,
   adminUserId: string,
   input: UpdateBusinessVerificationInput
 ) {
   try {
-    return await updateBusinessVerification(
+    const updated = await updateBusinessVerification(
       businessId,
       adminUserId,
       input.status,
       input.notes ?? null
     );
+
+    await db.query(`
+      INSERT INTO public.audit_logs
+        (actor_type, actor_user_id, action, entity_type, entity_id, description, metadata)
+      VALUES ('USER', $1, $2, 'BUSINESS', $3, $4, $5::jsonb)
+    `, [
+      adminUserId,
+      `BUSINESS_${input.status}`,
+      businessId,
+      `Business verification updated to ${input.status}: ${input.notes || "No notes provided"}`,
+      JSON.stringify({ status: input.status, notes: input.notes })
+    ]);
+
+    return updated;
   } catch (error: unknown) {
     if (
       error instanceof Error &&

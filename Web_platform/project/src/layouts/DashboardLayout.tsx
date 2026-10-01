@@ -19,6 +19,10 @@ import {
   ChevronRight,
   Repeat,
   Gauge,
+  Users,
+  Truck,
+  ShieldCheck,
+  LifeBuoy,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useCart } from '@/hooks/useCart';
@@ -49,12 +53,17 @@ const allNavLinks: NavLink[] = [
   // Rider
   { label: 'Deliveries', path: '/rider', icon: Bike, roles: ['RIDER'] },
   { label: 'Earnings', path: '/earnings', icon: Repeat, roles: ['RIDER'] },
-  // Admin & Super Admin
-  { label: 'Control Center', path: '/admin/control-center', icon: Gauge, roles: ['ADMIN', 'SUPER_ADMIN'] },
+  // Admin & Super Admin Core Navigation
   { label: 'Dashboard', path: '/admin', icon: LayoutDashboard, roles: ['ADMIN', 'SUPER_ADMIN'] },
-  { label: 'Businesses', path: '/admin/businesses', icon: Shield, roles: ['ADMIN', 'SUPER_ADMIN'] },
+  { label: 'Customers', path: '/admin/customers', icon: Users, roles: ['ADMIN', 'SUPER_ADMIN'] },
+  { label: 'Businesses', path: '/admin/businesses', icon: Store, roles: ['ADMIN', 'SUPER_ADMIN'] },
   { label: 'Riders', path: '/admin/riders', icon: Bike, roles: ['ADMIN', 'SUPER_ADMIN'] },
-  { label: 'Access', path: '/admin/access', icon: Shield, roles: ['ADMIN', 'SUPER_ADMIN'] },
+  { label: 'Deliveries', path: '/admin/deliveries', icon: Truck, roles: ['ADMIN', 'SUPER_ADMIN'] },
+  { label: 'Support & Issues', path: '/admin/support', icon: LifeBuoy, roles: ['ADMIN', 'SUPER_ADMIN'] },
+  // Super Admin Exclusive Navigation (Platform Governance & Control)
+  { label: 'Admin Management', path: '/admin/management', icon: ShieldCheck, roles: ['SUPER_ADMIN'] },
+  { label: 'Access Requests', path: '/admin/access', icon: Shield, roles: ['SUPER_ADMIN'] },
+  { label: 'Control Center', path: '/admin/control-center', icon: Gauge, roles: ['SUPER_ADMIN'] },
 ];
 
 const roleLabels: Record<Role, string> = {
@@ -69,8 +78,8 @@ const roleColors: Record<Role, string> = {
   CUSTOMER: 'bg-primary-100 text-primary-700',
   BUSINESS_USER: 'bg-secondary-100 text-secondary-700',
   RIDER: 'bg-accent-100 text-accent-700',
-  ADMIN: 'bg-gray-800 text-white',
-  SUPER_ADMIN: 'bg-gradient-to-r from-red-600 to-amber-600 text-white font-bold',
+  ADMIN: 'bg-slate-800 text-white font-medium',
+  SUPER_ADMIN: 'bg-slate-900 text-white font-bold border border-slate-700',
 };
 
 export function DashboardLayout() {

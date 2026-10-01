@@ -1,31 +1,33 @@
-import { Link } from 'react-router-dom';
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  Shield,
-  Store,
-  CheckCircle2,
-  Clock,
-  ArrowRight,
-  LayoutDashboard,
-  XCircle,
   Users,
+  Store,
   Bike,
-  UserCog,
-  Ban,
-  RotateCcw,
-  Trash2,
+  ShieldAlert,
+  ArrowRight,
+  Clock,
+  CheckCircle2,
+  AlertTriangle,
   Banknote,
   Check,
   X,
-  AlertCircle,
+  Filter,
+  Package,
+  Layers,
+  Truck,
+  RotateCcw,
+  Sparkles,
+  Lock,
 } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
 import { Badge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/States';
-import { adminApi, type PlatformAccount } from '@/api/admin';
-import { earningsApi, type AdminWithdrawalRequest } from '@/api/earnings';
+import { adminApi } from '@/api/admin';
+import { earningsApi } from '@/api/earnings';
 import { formatDate, formatPrice } from '@/utils/format';
-import type { BusinessVerificationRecord } from '@/types';
+import type { BusinessVerificationRecord, LiveOperationItem } from '@/types';
 
 function getStatusBadgeVariant(status: BusinessVerificationRecord['status']) {
   switch (status) {
@@ -40,29 +42,36 @@ function getStatusBadgeVariant(status: BusinessVerificationRecord['status']) {
   }
 }
 
-function getStatusLabel(status: BusinessVerificationRecord['status']) {
-  switch (status) {
-    case 'VERIFIED':
-      return 'Verified';
-    case 'REJECTED':
-      return 'Rejected';
-    case 'SUSPENDED':
-      return 'Suspended';
-    default:
-      return 'Pending Review';
-  }
-}
-
 export function AdminDashboard() {
+  const { user } = useAuth();
   const queryClient = useQueryClient();
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN' || user?.email === 'contact.squadlink@gmail.com';
+
+  const [timePeriod, setTimePeriod] = useState<'today' | '7d' | '30d' | '90d' | 'all'>('7d');
   const [withdrawalFilter, setWithdrawalFilter] = useState<'ALL' | 'PENDING' | 'APPROVED' | 'PAID' | 'REJECTED'>('ALL');
   const [withdrawalActionLoading, setWithdrawalActionLoading] = useState<string | null>(null);
 
-  const { data, isLoading, error } = useQuery({
+  // Platform summary query
+  const summaryQuery = useQuery({
+    queryKey: ['admin-platform-summary', timePeriod],
+    queryFn: () => adminApi.getPlatformSummary(timePeriod),
+    refetchInterval: 30000,
+  });
+
+  // Live Operations query
+  const liveOpsQuery = useQuery({
+    queryKey: ['admin-live-operations'],
+    queryFn: adminApi.getLiveOperations,
+    refetchInterval: 15000,
+  });
+
+  // Verification queue query
+  const businessesQuery = useQuery({
     queryKey: ['admin-business-verifications'],
     queryFn: adminApi.listBusinesses,
   });
 
+  // Withdrawals query
   const withdrawalsQuery = useQuery({
     queryKey: ['admin-withdrawals'],
     queryFn: () => earningsApi.listWithdrawals(),
@@ -86,194 +95,442 @@ export function AdminDashboard() {
     }
   };
 
-  const businesses = Array.isArray(data?.data) ? (data.data as BusinessVerificationRecord[]) : [];
-  const summaryQuery = useQuery({ queryKey: ['platform-summary'], queryFn: adminApi.getPlatformSummary, retry: false });
-  const accountsQuery = useQuery({ queryKey: ['platform-accounts'], queryFn: adminApi.listAccounts, retry: false });
-  const accounts = (accountsQuery.data?.data ?? []) as PlatformAccount[];
-  const accountAction = async (action: 'suspend' | 'unsuspend' | 'delete', account: PlatformAccount) => {
-    const reason = window.prompt(`Reason for ${action}ing this account:`)?.trim();
-    if (!reason) return;
-    if (action === 'suspend') await adminApi.suspendAccount(account.id, reason);
-    if (action === 'unsuspend') await adminApi.unsuspendAccount(account.id, reason);
-    if (action === 'delete') await adminApi.deleteAccount(account.id, reason);
-    await queryClient.invalidateQueries({ queryKey: ['platform-accounts'] });
-    await queryClient.invalidateQueries({ queryKey: ['platform-summary'] });
-  };
+  const summary = summaryQuery.data?.data;
+  const liveOps = (liveOpsQuery.data?.data || []) as LiveOperationItem[];
+  const businesses = Array.isArray(businessesQuery.data?.data)
+    ? (businessesQuery.data.data as BusinessVerificationRecord[])
+    : [];
 
-  const stats = {
-    total: businesses.length,
-    verified: businesses.filter((b) => b.status === 'VERIFIED').length,
-    pending: businesses.filter((b) => b.status === 'PENDING').length,
-    rejected: businesses.filter((b) => b.status === 'REJECTED').length,
+  const timePeriodLabels: Record<typeof timePeriod, string> = {
+    today: 'Today',
+    '7d': '7 Days',
+    '30d': '30 Days',
+    '90d': '90 Days',
+    all: 'All Time',
   };
 
   return (
     <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
-      <h1 className="font-display text-2xl font-bold text-gray-900 mb-1">Admin Dashboard</h1>
-      <p className="text-sm text-gray-500 mb-6">Platform operations, business verification, and oversight.</p>
-
-      {/* Super Admin Absolute Authority Banner */}
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-gradient-to-r from-slate-950 via-slate-900 to-emerald-950/70 p-6 text-white shadow-xl border border-emerald-500/25 relative overflow-hidden">
-        <div className="absolute top-0 right-0 h-48 w-48 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="space-y-1 relative z-10">
+      {/* Header */}
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
           <div className="flex items-center gap-2">
-            <span className="rounded-full bg-emerald-500/20 px-2.5 py-0.5 text-xs font-bold uppercase tracking-wider text-emerald-300 border border-emerald-400/30">
-              Super Admin Authority
-            </span>
-            <span className="text-xs text-slate-400">Governance & Unit Economics</span>
+            <h1 className="font-display text-2xl font-bold text-gray-900">Admin Operations Center</h1>
+            {isSuperAdmin ? (
+              <span className="rounded-full bg-slate-900 px-2.5 py-0.5 text-xs font-bold text-white tracking-wider">
+                Super Admin
+              </span>
+            ) : (
+              <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-semibold text-gray-700">
+                Operations Admin
+              </span>
+            )}
           </div>
-          <h2 className="text-xl font-bold tracking-tight text-white">
-            Command & Control Center
-          </h2>
-          <p className="text-xs text-slate-300 max-w-2xl">
-            Live observability (GMV, platform revenue, net contribution), 9-stage order intervention, double-entry ledger balancing, and pilot parameter governance.
+          <p className="text-xs text-gray-500 mt-0.5">
+            Operational governance, corridor monitoring, and fulfilment oversight.
           </p>
         </div>
-        <Link
-          to="/admin/control-center"
-          className="relative z-10 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-emerald-950/50 hover:from-emerald-500 hover:to-teal-500 transition-all cursor-pointer"
-        >
-          Open Control Center <ArrowRight className="h-4 w-4" />
-        </Link>
-      </div>
 
-      {error ? (
-        <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-          We could not load the business verification queue.
-        </div>
-      ) : null}
-
-      {summaryQuery.error ? (
-        <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-          Platform earnings and transaction metrics are unavailable. This account may not have access to the main-admin reporting endpoints.
-        </div>
-      ) : null}
-
-      {accountsQuery.error && <div role="alert" className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">Platform account management is unavailable for this admin account.</div>}
-
-      {summaryQuery.data?.data && <div className="mb-8 grid grid-cols-2 gap-4 lg:grid-cols-4"><div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm"><Users className="h-5 w-5 text-primary-600" /><p className="mt-3 text-2xl font-bold text-gray-900">{summaryQuery.data.data.customers}</p><p className="text-xs text-gray-500">Customer accounts</p></div><div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm"><Store className="h-5 w-5 text-primary-600" /><p className="mt-3 text-2xl font-bold text-gray-900">{summaryQuery.data.data.businesses}</p><p className="text-xs text-gray-500">Business accounts</p></div><div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm"><Bike className="h-5 w-5 text-primary-600" /><p className="mt-3 text-2xl font-bold text-gray-900">{summaryQuery.data.data.riders}</p><p className="text-xs text-gray-500">Rider accounts</p></div><div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm"><UserCog className="h-5 w-5 text-primary-600" /><p className="mt-3 text-2xl font-bold text-gray-900">{summaryQuery.data.data.admins}</p><p className="text-xs text-gray-500">Admin accounts</p></div></div>}
-
-      {summaryQuery.data?.data && <div className="mb-8 grid grid-cols-2 gap-4 lg:grid-cols-4"><div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm"><CheckCircle2 className="h-5 w-5 text-success-600" /><p className="mt-3 text-2xl font-bold text-gray-900">{summaryQuery.data.data.completed_transactions}</p><p className="text-xs text-gray-500">Completed transactions</p></div><div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm"><Clock className="h-5 w-5 text-warning-600" /><p className="mt-3 text-2xl font-bold text-gray-900">{summaryQuery.data.data.pending_transactions}</p><p className="text-xs text-gray-500">Pending transactions</p></div><div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm"><Bike className="h-5 w-5 text-primary-600" /><p className="mt-3 text-2xl font-bold text-gray-900">{summaryQuery.data.data.in_transit_transactions}</p><p className="text-xs text-gray-500">In transit</p></div><div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm"><Shield className="h-5 w-5 text-secondary-600" /><p className="mt-3 text-2xl font-bold text-gray-900">{summaryQuery.data.data.assigned_transactions}</p><p className="text-xs text-gray-500">Assigned</p></div></div>}
-
-      {summaryQuery.data?.data && <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-3"><div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm"><p className="text-xs text-gray-500">Completed order value</p><p className="mt-2 text-2xl font-bold text-gray-900">NGN {summaryQuery.data.data.gross_completed_value.toLocaleString()}</p></div><div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm"><p className="text-xs text-gray-500">Recipient earnings</p><p className="mt-2 text-2xl font-bold text-gray-900">NGN {summaryQuery.data.data.recipient_earnings.toLocaleString()}</p></div><div className="rounded-2xl border border-primary-200 bg-primary-50 p-5 shadow-sm"><p className="text-xs text-primary-700">Derived platform earnings</p><p className="mt-2 text-2xl font-bold text-primary-900">NGN {summaryQuery.data.data.platform_earnings.toLocaleString()}</p></div></div>}
-
-      {accountsQuery.data?.data && <div className="mb-8 rounded-2xl border border-gray-100 bg-white p-6 shadow-sm"><div className="flex items-center justify-between"><div><h2 className="font-display text-lg font-bold text-gray-900">Account authority</h2><p className="text-sm text-gray-500">Suspend, restore, or soft-delete accounts. Every action requires a reason and is audited.</p></div></div><div className="mt-4 space-y-2">{accounts.slice(0, 20).map((account) => <div key={account.id} className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 py-3"><div><p className="text-sm font-semibold text-gray-900">{[account.firstName, account.lastName].filter(Boolean).join(' ') || account.email || account.phoneNumber || account.id}</p><p className="text-xs text-gray-500">{account.role} · {account.deletedAt ? 'Deleted' : account.isActive ? 'Active' : 'Suspended'}</p></div><div className="flex gap-2">{!account.deletedAt && account.isActive && <button type="button" onClick={() => void accountAction('suspend', account)} title="Suspend account" className="rounded-lg border border-warning-200 p-2 text-warning-700"><Ban className="h-4 w-4" /></button>}{!account.deletedAt && !account.isActive && <button type="button" onClick={() => void accountAction('unsuspend', account)} title="Unsuspend account" className="rounded-lg border border-success-200 p-2 text-success-700"><RotateCcw className="h-4 w-4" /></button>}{!account.deletedAt && <button type="button" onClick={() => void accountAction('delete', account)} title="Delete account" className="rounded-lg border border-red-200 p-2 text-red-700"><Trash2 className="h-4 w-4" /></button>}</div></div>)}</div></div>}
-
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gray-800 text-white">
-            <Store className="h-5 w-5" />
-          </div>
-          <p className="mt-3 font-display text-2xl font-bold text-gray-900">{isLoading ? '…' : stats.total}</p>
-          <p className="text-xs text-gray-500">Total Businesses</p>
-        </div>
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-success-100 text-success-700">
-            <CheckCircle2 className="h-5 w-5" />
-          </div>
-          <p className="mt-3 font-display text-2xl font-bold text-gray-900">{isLoading ? '…' : stats.verified}</p>
-          <p className="text-xs text-gray-500">Verified</p>
-        </div>
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-warning-100 text-warning-700">
-            <Clock className="h-5 w-5" />
-          </div>
-          <p className="mt-3 font-display text-2xl font-bold text-gray-900">{isLoading ? '…' : stats.pending}</p>
-          <p className="text-xs text-gray-500">Pending Review</p>
-        </div>
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-red-100 text-red-700">
-            <XCircle className="h-5 w-5" />
-          </div>
-          <p className="mt-3 font-display text-2xl font-bold text-gray-900">{isLoading ? '…' : stats.rejected}</p>
-          <p className="text-xs text-gray-500">Rejected</p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
-        <Link
-          to="/admin/businesses"
-          className="flex items-center gap-4 rounded-2xl border border-gray-100 bg-white p-6 shadow-sm hover:shadow-md hover:border-primary-200 transition-all"
-        >
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary-100 text-primary-700">
-            <Shield className="h-6 w-6" />
-          </div>
-          <div className="flex-1">
-            <h3 className="font-display text-lg font-bold text-gray-900">Business Verification</h3>
-            <p className="text-sm text-gray-500">Review and verify businesses</p>
-          </div>
-          <ArrowRight className="h-5 w-5 text-gray-400" />
-        </Link>
-        <Link
-          to="/admin/operations"
-          className="flex items-center gap-4 rounded-2xl border border-gray-100 bg-white p-6 shadow-sm hover:shadow-md hover:border-primary-200 transition-all"
-        >
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-accent-100 text-accent-700">
-            <LayoutDashboard className="h-6 w-6" />
-          </div>
-          <div className="flex-1">
-            <h3 className="font-display text-lg font-bold text-gray-900">Operations</h3>
-            <p className="text-sm text-gray-500">Platform operational overview</p>
-          </div>
-          <ArrowRight className="h-5 w-5 text-gray-400" />
-        </Link>
-      </div>
-
-      <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm mb-8">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="font-display text-lg font-bold text-gray-900">Verification Queue</h2>
-          <Link
-            to="/admin/businesses"
-            className="text-sm font-semibold text-primary-600 hover:text-primary-700 inline-flex items-center gap-1"
-          >
-            View All <ArrowRight className="h-4 w-4" />
-          </Link>
-        </div>
-
-        {isLoading ? (
-          <p className="text-sm text-gray-600">Loading businesses…</p>
-        ) : businesses.length === 0 ? (
-          <EmptyState
-            icon={<Store className="h-7 w-7" />}
-            title="No businesses registered"
-            description="Registered businesses will appear here for verification."
-          />
-        ) : (
-          <div className="space-y-2">
-            {businesses.slice(0, 5).map((business) => (
-              <Link
-                key={business.businessId}
-                to={`/admin/businesses/${business.businessId}`}
-                className="flex items-center justify-between rounded-xl border border-gray-100 p-4 hover:bg-gray-50 transition-colors"
+        {/* Time Filters */}
+        <div className="flex items-center gap-2">
+          <div className="flex rounded-xl bg-gray-100 p-1">
+            {(['today', '7d', '30d', '90d', 'all'] as const).map((period) => (
+              <button
+                key={period}
+                type="button"
+                onClick={() => setTimePeriod(period)}
+                className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition-all cursor-pointer ${
+                  timePeriod === period
+                    ? 'bg-white text-gray-900 shadow-xs'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
               >
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gray-50">
-                    <Store className="h-5 w-5 text-gray-400" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-gray-900">{business.businessName}</p>
-                    <p className="text-xs text-gray-500">{business.businessEmail || business.businessPhoneNumber || 'No contact info'}</p>
-                  </div>
-                </div>
-                <Badge variant={getStatusBadgeVariant(business.status)}>
-                  {getStatusLabel(business.status)}
-                </Badge>
-              </Link>
+                {timePeriodLabels[period]}
+              </button>
             ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Super Admin Control Center Banner (Differentiated Experience) */}
+      {isSuperAdmin && (
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-slate-900 p-6 text-white shadow-md border border-slate-800 relative overflow-hidden">
+          <div className="space-y-1 relative z-10 max-w-2xl">
+            <div className="flex items-center gap-2">
+              <span className="rounded-full bg-emerald-500/20 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider text-emerald-300 border border-emerald-400/30">
+                Super Admin Command & Governance
+              </span>
+            </div>
+            <h2 className="text-lg font-bold tracking-tight text-white">
+              Platform Economics, Ledger & Emergency Controls
+            </h2>
+            <p className="text-xs text-slate-300">
+              Access double-entry platform ledger, 9-stage order state overrides, pricing tiers, and audit trails.
+            </p>
+          </div>
+          <div className="flex items-center gap-3 relative z-10">
+            <Link
+              to="/admin/management"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800/80 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-700 transition-colors"
+            >
+              <Users className="h-3.5 w-3.5" /> Manage Admins
+            </Link>
+            <Link
+              to="/admin/control-center"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-500 transition-colors"
+            >
+              Control Center <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {/* Row 1: Platform Population Cards */}
+      <div className="mb-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
+        {/* Customers */}
+        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Customers</span>
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-50 text-sky-700">
+              <Users className="h-4 w-4" />
+            </div>
+          </div>
+          <p className="mt-3 text-2xl font-bold text-gray-900">
+            {summaryQuery.isLoading ? '…' : summary?.population?.customers?.total ?? 0}
+          </p>
+          <div className="mt-1 flex items-center gap-2 text-[11px] text-gray-500">
+            <span className="text-emerald-600 font-medium">
+              {summary?.population?.customers?.active ?? 0} active
+            </span>
+            <span>·</span>
+            <Link to="/admin/customers" className="text-slate-900 font-semibold hover:underline">
+              Manage →
+            </Link>
+          </div>
+        </div>
+
+        {/* Businesses */}
+        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Businesses</span>
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50 text-indigo-700">
+              <Store className="h-4 w-4" />
+            </div>
+          </div>
+          <p className="mt-3 text-2xl font-bold text-gray-900">
+            {summaryQuery.isLoading ? '…' : summary?.population?.businesses?.total ?? 0}
+          </p>
+          <div className="mt-1 flex items-center gap-2 text-[11px] text-gray-500">
+            <span className="text-emerald-600 font-medium">
+              {summary?.population?.businesses?.verified ?? 0} verified
+            </span>
+            <span>·</span>
+            <span className="text-amber-600 font-medium">
+              {summary?.population?.businesses?.pending ?? 0} pending
+            </span>
+          </div>
+        </div>
+
+        {/* Riders */}
+        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Riders</span>
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700">
+              <Bike className="h-4 w-4" />
+            </div>
+          </div>
+          <p className="mt-3 text-2xl font-bold text-gray-900">
+            {summaryQuery.isLoading ? '…' : summary?.population?.riders?.total ?? 0}
+          </p>
+          <div className="mt-1 flex items-center gap-2 text-[11px] text-gray-500">
+            <span className="text-emerald-600 font-medium">
+              {summary?.population?.riders?.verified ?? 0} verified
+            </span>
+            <span>·</span>
+            <span className="text-sky-600 font-medium">
+              {summary?.population?.riders?.active ?? 0} available
+            </span>
+          </div>
+        </div>
+
+        {/* Administrators (Shown ONLY if accessible - Super Admin or permitted) */}
+        {summary?.population?.admins !== null && summary?.population?.admins !== undefined ? (
+          <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-xs">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Administrators</span>
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-900 text-white">
+                <Lock className="h-4 w-4" />
+              </div>
+            </div>
+            <p className="mt-3 text-2xl font-bold text-gray-900">
+              {summaryQuery.isLoading ? '…' : summary.population.admins}
+            </p>
+            <div className="mt-1 flex items-center gap-2 text-[11px] text-gray-500">
+              <span className="text-slate-600 font-medium">System governance</span>
+              {isSuperAdmin && (
+                <>
+                  <span>·</span>
+                  <Link to="/admin/management" className="text-slate-900 font-semibold hover:underline">
+                    Roster →
+                  </Link>
+                </>
+              )}
+            </div>
+          </div>
+        ) : (
+          /* Operational Health Fallback Card for Ordinary Admins */
+          <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-xs">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Attention Needed</span>
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-50 text-amber-700">
+                <AlertTriangle className="h-4 w-4" />
+              </div>
+            </div>
+            <p className="mt-3 text-2xl font-bold text-amber-600">{liveOps.length}</p>
+            <p className="mt-1 text-[11px] text-gray-500">Active fulfilment bottlenecks</p>
           </div>
         )}
       </div>
 
-      {/* Withdrawal Requests & Payouts Review */}
-      <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm mb-8">
+      {/* Row 2: Live Operations Attention Queue (Section 10) */}
+      <div className="mb-8 rounded-2xl border border-gray-200 bg-white p-6 shadow-xs">
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between mb-4">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-50 text-amber-700">
+              <AlertTriangle className="h-4 w-4" />
+            </div>
+            <div>
+              <h2 className="font-display text-base font-bold text-gray-900">
+                Live Operations — Attention Queue
+              </h2>
+              <p className="text-xs text-gray-500">
+                Stalled orders, unassigned dispatches, preparation delays, and cancellations.
+              </p>
+            </div>
+          </div>
+          <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-semibold text-gray-700">
+            {liveOps.length} items requiring review
+          </span>
+        </div>
+
+        {liveOpsQuery.isLoading ? (
+          <p className="py-6 text-center text-xs text-gray-500">Checking active operations...</p>
+        ) : liveOps.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-gray-200 p-6 text-center">
+            <CheckCircle2 className="mx-auto h-7 w-7 text-emerald-500" />
+            <p className="mt-2 text-sm font-semibold text-gray-900">All Operations Flowing Smoothly</p>
+            <p className="text-xs text-gray-500">
+              No orders are currently waiting for acceptance, rider assignment, or reporting delays.
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="border-b border-gray-200 bg-gray-50/75 uppercase font-semibold text-gray-500 tracking-wider">
+                <tr>
+                  <th className="px-4 py-2.5">Attention Reason</th>
+                  <th className="px-4 py-2.5">Order</th>
+                  <th className="px-4 py-2.5">Business & Customer</th>
+                  <th className="px-4 py-2.5">Current Status</th>
+                  <th className="px-4 py-2.5">Duration</th>
+                  <th className="px-4 py-2.5 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 text-gray-700">
+                {liveOps.map((item) => (
+                  <tr key={item.orderId} className="hover:bg-amber-50/30 transition-colors">
+                    <td className="px-4 py-3">
+                      <span className="inline-flex items-center gap-1.5 rounded-md bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-800">
+                        <AlertTriangle className="h-3 w-3 shrink-0" /> {item.reason}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 font-mono font-bold text-gray-900">
+                      #{item.orderId.slice(0, 8)}
+                    </td>
+                    <td className="px-4 py-3">
+                      <p className="font-semibold text-gray-900">{item.businessName}</p>
+                      <p className="text-[11px] text-gray-500">{item.customerName}</p>
+                    </td>
+                    <td className="px-4 py-3">
+                      <Badge variant="neutral">{item.status}</Badge>
+                    </td>
+                    <td className="px-4 py-3 text-gray-500">
+                      {item.minutesElapsed} mins ago
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <Link
+                        to="/admin/support"
+                        className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+                      >
+                        Intervene <ArrowRight className="h-3 w-3" />
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Row 3: Operations 9-Stage Breakdown */}
+      <div className="mb-8 rounded-2xl border border-gray-200 bg-white p-6 shadow-xs">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="font-display text-base font-bold text-gray-900">
+              Fulfillment Pipeline Overview ({timePeriodLabels[timePeriod]})
+            </h2>
+            <p className="text-xs text-gray-500">Volume distribution across order lifecycle states.</p>
+          </div>
+          <Link
+            to="/admin/deliveries"
+            className="text-xs font-semibold text-slate-900 hover:underline inline-flex items-center gap-1"
+          >
+            Monitor Deliveries <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          <div className="rounded-xl border border-gray-100 bg-gray-50/50 p-3">
+            <span className="text-[11px] font-medium text-gray-400 uppercase">Pending Payment</span>
+            <p className="mt-1 text-xl font-bold text-gray-900">
+              {summary?.operations?.pendingPayment ?? 0}
+            </p>
+          </div>
+          <div className="rounded-xl border border-gray-100 bg-gray-50/50 p-3">
+            <span className="text-[11px] font-medium text-gray-400 uppercase">Awaiting Merchant</span>
+            <p className="mt-1 text-xl font-bold text-amber-600">
+              {summary?.operations?.awaitingAcceptance ?? 0}
+            </p>
+          </div>
+          <div className="rounded-xl border border-gray-100 bg-gray-50/50 p-3">
+            <span className="text-[11px] font-medium text-gray-400 uppercase">Preparing</span>
+            <p className="mt-1 text-xl font-bold text-sky-600">
+              {summary?.operations?.preparing ?? 0}
+            </p>
+          </div>
+          <div className="rounded-xl border border-gray-100 bg-gray-50/50 p-3">
+            <span className="text-[11px] font-medium text-gray-400 uppercase">Awaiting Rider</span>
+            <p className="mt-1 text-xl font-bold text-indigo-600">
+              {summary?.operations?.readyForPickup ?? 0}
+            </p>
+          </div>
+          <div className="rounded-xl border border-gray-100 bg-gray-50/50 p-3">
+            <span className="text-[11px] font-medium text-gray-400 uppercase">In Transit</span>
+            <p className="mt-1 text-xl font-bold text-blue-600">
+              {summary?.operations?.inTransit ?? 0}
+            </p>
+          </div>
+          <div className="rounded-xl border border-gray-100 bg-gray-50/50 p-3">
+            <span className="text-[11px] font-medium text-gray-400 uppercase">Delivered</span>
+            <p className="mt-1 text-xl font-bold text-emerald-600">
+              {summary?.operations?.delivered ?? 0}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Row 4: Financial Snapshot (Restricted to permitted / Super Admin) */}
+      {summary?.financial && (
+        <div className="mb-8 rounded-2xl border border-gray-200 bg-white p-6 shadow-xs">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="font-display text-base font-bold text-gray-900">
+                Financial Volume Snapshot ({timePeriodLabels[timePeriod]})
+              </h2>
+              <p className="text-xs text-gray-500">Gross Merchandise Value, Platform Fee Revenue, and Courier Settlements.</p>
+            </div>
+            {isSuperAdmin && (
+              <Link
+                to="/admin/control-center"
+                className="text-xs font-semibold text-emerald-700 hover:underline inline-flex items-center gap-1"
+              >
+                Open Full Ledger <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="rounded-xl border border-gray-100 bg-gray-50/50 p-4">
+              <span className="text-xs font-semibold text-gray-500 uppercase">Gross Merchandise Value (GMV)</span>
+              <p className="mt-2 text-2xl font-bold text-gray-900">
+                {formatPrice(summary.financial.gmv)}
+              </p>
+              <p className="text-[11px] text-gray-400 mt-1">Total consumer transactions completed</p>
+            </div>
+            <div className="rounded-xl border border-gray-100 bg-gray-50/50 p-4">
+              <span className="text-xs font-semibold text-gray-500 uppercase">SquadLink Derived Revenue</span>
+              <p className="mt-2 text-2xl font-bold text-slate-900">
+                {formatPrice(summary.financial.platformFeeRevenue)}
+              </p>
+              <p className="text-[11px] text-gray-400 mt-1">Platform service fees retained</p>
+            </div>
+            <div className="rounded-xl border border-emerald-100 bg-emerald-50/40 p-4">
+              <span className="text-xs font-semibold text-emerald-800 uppercase">Recipient Settlements</span>
+              <p className="mt-2 text-2xl font-bold text-emerald-700">
+                {formatPrice(summary.financial.riderPayouts)}
+              </p>
+              <p className="text-[11px] text-emerald-600 mt-1">Settled to fulfilling merchants & riders</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Row 5: Quick Navigation to Queues */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+        <Link
+          to="/admin/businesses"
+          className="flex items-center gap-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-xs hover:border-slate-900 hover:shadow-sm transition-all"
+        >
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-800">
+            <Store className="h-5 w-5" />
+          </div>
+          <div className="flex-1">
+            <h3 className="font-display text-sm font-bold text-gray-900">Business Verification</h3>
+            <p className="text-xs text-gray-500">{businesses.filter((b) => b.status === 'PENDING').length} pending approval</p>
+          </div>
+          <ArrowRight className="h-4 w-4 text-gray-400" />
+        </Link>
+
+        <Link
+          to="/admin/riders"
+          className="flex items-center gap-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-xs hover:border-slate-900 hover:shadow-sm transition-all"
+        >
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-800">
+            <Bike className="h-5 w-5" />
+          </div>
+          <div className="flex-1">
+            <h3 className="font-display text-sm font-bold text-gray-900">Rider Verification</h3>
+            <p className="text-xs text-gray-500">Inspect courier onboardings</p>
+          </div>
+          <ArrowRight className="h-4 w-4 text-gray-400" />
+        </Link>
+
+        <Link
+          to="/admin/support"
+          className="flex items-center gap-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-xs hover:border-slate-900 hover:shadow-sm transition-all"
+        >
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-800">
+            <ShieldAlert className="h-5 w-5" />
+          </div>
+          <div className="flex-1">
+            <h3 className="font-display text-sm font-bold text-gray-900">Support & Issues</h3>
+            <p className="text-xs text-gray-500">Record & resolve friction</p>
+          </div>
+          <ArrowRight className="h-4 w-4 text-gray-400" />
+        </Link>
+      </div>
+
+      {/* Row 6: Withdrawal Requests (Payouts Review Queue) */}
+      <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-xs mb-8">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700">
               <Banknote className="h-5 w-5" />
             </div>
             <div>
-              <h2 className="font-display text-lg font-bold text-gray-900">Withdrawal Requests (Payouts)</h2>
-              <p className="text-xs text-gray-500">Review and authorize payouts for riders, merchants, and customers.</p>
+              <h2 className="font-display text-base font-bold text-gray-900">Withdrawal Requests (Payouts)</h2>
+              <p className="text-xs text-gray-500">Review and authorize bank payouts for couriers and merchants.</p>
             </div>
           </div>
           <div className="flex flex-wrap gap-1 rounded-xl bg-gray-100 p-1">
@@ -295,16 +552,16 @@ export function AdminDashboard() {
         </div>
 
         {withdrawalsQuery.isLoading ? (
-          <p className="text-sm text-gray-600">Loading withdrawal requests...</p>
+          <p className="text-xs text-gray-500 py-6 text-center">Loading withdrawal requests...</p>
         ) : withdrawalsQuery.isError ? (
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-800">
-            Platform withdrawal requests are only accessible to the primary administrator.
+            Platform withdrawal requests are restricted to authorized administrators.
           </div>
         ) : !withdrawalsQuery.data?.data || withdrawalsQuery.data.data.length === 0 ? (
           <EmptyState
             icon={<Banknote className="h-7 w-7 text-gray-400" />}
             title="No withdrawal requests"
-            description="When users or couriers request withdrawals, they will appear here for verification and payout."
+            description="When merchants or couriers request earnings payouts, they will appear here for authorization."
           />
         ) : (
           <div className="space-y-3">
@@ -313,15 +570,15 @@ export function AdminDashboard() {
               .map((item) => (
                 <div
                   key={item.id}
-                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-xl border border-gray-100 p-4 hover:border-gray-200 transition-all bg-gray-50/40"
+                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-xl border border-gray-100 p-4 hover:border-gray-200 transition-all bg-gray-50/30"
                 >
                   <div className="space-y-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-bold text-gray-900">
+                      <span className="font-bold text-gray-900 text-sm">
                         {item.firstName && item.lastName ? `${item.firstName} ${item.lastName}` : item.email}
                       </span>
                       {item.username && (
-                        <span className="rounded-md bg-primary-50 px-1.5 py-0.5 text-xs font-semibold text-primary-700">
+                        <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-xs font-semibold text-slate-700">
                           @{item.username}
                         </span>
                       )}
@@ -349,14 +606,14 @@ export function AdminDashboard() {
                       </p>
                       <p className="text-[11px] text-gray-400">Requested: {formatDate(item.createdAt)}</p>
                       {item.reviewReason && (
-                        <p className="text-red-600 font-medium">Reason: {item.reviewReason}</p>
+                        <p className="text-rose-600 font-medium">Reason: {item.reviewReason}</p>
                       )}
                     </div>
                   </div>
 
                   <div className="flex items-center gap-3 sm:self-center">
                     <div className="text-right sm:mr-3">
-                      <p className="text-base font-extrabold text-gray-900">{formatPrice(Number(item.amount))}</p>
+                      <p className="text-base font-bold text-gray-900">{formatPrice(Number(item.amount))}</p>
                       <p className="text-[10px] text-gray-400 uppercase tracking-wider">{item.currency || 'NGN'}</p>
                     </div>
 
@@ -366,7 +623,7 @@ export function AdminDashboard() {
                           type="button"
                           disabled={withdrawalActionLoading === item.id}
                           onClick={() => handleReviewWithdrawal(item.id, 'APPROVED')}
-                          className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-emerald-700 disabled:opacity-50 transition-colors cursor-pointer"
+                          className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-emerald-700 disabled:opacity-50 transition-colors cursor-pointer"
                         >
                           <Check className="h-3.5 w-3.5" /> Approve
                         </button>
@@ -374,7 +631,7 @@ export function AdminDashboard() {
                           type="button"
                           disabled={withdrawalActionLoading === item.id}
                           onClick={() => handleReviewWithdrawal(item.id, 'REJECTED')}
-                          className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50 transition-colors cursor-pointer"
+                          className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-white px-3 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 disabled:opacity-50 transition-colors cursor-pointer"
                         >
                           <X className="h-3.5 w-3.5" /> Reject
                         </button>
@@ -386,7 +643,7 @@ export function AdminDashboard() {
                         type="button"
                         disabled={withdrawalActionLoading === item.id}
                         onClick={() => handleReviewWithdrawal(item.id, 'PAID')}
-                        className="inline-flex items-center gap-1 rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-primary-700 disabled:opacity-50 transition-colors cursor-pointer"
+                        className="inline-flex items-center gap-1 rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-slate-800 disabled:opacity-50 transition-colors cursor-pointer"
                       >
                         <Check className="h-3.5 w-3.5" /> Mark Paid
                       </button>
@@ -394,6 +651,57 @@ export function AdminDashboard() {
                   </div>
                 </div>
               ))}
+          </div>
+        )}
+      </div>
+
+      {/* Row 7: Business Verification Queue Preview */}
+      <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-xs">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="font-display text-base font-bold text-gray-900">Business Verification Queue</h2>
+            <p className="text-xs text-gray-500">Merchant onboarding applications awaiting document review.</p>
+          </div>
+          <Link
+            to="/admin/businesses"
+            className="text-xs font-semibold text-slate-900 hover:underline inline-flex items-center gap-1"
+          >
+            View All ({businesses.length}) <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
+
+        {businessesQuery.isLoading ? (
+          <p className="text-xs text-gray-500 py-4 text-center">Loading businesses...</p>
+        ) : businesses.length === 0 ? (
+          <EmptyState
+            icon={<Store className="h-7 w-7 text-gray-400" />}
+            title="No businesses pending"
+            description="All business merchant registrations have been processed."
+          />
+        ) : (
+          <div className="space-y-2">
+            {businesses.slice(0, 5).map((business) => (
+              <Link
+                key={business.businessId}
+                to={`/admin/businesses/${business.businessId}`}
+                className="flex items-center justify-between rounded-xl border border-gray-100 p-3 hover:bg-gray-50/70 transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gray-50">
+                    <Store className="h-4 w-4 text-gray-500" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-gray-900">{business.businessName}</p>
+                    <p className="text-xs text-gray-500">
+                      {business.businessEmail || business.businessPhoneNumber || 'No contact info'}
+                    </p>
+                  </div>
+                </div>
+                <Badge variant={getStatusBadgeVariant(business.status)}>
+                  {business.status}
+                </Badge>
+              </Link>
+            ))}
           </div>
         )}
       </div>

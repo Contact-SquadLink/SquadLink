@@ -257,6 +257,20 @@ try {
     );
   }
 
+  const adminPermissionsMigration = await client.query(
+    "SELECT 1 FROM public.schema_migrations WHERE version = '105'"
+  );
+  if (adminPermissionsMigration.rowCount === 0) {
+    const sql105 = await readFile(
+      new URL('../database/migrations/105_create_admin_permissions_and_support.sql', import.meta.url),
+      'utf8'
+    );
+    await client.query(sql105);
+    await client.query(
+      "INSERT INTO public.schema_migrations (version, name) VALUES ('105', 'create_admin_permissions_and_support')"
+    );
+  }
+
     await client.query(`
       INSERT INTO public.schema_migrations (version, name) VALUES
         ('004', 'create_businesses'),

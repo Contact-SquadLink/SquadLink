@@ -17,11 +17,15 @@ import {
   Phone,
   Filter,
   Sparkles,
+  Server,
+  Cpu,
+  Database,
 } from 'lucide-react';
 import { adminApi } from '@/api/admin';
 import type {
   SuperAdminOrderSummary,
   OrderStage,
+  SystemHealthData,
 } from '@/types';
 
 const ALL_9_STAGES: { stage: OrderStage; label: string; desc: string }[] = [
@@ -38,7 +42,7 @@ const ALL_9_STAGES: { stage: OrderStage; label: string; desc: string }[] = [
 
 export function SuperAdminControlCenter() {
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<'observability' | 'orders' | 'ledger' | 'audit' | 'config' | 'participants'>('observability');
+  const [activeTab, setActiveTab] = useState<'observability' | 'orders' | 'ledger' | 'audit' | 'config' | 'participants' | 'health'>('observability');
 
   // Order intervention state
   const [selectedStageFilter, setSelectedStageFilter] = useState<string>('');
@@ -81,6 +85,12 @@ export function SuperAdminControlCenter() {
   const participantsQuery = useQuery({
     queryKey: ['super-admin-participants'],
     queryFn: () => adminApi.listParticipants(),
+  });
+
+  const healthQuery = useQuery({
+    queryKey: ['super-admin-system-health'],
+    queryFn: adminApi.getSystemHealth,
+    refetchInterval: 15000,
   });
 
   // Mutations
@@ -177,6 +187,7 @@ export function SuperAdminControlCenter() {
             { id: 'audit', label: 'Immutable Audit Trail', icon: Lock },
             { id: 'config', label: 'Pilot Parameters', icon: Settings },
             { id: 'participants', label: 'Participant Governance', icon: Users },
+            { id: 'health', label: 'System Health', icon: Server },
           ].map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -895,6 +906,100 @@ export function SuperAdminControlCenter() {
                 </table>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* TAB 7: SYSTEM HEALTH (Section 23) */}
+        {activeTab === 'health' && (
+          <div className="space-y-6 max-w-5xl">
+            <div>
+              <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                <Server className="h-5 w-5 text-emerald-400" />
+                Infrastructure & System Health
+              </h2>
+              <p className="text-xs text-slate-400">
+                Live database connectivity, PostgreSQL latency, active queue telemetry, and Node runtime statistics.
+              </p>
+            </div>
+
+            {healthQuery.isLoading ? (
+              <p className="text-xs text-slate-400 py-8 text-center">Pinging platform services...</p>
+            ) : healthQuery.data?.data ? (
+              <div className="space-y-6">
+                {/* Status Hero Card */}
+                <div className="rounded-3xl border border-slate-800/80 bg-slate-900/60 p-6 shadow-xl backdrop-blur-xl flex flex-wrap items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className={`flex h-12 w-12 items-center justify-center rounded-2xl ${
+                      healthQuery.data.data.status === 'OPERATIONAL'
+                        ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
+                        : 'bg-amber-500/20 text-amber-400 border border-amber-500/40'
+                    }`}>
+                      <CheckCircle2 className="h-6 w-6" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-white">
+                        Platform Status: {healthQuery.data.data.status}
+                      </h3>
+                      <p className="text-xs text-slate-400">
+                        Heartbeat verified at {new Date(healthQuery.data.data.timestamp).toLocaleTimeString()}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-950 px-3 py-1 text-xs font-mono font-semibold text-emerald-300 border border-slate-800">
+                      Uptime: {Math.floor(healthQuery.data.data.server.uptimeSeconds / 60)}m {healthQuery.data.data.server.uptimeSeconds % 60}s
+                    </span>
+                  </div>
+                </div>
+
+                {/* Subsystem Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  {/* Database */}
+                  <div className="rounded-2xl border border-slate-800/80 bg-slate-900/60 p-5 shadow-xl backdrop-blur-xl space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Database</span>
+                      <Database className="h-4 w-4 text-emerald-400" />
+                    </div>
+                    <p className="text-xl font-bold text-white">
+                      {healthQuery.data.data.database.status}
+                    </p>
+                    <p className="text-xs text-slate-400 font-mono">
+                      Query Ping Latency: <span className="text-emerald-300 font-bold">{healthQuery.data.data.database.latencyMs} ms</span>
+                    </p>
+                  </div>
+
+                  {/* Node Runtime */}
+                  <div className="rounded-2xl border border-slate-800/80 bg-slate-900/60 p-5 shadow-xl backdrop-blur-xl space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Server Memory</span>
+                      <Cpu className="h-4 w-4 text-sky-400" />
+                    </div>
+                    <p className="text-xl font-bold text-white">
+                      {healthQuery.data.data.server.memoryUsageMB.heapUsed} MB
+                    </p>
+                    <p className="text-xs text-slate-400 font-mono">
+                      RSS: {healthQuery.data.data.server.memoryUsageMB.rss} MB · Heap: {healthQuery.data.data.server.memoryUsageMB.heapTotal} MB
+                    </p>
+                  </div>
+
+                  {/* Active Queue Pressure */}
+                  <div className="rounded-2xl border border-slate-800/80 bg-slate-900/60 p-5 shadow-xl backdrop-blur-xl space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Active Queues</span>
+                      <Layers className="h-4 w-4 text-teal-400" />
+                    </div>
+                    <p className="text-xl font-bold text-white">
+                      {healthQuery.data.data.queues.activeOrders} orders
+                    </p>
+                    <p className="text-xs text-slate-400">
+                      {healthQuery.data.data.queues.unassignedDeliveries} unassigned · {healthQuery.data.data.queues.pendingWithdrawals} pending payouts
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs text-rose-400">Failed to load system health telemetry.</p>
+            )}
           </div>
         )}
       </main>
