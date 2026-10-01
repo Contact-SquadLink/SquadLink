@@ -224,7 +224,7 @@ export function CheckoutPage() {
           reference: ref,
           paymentId: response.data.payment?.paymentId || '',
           paymentAttemptId: response.data.payment?.paymentAttemptId || '',
-          amount: response.data.payment?.amount || summary.finalTotal,
+          amount: response.data.payment?.amount || total,
           currency: 'NGN',
           isSimulated: true,
         };
@@ -243,7 +243,7 @@ export function CheckoutPage() {
     } finally {
       setPlacingOrder(false);
     }
-  }, [clearCart, deliveryAddressLine, deliveryCity, deliveryState, isSyncing, items, latitudeValue, longitudeValue, normalizedContactPhone, placingOrder, selectedGateway, summary.finalTotal]);
+  }, [clearCart, deliveryAddressLine, deliveryCity, deliveryState, isSyncing, items, latitudeValue, longitudeValue, normalizedContactPhone, placingOrder, selectedGateway, total]);
 
   const handleVerifyOrCompletePayment = async () => {
     if (!placedOrderId || !gatewayInitData) return;
