@@ -4,6 +4,16 @@ import { withTransaction } from "../../db/transaction";
 import { AppError } from "../../utils/app-error";
 import { processProviderPayment } from "../lifecycle/lifecycle.service";
 
+export function getPaystackSecretKey(): string | undefined {
+  return (
+    process.env.PAYSTACK_SECRET_KEY ||
+    process.env.PAYSTACK_SECRET ||
+    process.env.PAYSTACK_KEY ||
+    process.env.PAYSTACK_SK ||
+    process.env.PSTK_SECRET_KEY
+  );
+}
+
 export function getFlutterwaveSecretKey(): string | undefined {
   return (
     process.env.FLUTTERWAVE_SECRET_KEY ||
@@ -107,7 +117,7 @@ export async function initializePaymentGatewayTransaction(
   let gatewayWarning: string | undefined;
 
   if (gateway === "PAYSTACK") {
-    const paystackSecret = process.env.PAYSTACK_SECRET_KEY;
+    const paystackSecret = getPaystackSecretKey();
     const hasLiveKey = Boolean(
       paystackSecret &&
       !paystackSecret.includes("YOUR_") &&
@@ -253,7 +263,7 @@ export async function initializePaymentGatewayTransaction(
  * Cryptographic HMAC SHA-512 verification for Paystack webhooks
  */
 export function verifyPaystackSignature(rawBody: string, signature: string): boolean {
-  const secret = process.env.PAYSTACK_SECRET_KEY || "sk_test_paystack_default";
+  const secret = getPaystackSecretKey() || "sk_test_paystack_default";
   const hash = createHmac("sha512", secret).update(rawBody).digest("hex");
   return hash === signature;
 }

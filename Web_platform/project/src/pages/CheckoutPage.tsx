@@ -123,10 +123,10 @@ export function CheckoutPage() {
   }, [deliveryAddressLine, deliveryCity, deliveryState, hasValidDeliveryDetails, isSyncing, items, latitudeValue, longitudeValue, normalizedContactPhone]);
 
   useEffect(() => {
-    if (items.length === 0 && !orderPlaced && !placingOrder) {
+    if (items.length === 0 && !orderPlaced && !placingOrder && !placedOrderId && !showPaymentModal) {
       navigate('/cart');
     }
-  }, [items.length, orderPlaced, placingOrder, navigate]);
+  }, [items.length, orderPlaced, placingOrder, placedOrderId, showPaymentModal, navigate]);
 
   const estimatedDeliveryFee = items.length > 0 ? DELIVERY_FEE : 0;
   const deliveryFee = preview?.deliveryFee ?? estimatedDeliveryFee;
@@ -234,9 +234,11 @@ export function CheckoutPage() {
       setShowPaymentModal(true);
       clearCart();
 
-      // Open payment portal in a new tab only for live external gateway
+      // For live external gateway (Paystack / Flutterwave), navigate directly in current window
+      // so browser pop-up blockers never block the payment flow.
       if (initData.checkoutUrl && !initData.isSimulated && !initData.checkoutUrl.includes('simulated=true')) {
-        window.open(initData.checkoutUrl, '_blank');
+        window.location.href = initData.checkoutUrl;
+        return;
       }
     } catch (error) {
       setPreviewError(error instanceof Error ? error.message : 'Unable to initiate order payment.');
@@ -278,13 +280,15 @@ export function CheckoutPage() {
       }
       await ordersApi.cancel(placedOrderId, 'Customer cancelled in checkout modal').catch(() => {});
       setShowPaymentModal(false);
+      setPlacedOrderId(null);
       setPreviewError('Order cancelled. Reserved items have been released.');
+      navigate('/cart');
     } catch (err) {
       setPreviewError(err instanceof Error ? err.message : 'Unable to cancel order.');
     }
   };
 
-  if (items.length === 0 && !orderPlaced) {
+  if (items.length === 0 && !orderPlaced && !placedOrderId && !showPaymentModal) {
     return null;
   }
 
