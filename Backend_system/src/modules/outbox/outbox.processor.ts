@@ -3,6 +3,7 @@ import type { PoolClient } from "pg";
 import { withTransaction } from "../../db/transaction";
 import { db } from "../../db/database";
 import { expireInventoryReservations } from "../inventory/inventory.maintenance";
+import { sweepAbandonedPendingOrders } from "../order/order.service";
 import { processPushDeliveryBatch } from "../notification/push.processor";
 
 const DEFAULT_BATCH_SIZE = 10;
@@ -568,6 +569,7 @@ export async function processOutboxCronTrigger(batchSize = DEFAULT_BATCH_SIZE): 
   timestamp: string;
 }> {
   await expireInventoryReservations();
+  await sweepAbandonedPendingOrders(15).catch(() => {});
   const processedEvents = await processOutboxBatch(batchSize);
   const pushedNotifications = await processPushDeliveryBatch();
   return {
@@ -583,6 +585,7 @@ export async function runOutboxWorker(): Promise<void> {
 
   while (true) {
     await expireInventoryReservations();
+    await sweepAbandonedPendingOrders(15).catch(() => {});
     const processed = await processOutboxBatch(batchSize);
     const pushed = await processPushDeliveryBatch();
     if (processed === 0 && pushed === 0) {

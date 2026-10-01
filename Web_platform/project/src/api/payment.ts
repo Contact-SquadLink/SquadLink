@@ -15,6 +15,7 @@ export interface PaymentInitializationData {
   paymentAttemptId: string;
   amount: number;
   currency: string;
+  isSimulated?: boolean;
 }
 
 export interface PaymentVerificationData {
@@ -35,4 +36,10 @@ export const paymentApi = {
 
   verify: (reference: string) =>
     apiRequest<ApiSingleResponse<PaymentVerificationData>>(`/api/v1/payments/verify/${reference}`),
+
+  abandon: (reference: string, reason?: string) =>
+    apiRequest<ApiSingleResponse<{ status: string }>>('/api/v1/payments/abandon', {
+      method: 'POST',
+      body: { reference, reason },
+    }),
 };

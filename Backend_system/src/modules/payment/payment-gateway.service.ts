@@ -37,6 +37,7 @@ export interface PaymentInitializationResult {
   paymentAttemptId: string;
   amount: number;
   currency: string;
+  isSimulated: boolean;
 }
 
 /**
@@ -101,10 +102,17 @@ export async function initializePaymentGatewayTransaction(
   const callbackUrl = input.callbackUrl || `http://localhost:5173/orders/${order.order_id}`;
 
   let checkoutUrl: string;
+  let isSimulated = false;
 
   if (gateway === "PAYSTACK") {
     const paystackSecret = process.env.PAYSTACK_SECRET_KEY;
-    if (paystackSecret && !paystackSecret.includes("YOUR_")) {
+    const hasLiveKey = Boolean(
+      paystackSecret &&
+      !paystackSecret.includes("YOUR_") &&
+      !paystackSecret.startsWith("sk_test_paystack_default")
+    );
+
+    if (hasLiveKey) {
       try {
         const response = await fetch("https://api.paystack.co/transaction/initialize", {
           method: "POST",
@@ -128,25 +136,42 @@ export async function initializePaymentGatewayTransaction(
 
         const data = (await response.json()) as {
           status: boolean;
+          message?: string;
           data?: { authorization_url: string; reference: string };
         };
 
         if (data.status && data.data?.authorization_url) {
           checkoutUrl = data.data.authorization_url;
         } else {
-          checkoutUrl = `https://checkout.paystack.com/${reference}`;
+          throw new AppError(
+            `Paystack initialization failed: ${data.message || 'Unable to create payment authorization.'}`,
+            502,
+            "PAYSTACK_INITIALIZATION_ERROR"
+          );
         }
       } catch (err) {
+        if (err instanceof AppError) throw err;
         console.error("[PAYSTACK INITIALIZE ERROR]", err);
-        checkoutUrl = `https://checkout.paystack.com/${reference}`;
+        throw new AppError(
+          `Unable to connect to Paystack payment gateway: ${err instanceof Error ? err.message : 'Network failure'}`,
+          502,
+          "PAYSTACK_GATEWAY_UNREACHABLE"
+        );
       }
     } else {
-      checkoutUrl = `https://checkout.paystack.com/simulate/${reference}?amount=${totalAmount}&email=${encodeURIComponent(email)}`;
+      isSimulated = true;
+      checkoutUrl = `${callbackUrl}?reference=${reference}&gateway=PAYSTACK&simulated=true`;
     }
   } else {
     // Flutterwave
     const flwSecret = getFlutterwaveSecretKey();
-    if (flwSecret && !flwSecret.includes("YOUR_")) {
+    const hasLiveKey = Boolean(
+      flwSecret &&
+      !flwSecret.includes("YOUR_") &&
+      !flwSecret.startsWith("FLWSECK_TEST_DEFAULT")
+    );
+
+    if (hasLiveKey) {
       try {
         const response = await fetch("https://api.flutterwave.com/v3/payments", {
           method: "POST",
@@ -179,21 +204,31 @@ export async function initializePaymentGatewayTransaction(
 
         const data = (await response.json()) as {
           status: string;
+          message?: string;
           data?: { link: string };
         };
 
         if (data.status === "success" && data.data?.link) {
           checkoutUrl = data.data.link;
         } else {
-          console.warn("[FLUTTERWAVE INITIALIZE API WARNING]", data);
-          checkoutUrl = `https://checkout.flutterwave.com/v3/hosted/pay/${reference}`;
+          throw new AppError(
+            `Flutterwave initialization failed: ${data.message || 'Unable to create payment session.'}`,
+            502,
+            "FLUTTERWAVE_INITIALIZATION_ERROR"
+          );
         }
       } catch (err) {
+        if (err instanceof AppError) throw err;
         console.error("[FLUTTERWAVE INITIALIZE ERROR]", err);
-        checkoutUrl = `https://checkout.flutterwave.com/v3/hosted/pay/${reference}`;
+        throw new AppError(
+          `Unable to connect to Flutterwave payment gateway: ${err instanceof Error ? err.message : 'Network failure'}`,
+          502,
+          "FLUTTERWAVE_GATEWAY_UNREACHABLE"
+        );
       }
     } else {
-      checkoutUrl = `https://checkout.flutterwave.com/v3/hosted/pay/${reference}?amount=${totalAmount}&email=${encodeURIComponent(email)}`;
+      isSimulated = true;
+      checkoutUrl = `${callbackUrl}?reference=${reference}&gateway=FLUTTERWAVE&simulated=true`;
     }
   }
 
@@ -215,6 +250,7 @@ export async function initializePaymentGatewayTransaction(
     paymentAttemptId: order.payment_attempt_id,
     amount: totalAmount,
     currency: order.currency,
+    isSimulated,
   };
 }
 
@@ -392,6 +428,22 @@ export async function verifyPaymentReference(reference: string, userId: string) 
             currentPaymentStatus = "AUTHORIZED";
             currentOrderStatus = "CONFIRMED";
           }
+        } else if (
+          psData.status &&
+          (psData.data?.status === "failed" || psData.data?.status === "reversed" || psData.data?.status === "abandoned")
+        ) {
+          const attempt = await findPaymentAttemptByReference(reference);
+          if (attempt && attempt.status !== "FAILED") {
+            await processProviderPayment(userId, attempt.payment_id, {
+              providerEventId: `ps-verify-fail-${reference}`,
+              paymentAttemptId: attempt.id,
+              status: "FAILED",
+              providerReference: reference,
+              failureReason: psData.data?.gateway_response || "Paystack reported payment failure",
+            });
+            currentPaymentStatus = "FAILED";
+            currentOrderStatus = "CANCELLED";
+          }
         }
       } catch (err) {
         console.error("[PAYSTACK DIRECT VERIFY ERROR]", err);
@@ -444,6 +496,26 @@ export async function verifyPaymentReference(reference: string, userId: string) 
             currentPaymentStatus = "AUTHORIZED";
             currentOrderStatus = "CONFIRMED";
           }
+        } else if (
+          flwData.status === "error" ||
+          (flwData.data && (flwData.data.status === "failed" || flwData.data.status === "cancelled"))
+        ) {
+          const matchedTxRef = flwData.data?.tx_ref || reference;
+          const attempt =
+            (await findPaymentAttemptByReference(reference)) ||
+            (await findPaymentAttemptByReference(matchedTxRef));
+
+          if (attempt && attempt.status !== "FAILED") {
+            await processProviderPayment(userId, attempt.payment_id, {
+              providerEventId: `flw-verify-fail-${reference}`,
+              paymentAttemptId: attempt.id,
+              status: "FAILED",
+              providerReference: matchedTxRef,
+              failureReason: "Flutterwave reported payment failure or cancellation",
+            });
+            currentPaymentStatus = "FAILED";
+            currentOrderStatus = "CANCELLED";
+          }
         }
       } catch (err) {
         console.error("[FLUTTERWAVE DIRECT VERIFY ERROR]", err);
@@ -459,4 +531,40 @@ export async function verifyPaymentReference(reference: string, userId: string) 
     amount: Number(row.amount),
     provider: row.provider,
   };
+}
+
+/**
+ * Cancels or abandons a pending payment attempt, releasing inventory immediately.
+ */
+export async function cancelPaymentAttempt(
+  reference: string,
+  userId: string,
+  reason?: string
+) {
+  if (!reference) {
+    throw new AppError("Payment reference is required.", 400, "REFERENCE_REQUIRED");
+  }
+
+  const attempt = await findPaymentAttemptByReference(reference);
+  if (!attempt) {
+    throw new AppError("No payment attempt found for reference.", 404, "PAYMENT_ATTEMPT_NOT_FOUND");
+  }
+
+  if (attempt.status === "SUCCESS") {
+    throw new AppError("Cannot cancel an already completed payment.", 409, "PAYMENT_ALREADY_SUCCESS");
+  }
+
+  if (attempt.status === "FAILED") {
+    return { status: "already_failed", paymentAttemptId: attempt.id };
+  }
+
+  const result = await processProviderPayment(userId, attempt.payment_id, {
+    providerEventId: `cancel-${reference}-${Date.now()}`,
+    paymentAttemptId: attempt.id,
+    status: "FAILED",
+    providerReference: reference,
+    failureReason: reason || "Customer abandoned checkout at payment gateway.",
+  });
+
+  return { status: "cancelled", result };
 }

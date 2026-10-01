@@ -85,6 +85,13 @@ function serializeOrderRow(row: {
 }
 
 export async function listOrdersForUser(userId: string) {
+  // Self-healing sweep for abandoned unpaid orders
+  try {
+    await sweepAbandonedPendingOrders(15);
+  } catch {
+    // non-blocking
+  }
+
   const result = await db.query<{
     id: string;
     status: string;
@@ -171,6 +178,13 @@ export async function listOrdersForUser(userId: string) {
 }
 
 export async function getOrderForUser(userId: string, orderId: string) {
+  // Self-healing sweep for abandoned unpaid orders
+  try {
+    await sweepAbandonedPendingOrders(15);
+  } catch {
+    // non-blocking
+  }
+
   const result = await db.query<{
     id: string;
     status: string;
@@ -324,8 +338,17 @@ export async function cancelCustomerOrderBeforePayment(
       );
 
       await client.query(
-        `UPDATE public.inventory_reservations SET status = 'CANCELLED', updated_at = NOW() WHERE id = $1`,
+        `UPDATE public.inventory_reservations SET status = 'RELEASED', updated_at = NOW() WHERE id = $1`,
         [res.id]
+      );
+
+      await client.query(
+        `
+          INSERT INTO public.inventory_reservation_history
+            (reservation_id, previous_status, new_status, quantity, changed_by, reason)
+          VALUES ($1, 'ACTIVE', 'RELEASED', $2, $3, 'Customer cancelled order before payment.')
+        `,
+        [res.id, res.quantity, userId]
       );
     }
 
@@ -340,7 +363,30 @@ export async function cancelCustomerOrderBeforePayment(
       [orderId]
     );
 
-    // 4. Record order status history
+    // 4. Update payments and payment attempts to FAILED
+    await client.query(
+      `
+        UPDATE public.payment_attempts
+        SET status = 'FAILED',
+            failure_reason = 'Order cancelled by customer before payment.',
+            completed_at = NOW()
+        WHERE payment_id IN (SELECT id FROM public.payments WHERE order_id = $1)
+          AND status IN ('INITIATED', 'PENDING')
+      `,
+      [orderId]
+    );
+
+    await client.query(
+      `
+        UPDATE public.payments
+        SET status = 'FAILED',
+            updated_at = NOW()
+        WHERE order_id = $1 AND status = 'PENDING'
+      `,
+      [orderId]
+    );
+
+    // 5. Record order status history
     await client.query(
       `
         INSERT INTO public.order_status_history (
@@ -355,7 +401,7 @@ export async function cancelCustomerOrderBeforePayment(
       [orderId, userId, cancelReason]
     );
 
-    // 5. In-app notification
+    // 6. In-app notification
     try {
       await createInAppNotification({
         userId,
@@ -374,6 +420,167 @@ export async function cancelCustomerOrderBeforePayment(
       orderId,
       status: "CANCELLED",
       message: "Order cancelled successfully."
+    };
+  });
+}
+
+/**
+ * Sweeps all unpaid abandoned orders in status PENDING.
+ * If an order is older than maxAgeMinutes OR all its reservations have expired,
+ * it is transitioned to CANCELLED, stock is released, and payments are marked FAILED.
+ */
+export async function sweepAbandonedPendingOrders(maxAgeMinutes: number = 15): Promise<{
+  sweptCount: number;
+  orderIds: string[];
+}> {
+  return withTransaction(async (client) => {
+    const pendingOrdersRes = await client.query<{
+      id: string;
+      user_id: string;
+      created_at: string;
+    }>(
+      `
+        SELECT o.id, o.user_id, o.created_at
+        FROM public.orders o
+        WHERE o.status = 'PENDING'
+          AND (
+            o.created_at <= NOW() - ($1 || ' minutes')::interval
+            OR NOT EXISTS (
+              SELECT 1 FROM public.inventory_reservations ir
+              WHERE ir.order_id = o.id AND ir.status = 'ACTIVE' AND (ir.expires_at IS NULL OR ir.expires_at > NOW())
+            )
+          )
+        FOR UPDATE SKIP LOCKED
+      `,
+      [maxAgeMinutes]
+    );
+
+    const sweptOrderIds: string[] = [];
+
+    for (const order of pendingOrdersRes.rows) {
+      const orderId = order.id;
+      const userId = order.user_id;
+
+      // 1. Release active reservations if any still active
+      const activeReservations = await client.query<{ id: string; inventory_id: string; quantity: number }>(
+        `
+          SELECT id, inventory_id, quantity
+          FROM public.inventory_reservations
+          WHERE order_id = $1 AND status = 'ACTIVE'
+          FOR UPDATE
+        `,
+        [orderId]
+      );
+
+      for (const res of activeReservations.rows) {
+        await client.query(
+          `
+            UPDATE public.inventory
+            SET quantity_reserved = GREATEST(0, quantity_reserved - $1),
+                updated_at = NOW(),
+                last_updated_at = NOW()
+            WHERE id = $2
+          `,
+          [res.quantity, res.inventory_id]
+        );
+
+        await client.query(
+          `UPDATE public.inventory_reservations SET status = 'EXPIRED', updated_at = NOW() WHERE id = $1`,
+          [res.id]
+        );
+
+        await client.query(
+          `
+            INSERT INTO public.inventory_reservation_history
+              (reservation_id, previous_status, new_status, quantity, changed_by, reason)
+            VALUES ($1, 'ACTIVE', 'EXPIRED', $2, NULL, 'Reservation expired - order abandoned before payment.')
+          `,
+          [res.id, res.quantity]
+        );
+      }
+
+      // 2. Mark order CANCELLED (cancellation_reason = 'OTHER', cancelled_by = 'SYSTEM')
+      await client.query(
+        `
+          UPDATE public.orders
+          SET status = 'CANCELLED',
+              cancelled_by = 'SYSTEM',
+              cancellation_reason = 'OTHER',
+              cancelled_at = NOW(),
+              updated_at = NOW()
+          WHERE id = $1
+        `,
+        [orderId]
+      );
+
+      // 3. Status history
+      await client.query(
+        `
+          INSERT INTO public.order_status_history (
+            order_id,
+            previous_status,
+            new_status,
+            changed_by,
+            reason
+          )
+          VALUES ($1, 'PENDING', 'CANCELLED', NULL, 'Order abandoned - payment window expired after ' || $2 || ' minutes.')
+        `,
+        [orderId, maxAgeMinutes]
+      );
+
+      // 4. Cancel fulfillment & delivery
+      await client.query(
+        `UPDATE public.fulfillments SET status = 'FAILED', failed_at = NOW(), updated_at = NOW() WHERE order_id = $1`,
+        [orderId]
+      );
+      await client.query(
+        `UPDATE public.deliveries SET status = 'CANCELLED', updated_at = NOW() WHERE order_id = $1`,
+        [orderId]
+      );
+
+      // 5. Fail pending payments & attempts
+      await client.query(
+        `
+          UPDATE public.payment_attempts
+          SET status = 'FAILED',
+              failure_reason = 'Payment expired / order abandoned.',
+              completed_at = NOW()
+          WHERE payment_id IN (SELECT id FROM public.payments WHERE order_id = $1)
+            AND status IN ('INITIATED', 'PENDING')
+        `,
+        [orderId]
+      );
+      await client.query(
+        `
+          UPDATE public.payments
+          SET status = 'FAILED',
+              updated_at = NOW()
+          WHERE order_id = $1 AND status = 'PENDING'
+        `,
+        [orderId]
+      );
+
+      // 6. In-app notification
+      try {
+        await createInAppNotification({
+          userId,
+          orderId,
+          type: "ORDER_CANCELLED",
+          title: "Order Expired",
+          message: `Your pending order #${orderId.slice(-8)} was cancelled because payment was not completed within the time limit.`,
+          eventKey: `order-abandoned:${orderId}`,
+          client,
+        });
+      } catch {
+        // non-blocking
+      }
+
+      sweptOrderIds.push(orderId);
+    }
+
+    return {
+      sweptCount: sweptOrderIds.length,
+      orderIds: sweptOrderIds,
     };
   });
 }

@@ -263,7 +263,11 @@ export function AdminDashboard() {
               </div>
             </div>
             <p className="mt-3 text-2xl font-bold text-gray-900">
-              {summaryQuery.isLoading ? '…' : summary.population.admins}
+              {summaryQuery.isLoading
+                ? '…'
+                : typeof summary?.population?.admins === 'object' && summary?.population?.admins !== null
+                ? summary.population.admins.total
+                : summary?.population?.admins ?? 0}
             </p>
             <div className="mt-1 flex items-center gap-2 text-[11px] text-gray-500">
               <span className="text-slate-600 font-medium">System governance</span>
@@ -394,37 +398,37 @@ export function AdminDashboard() {
           <div className="rounded-xl border border-gray-100 bg-gray-50/50 p-3">
             <span className="text-[11px] font-medium text-gray-400 uppercase">Pending Payment</span>
             <p className="mt-1 text-xl font-bold text-gray-900">
-              {summary?.operations?.pendingPayment ?? 0}
+              {summary?.orders?.stages?.PENDING ?? 0}
             </p>
           </div>
           <div className="rounded-xl border border-gray-100 bg-gray-50/50 p-3">
             <span className="text-[11px] font-medium text-gray-400 uppercase">Awaiting Merchant</span>
             <p className="mt-1 text-xl font-bold text-amber-600">
-              {summary?.operations?.awaitingAcceptance ?? 0}
+              {summary?.orders?.stages?.CONFIRMED ?? 0}
             </p>
           </div>
           <div className="rounded-xl border border-gray-100 bg-gray-50/50 p-3">
             <span className="text-[11px] font-medium text-gray-400 uppercase">Preparing</span>
             <p className="mt-1 text-xl font-bold text-sky-600">
-              {summary?.operations?.preparing ?? 0}
+              {summary?.orders?.stages?.PREPARING ?? 0}
             </p>
           </div>
           <div className="rounded-xl border border-gray-100 bg-gray-50/50 p-3">
             <span className="text-[11px] font-medium text-gray-400 uppercase">Awaiting Rider</span>
             <p className="mt-1 text-xl font-bold text-indigo-600">
-              {summary?.operations?.readyForPickup ?? 0}
+              {summary?.orders?.stages?.READY_FOR_PICKUP ?? 0}
             </p>
           </div>
           <div className="rounded-xl border border-gray-100 bg-gray-50/50 p-3">
             <span className="text-[11px] font-medium text-gray-400 uppercase">In Transit</span>
             <p className="mt-1 text-xl font-bold text-blue-600">
-              {summary?.operations?.inTransit ?? 0}
+              {summary?.orders?.stages?.IN_TRANSIT ?? 0}
             </p>
           </div>
           <div className="rounded-xl border border-gray-100 bg-gray-50/50 p-3">
             <span className="text-[11px] font-medium text-gray-400 uppercase">Delivered</span>
             <p className="mt-1 text-xl font-bold text-emerald-600">
-              {summary?.operations?.delivered ?? 0}
+              {summary?.orders?.stages?.DELIVERED ?? 0}
             </p>
           </div>
         </div>

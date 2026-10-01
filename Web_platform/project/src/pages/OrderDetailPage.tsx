@@ -104,7 +104,23 @@ export function OrderDetailPage() {
         gateway,
         callbackUrl,
       });
-      if (res.data.checkoutUrl) {
+
+      if (res.data.isSimulated || res.data.checkoutUrl.includes('simulated=true')) {
+        setPaymentNotice('Authorizing sandbox payment simulation...');
+        try {
+          await ordersApi.completeSandboxPayment(
+            res.data.paymentId,
+            res.data.paymentAttemptId,
+            '4084 0840 8408 4081'
+          );
+          setPaymentNotice('Payment authorized successfully! Order is confirmed.');
+          refetch();
+        } catch {
+          await paymentApi.verify(res.data.reference);
+          setPaymentNotice('Payment verified! Order is confirmed.');
+          refetch();
+        }
+      } else if (res.data.checkoutUrl) {
         window.location.href = res.data.checkoutUrl;
       }
     } catch (err) {
@@ -240,7 +256,7 @@ export function OrderDetailPage() {
                 <div>
                   <h3 className="font-display text-base font-bold text-amber-950">Awaiting Payment Clearance</h3>
                   <p className="mt-1 text-xs text-amber-800">
-                    This order is placed and awaiting payment confirmation. Once payment clears, the store will prepare your items and a courier will be assigned.
+                    This order is placed and awaiting payment confirmation. Once payment clears, the store will prepare your items and a courier will be assigned. (Unpaid orders are automatically expired after 15 minutes to release reserved items).
                   </p>
                   {paymentNotice && (
                     <p className="mt-2 text-xs font-semibold text-amber-900 bg-amber-100 px-2.5 py-1 rounded-md inline-block">

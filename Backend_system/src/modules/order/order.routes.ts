@@ -8,7 +8,8 @@ import {
   cancelCustomerOrderBeforePayment,
   getOrderForUser,
   listOrdersForUser,
-  placeOrder
+  placeOrder,
+  sweepAbandonedPendingOrders
 } from "./order.service";
 
 export async function orderRoutes(
@@ -97,6 +98,22 @@ export async function orderRoutes(
         await cancelCustomerOrderBeforePayment(request.user.id, orderId, body.reason),
         request.id
       );
+    }
+  );
+
+  app.post(
+    "/sweep-abandoned",
+    {
+      preHandler: [
+        authenticate,
+        authorize("ADMIN", "SUPER_ADMIN", "BUSINESS_USER", "CUSTOMER")
+      ]
+    },
+    async (request) => {
+      const body = (request.body ?? {}) as { maxAgeMinutes?: number };
+      const maxAgeMinutes = typeof body.maxAgeMinutes === "number" && body.maxAgeMinutes > 0 ? body.maxAgeMinutes : 15;
+      const result = await sweepAbandonedPendingOrders(maxAgeMinutes);
+      return successResponse(result, request.id);
     }
   );
 }

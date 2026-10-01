@@ -4,6 +4,7 @@ import { authenticate } from "../../middleware/authenticate";
 import { authorize } from "../../middleware/authorize";
 import { successResponse } from "../../utils/api-response";
 import {
+  cancelPaymentAttempt,
   initializePaymentGatewayTransaction,
   processFlutterwaveWebhook,
   processPaystackWebhook,
@@ -88,6 +89,19 @@ export async function paymentRoutes(app: FastifyInstance): Promise<void> {
     async (request, reply) => {
       const { reference } = request.params as { reference: string };
       const result = await verifyPaymentReference(reference, request.user.id);
+      return reply.status(200).send(successResponse(result, request.id));
+    }
+  );
+
+  // Cancel / abandon checkout attempt and release inventory
+  app.post(
+    "/abandon",
+    {
+      preHandler: [authenticate, authorize("CUSTOMER", "BUSINESS_USER")],
+    },
+    async (request, reply) => {
+      const { reference, reason } = request.body as { reference: string; reason?: string };
+      const result = await cancelPaymentAttempt(reference, request.user.id, reason);
       return reply.status(200).send(successResponse(result, request.id));
     }
   );

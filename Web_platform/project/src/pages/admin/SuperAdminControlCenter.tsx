@@ -226,7 +226,7 @@ export function SuperAdminControlCenter() {
                   </div>
                 </div>
                 <p className="mt-3 text-3xl font-extrabold text-white">
-                  ₦{(obs?.financials.grossMerchandiseValue ?? 0).toLocaleString()}
+                  ₦{(obs?.financials?.grossMerchandiseValue ?? 0).toLocaleString()}
                 </p>
                 <p className="mt-1 text-xs text-slate-500">Total transacted volume across corridor</p>
               </div>
@@ -242,7 +242,7 @@ export function SuperAdminControlCenter() {
                   </div>
                 </div>
                 <p className="mt-3 text-3xl font-extrabold text-teal-400">
-                  ₦{(obs?.financials.totalPlatformRevenue ?? 0).toLocaleString()}
+                  ₦{(obs?.financials?.totalPlatformRevenue ?? 0).toLocaleString()}
                 </p>
                 <p className="mt-1 text-xs text-slate-500">Customer fees + Merchant commissions</p>
               </div>
@@ -258,7 +258,7 @@ export function SuperAdminControlCenter() {
                   </div>
                 </div>
                 <p className="mt-3 text-3xl font-extrabold text-cyan-300">
-                  ₦{(obs?.financials.averageContributionPerOrder ?? 0).toFixed(2)}
+                  ₦{(obs?.financials?.averageContributionPerOrder ?? 0).toFixed(2)}
                 </p>
                 <p className="mt-1 text-xs text-slate-500">Unit economics retention margin</p>
               </div>
@@ -274,10 +274,10 @@ export function SuperAdminControlCenter() {
                   </div>
                 </div>
                 <p className="mt-3 text-3xl font-extrabold text-emerald-400">
-                  {obs?.health.healthScore ?? 100}%
+                  {obs?.health?.healthScore ?? 100}%
                 </p>
                 <p className="mt-1 text-xs text-slate-500">
-                  Completion rate: {obs?.health.completionRate ?? 100}% · Exceptions: {obs?.health.activeExceptionsCount ?? 0}
+                  Completion rate: {obs?.health?.completionRate ?? 100}% · Exceptions: {obs?.health?.activeExceptionsCount ?? 0}
                 </p>
               </div>
             </div>

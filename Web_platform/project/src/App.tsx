@@ -22,6 +22,7 @@ import { TermsPage } from '@/pages/TermsPage';
 import { PrivacyPage } from '@/pages/PrivacyPage';
 import { UnauthorizedPage } from '@/pages/UnauthorizedPage';
 import { CookieConsentBanner } from '@/components/common/CookieConsentBanner';
+import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 
 // Customer pages
 import { CustomerDashboard } from '@/pages/CustomerDashboard';
@@ -97,9 +98,10 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <CartProvider>
-          <BrowserRouter>
-            <ScrollManager />
-            <Routes>
+          <ErrorBoundary>
+            <BrowserRouter>
+              <ScrollManager />
+              <Routes>
               {/* Auth pages — no public header/footer */}
               <Route path="/login" element={<LoginPage />} />
               <Route path="/register" element={<RegisterPage />} />
@@ -317,8 +319,9 @@ export default function App() {
             </Routes>
             <CookieConsentBanner />
           </BrowserRouter>
-        </CartProvider>
-      </AuthProvider>
-    </QueryClientProvider>
+        </ErrorBoundary>
+      </CartProvider>
+    </AuthProvider>
+  </QueryClientProvider>
   );
 }

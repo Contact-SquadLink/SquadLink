@@ -216,8 +216,8 @@ export function CheckoutPage() {
       setShowPaymentModal(true);
       clearCart();
 
-      // Seamlessly open payment portal in a new tab if URL provided
-      if (initRes.data.checkoutUrl) {
+      // Open payment portal in a new tab only for live external gateway
+      if (initRes.data.checkoutUrl && !initRes.data.isSimulated && !initRes.data.checkoutUrl.includes('simulated=true')) {
         window.open(initRes.data.checkoutUrl, '_blank');
       }
     } catch (error) {
@@ -249,6 +249,20 @@ export function CheckoutPage() {
       setPreviewError(err instanceof Error ? err.message : 'Payment authorization verification pending.');
     } finally {
       setIsVerifyingPayment(false);
+    }
+  };
+
+  const handleCancelModalOrder = async () => {
+    if (!placedOrderId) return;
+    try {
+      if (gatewayInitData?.reference) {
+        await paymentApi.abandon(gatewayInitData.reference, 'Customer cancelled in checkout modal').catch(() => {});
+      }
+      await ordersApi.cancel(placedOrderId, 'Customer cancelled in checkout modal').catch(() => {});
+      setShowPaymentModal(false);
+      setPreviewError('Order cancelled. Reserved items have been released.');
+    } catch (err) {
+      setPreviewError(err instanceof Error ? err.message : 'Unable to cancel order.');
     }
   };
 
@@ -575,10 +589,16 @@ export function CheckoutPage() {
                     </button>
                   </div>
 
-                  <p className="mt-2 text-xs text-primary-700">
-                    Pre-Payment Safeguard: Order #{placedOrderId?.slice(0, 8)} remains strictly <strong className="font-bold">PENDING</strong>.
-                    Merchant will be notified only after successful cryptographic webhook authorization.
-                  </p>
+                  {gatewayInitData.isSimulated || gatewayInitData.checkoutUrl.includes('simulated=true') ? (
+                    <div className="mt-2.5 rounded-lg bg-amber-50 p-2.5 border border-amber-200 text-xs text-amber-900">
+                      <span className="font-bold">🧪 Sandbox Simulation Mode:</span> No live API keys are required. You can authorize test payment below to immediately clear this order and trigger courier dispatch economics.
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-xs text-primary-700">
+                      Pre-Payment Safeguard: Order #{placedOrderId?.slice(0, 8)} remains strictly <strong className="font-bold">PENDING</strong>.
+                      Merchant will be notified only after successful cryptographic webhook authorization.
+                    </p>
+                  )}
 
                   <div className="mt-3 rounded-lg bg-white p-3 border border-primary-200 space-y-1 text-xs">
                     <div className="flex justify-between">
@@ -592,28 +612,39 @@ export function CheckoutPage() {
                   </div>
 
                   <div className="mt-4 space-y-2.5">
-                    <a
-                      href={gatewayInitData.checkoutUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#09A5DB] hover:bg-[#0895c7] py-3 text-sm font-bold text-white shadow-md hover:shadow-lg transition-all"
-                    >
-                      💳 Complete Payment on {gatewayInitData.gateway} Portal ↗
-                    </a>
+                    {(!gatewayInitData.isSimulated && !gatewayInitData.checkoutUrl.includes('simulated=true')) && (
+                      <a
+                        href={gatewayInitData.checkoutUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#09A5DB] hover:bg-[#0895c7] py-3 text-sm font-bold text-white shadow-md hover:shadow-lg transition-all"
+                      >
+                        💳 Complete Payment on {gatewayInitData.gateway} Portal ↗
+                      </a>
+                    )}
                     <button
                       type="button"
                       onClick={handleVerifyOrCompletePayment}
                       disabled={isVerifyingPayment}
-                      className="flex w-full items-center justify-center gap-2 rounded-xl bg-gray-900 py-2.5 text-xs font-bold text-white hover:bg-black transition-colors disabled:opacity-50"
+                      className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#09A5DB] hover:bg-[#0895c7] py-2.5 text-xs font-bold text-white shadow-sm transition-colors disabled:opacity-50"
                     >
                       {isVerifyingPayment ? (
                         <>
                           <span className="h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                          Verifying Payment Clearance...
+                          Processing Payment Clearance...
                         </>
+                      ) : gatewayInitData.isSimulated || gatewayInitData.checkoutUrl.includes('simulated=true') ? (
+                        '🚀 Authorize 1-Click Test Payment'
                       ) : (
                         'I have completed payment — Verify Order'
                       )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleCancelModalOrder}
+                      className="flex w-full items-center justify-center gap-2 rounded-xl border border-red-200 bg-white py-2 text-xs font-bold text-red-600 hover:bg-red-50 transition-colors"
+                    >
+                      Cancel Order & Release Items
                     </button>
                   </div>
                 </div>
