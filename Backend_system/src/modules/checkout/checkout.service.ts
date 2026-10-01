@@ -11,7 +11,7 @@ import type {
   CheckoutPreviewInput
 } from "./checkout.schemas";
 import { expireInventoryReservations } from "../inventory/inventory.maintenance";
-import { calculateDeliveryPricing } from "../order/delivery-pricing";
+import { calculateDeliveryPricing, evaluateEconomicFeasibility } from "../order/delivery-pricing";
 
 const SEARCH_RADIUS_BANDS_METERS = [
   2000,
@@ -235,6 +235,14 @@ export async function previewCheckout(
   const vatAmount = 0;
   const totalAmount = qualifyingBusiness.subtotalAmount + deliveryFeeAmount + platformFeeAmount;
 
+  const feasibility = evaluateEconomicFeasibility({
+    subtotal: qualifyingBusiness.subtotalAmount,
+    deliveryFee: deliveryFeeAmount,
+    customerServiceFee: platformFeeAmount,
+    merchantCommissionRate: 0.10,
+    riderPayout: pricing.riderPayout,
+  });
+
   return {
     subtotal: qualifyingBusiness.subtotalAmount,
     deliveryFee: deliveryFeeAmount,
@@ -262,8 +270,22 @@ export async function previewCheckout(
         pricing.estimatedDurationSeconds,
       pricingVersion:
         pricing.pricingVersion,
+      pricingVersionLabel:
+        pricing.pricingVersionLabel,
+      distanceModelNote:
+        pricing.distanceModelNote,
       searchRadiusMeters:
         selectedRadius
+    },
+
+    economics: {
+      riderPayout: pricing.riderPayout,
+      riderOperationalKm: pricing.totalRiderOperationalKm,
+      fuelCost: pricing.fuelCost,
+      maintenanceCost: pricing.maintenanceCost,
+      estimatedContribution: feasibility.estimatedContribution,
+      viabilityState: feasibility.viabilityState,
+      isFeasible: feasibility.isFeasible
     },
 
     delivery: {

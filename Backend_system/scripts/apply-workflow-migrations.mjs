@@ -243,6 +243,20 @@ try {
     );
   }
 
+  const economicSnapshotMigration = await client.query(
+    "SELECT 1 FROM public.schema_migrations WHERE version = '104'"
+  );
+  if (economicSnapshotMigration.rowCount === 0) {
+    const sql104 = await readFile(
+      new URL('../database/migrations/104_add_order_economic_snapshot.sql', import.meta.url),
+      'utf8'
+    );
+    await client.query(sql104);
+    await client.query(
+      "INSERT INTO public.schema_migrations (version, name) VALUES ('104', 'add_order_economic_snapshot')"
+    );
+  }
+
     await client.query(`
       INSERT INTO public.schema_migrations (version, name) VALUES
         ('004', 'create_businesses'),

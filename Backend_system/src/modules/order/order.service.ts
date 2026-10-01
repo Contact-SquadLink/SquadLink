@@ -9,7 +9,7 @@ import {
 } from "./order.repository";
 import type { PlaceOrderInput } from "./order.schemas";
 import { createInAppNotification, notifyAdmins } from "../notification/notification.service";
-import { calculateDeliveryPricing } from "./delivery-pricing";
+import { calculateDeliveryPricing, buildOrderEconomicSnapshot, type OrderEconomicSnapshot } from "./delivery-pricing";
 
 const IDEMPOTENCY_ENDPOINT = "POST /api/v1/orders";
 
@@ -35,6 +35,7 @@ function serializeOrderRow(row: {
     vehicleType: string | null;
     vehicleRegistration: string | null;
   } | null;
+  economic_snapshot?: OrderEconomicSnapshot | null;
   items: Array<{
     productId: string;
     name: string;
@@ -51,8 +52,9 @@ function serializeOrderRow(row: {
     deliveryFee: Number(row.delivery_fee_amount),
     platformFee: Number(row.platform_fee_amount),
     businessFee: Number(row.business_fee_amount ?? 0),
-    vat: Math.round(Number(row.subtotal_amount) * 0.075),
+    vat: 0,
     total: Number(row.total_amount),
+    economicSnapshot: row.economic_snapshot ?? null,
     deliveryContactPhone: row.delivery_contact_phone,
     delivery: row.delivery_id
       ? {
@@ -113,6 +115,7 @@ export async function listOrdersForUser(userId: string) {
            o.platform_fee_amount,
            o.business_fee_amount,
            o.total_amount,
+           o.economic_snapshot,
            o.delivery_contact_phone,
            d.id AS delivery_id,
            d.status AS delivery_status,
@@ -160,7 +163,7 @@ export async function listOrdersForUser(userId: string) {
       LIMIT 1
     ) latest_decision ON TRUE
     WHERE o.user_id = $1
-    GROUP BY o.id, o.status, o.created_at, o.subtotal_amount, o.delivery_fee_amount, o.platform_fee_amount, o.business_fee_amount, o.total_amount, o.delivery_contact_phone, d.id, d.status, latest_decision.status, r.id, ru.first_name, ru.last_name, ru.username, ru.phone_number, vt.name, vt.code, v.registration_number
+    GROUP BY o.id, o.status, o.created_at, o.subtotal_amount, o.delivery_fee_amount, o.platform_fee_amount, o.business_fee_amount, o.total_amount, o.economic_snapshot, o.delivery_contact_phone, d.id, d.status, latest_decision.status, r.id, ru.first_name, ru.last_name, ru.username, ru.phone_number, vt.name, vt.code, v.registration_number
     ORDER BY o.created_at DESC
   `, [userId]);
 
@@ -177,6 +180,7 @@ export async function getOrderForUser(userId: string, orderId: string) {
     platform_fee_amount: number | string;
     business_fee_amount: number | string;
     total_amount: number | string;
+    economic_snapshot?: any;
     delivery_contact_phone: string | null;
     delivery_id: string | null;
     delivery_status: string | null;
@@ -198,6 +202,7 @@ export async function getOrderForUser(userId: string, orderId: string) {
            o.platform_fee_amount,
            o.business_fee_amount,
            o.total_amount,
+           o.economic_snapshot,
            o.delivery_contact_phone,
            d.id AS delivery_id,
            d.status AS delivery_status,
@@ -245,7 +250,7 @@ export async function getOrderForUser(userId: string, orderId: string) {
       LIMIT 1
     ) latest_decision ON TRUE
     WHERE o.user_id = $1 AND o.id = $2
-    GROUP BY o.id, o.status, o.created_at, o.subtotal_amount, o.delivery_fee_amount, o.platform_fee_amount, o.business_fee_amount, o.total_amount, o.delivery_contact_phone, d.id, d.status, latest_decision.status, r.id, ru.first_name, ru.last_name, ru.username, ru.phone_number, vt.name, vt.code, v.registration_number
+    GROUP BY o.id, o.status, o.created_at, o.subtotal_amount, o.delivery_fee_amount, o.platform_fee_amount, o.business_fee_amount, o.total_amount, o.economic_snapshot, o.delivery_contact_phone, d.id, d.status, latest_decision.status, r.id, ru.first_name, ru.last_name, ru.username, ru.phone_number, vt.name, vt.code, v.registration_number
   `, [userId, orderId]);
 
   if (result.rows.length === 0) {
@@ -582,6 +587,22 @@ export async function placeOrder(
     const vatAmount = 0;
     const totalAmount = orderTotals.subtotal + deliveryFeeAmount + platformFeeAmount;
 
+    // Snapshot immutable economic assumptions for this order
+    const economicSnapshot = buildOrderEconomicSnapshot({
+      pricing,
+      orderSubtotal: orderTotals.subtotal,
+      merchantCommissionRate: 0.10,
+    });
+
+    if (economicSnapshot.contribution_state === "ECONOMICALLY_UNVIABLE") {
+      throw new AppError(
+        "Order cannot be placed because fulfilment economics exceed acceptable pilot tolerance.",
+        400,
+        "ORDER_ECONOMICALLY_UNVIABLE",
+        true
+      );
+    }
+
     const orderResult = await client.query<{ id: string }>(
       `
         INSERT INTO public.orders (
@@ -597,7 +618,8 @@ export async function placeOrder(
           platform_fee_amount,
           business_fee_amount,
           total_amount,
-          currency
+          currency,
+          economic_snapshot
         )
         VALUES (
           $1,
@@ -612,7 +634,8 @@ export async function placeOrder(
           $10,
           $11,
           $12,
-          'NGN'
+          'NGN',
+          $13
         )
         RETURNING id
       `,
@@ -628,7 +651,8 @@ export async function placeOrder(
         deliveryFeeAmount,
         platformFeeAmount,
         0,
-        totalAmount
+        totalAmount,
+        JSON.stringify(economicSnapshot)
       ]
     );
     const orderId = orderResult.rows[0].id;

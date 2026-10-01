@@ -1,6 +1,7 @@
 import type { PoolClient } from "pg";
 import { randomUUID } from "node:crypto";
 import { db } from "../../db/database";
+import { RIDER_MINIMUM_PAYOUT, RIDER_REVENUE_SHARE_FLOOR } from "../order/delivery-pricing";
 
 export interface UnitEconomics {
   orderId: string;
@@ -52,8 +53,9 @@ export async function calculateAndRecordOrderSettlement(
     platform_fee_amount: number | string;
     business_fee_amount: number | string;
     total_amount: number | string;
+    economic_snapshot: any;
   }>(
-    `SELECT id, subtotal_amount, delivery_fee_amount, platform_fee_amount, business_fee_amount, total_amount
+    `SELECT id, subtotal_amount, delivery_fee_amount, platform_fee_amount, business_fee_amount, total_amount, economic_snapshot
      FROM public.orders
      WHERE id = $1
      FOR UPDATE`,
@@ -74,8 +76,14 @@ export async function calculateAndRecordOrderSettlement(
   // Gateway cost: 1.5% of total payment processed
   const gatewayFee = Math.max(0, Math.round(totalCustomerPaid * 0.015));
 
-  // Rider payout: 80% of delivery fee (min ₦400 or delivery fee)
-  const riderPayout = deliveryFee > 0 ? Math.max(400, Math.round(deliveryFee * 0.8)) : Math.max(400, Math.round(gmv * 0.10));
+  // Rider payout: Read from immutable historical snapshot if present, otherwise calculate using pilot formula
+  const snapshot = order?.economic_snapshot;
+  const snapshotRiderPayout = snapshot?.rider_payout != null && Number(snapshot.rider_payout) > 0
+    ? Number(snapshot.rider_payout)
+    : null;
+  const riderPayout = snapshotRiderPayout != null
+    ? snapshotRiderPayout
+    : (deliveryFee > 0 ? Math.max(RIDER_MINIMUM_PAYOUT, Math.round(deliveryFee * RIDER_REVENUE_SHARE_FLOOR)) : Math.max(RIDER_MINIMUM_PAYOUT, Math.round(gmv * 0.10)));
 
   // Net Platform Contribution per Order:
   // Contribution = (Customer Fee + Merchant Commission + Delivery Fee) - (Rider Payout + Gateway Fee)
@@ -114,6 +122,8 @@ export async function calculateAndRecordOrderSettlement(
   // Total Credits = (gmv - commission) + riderPayout + customerFee + commission + (deliveryFee - riderPayout)
   //               = gmv + customerFee + deliveryFee = totalCustomerPaid
 
+  const deliveryMargin = deliveryFee - riderPayout;
+
   const ledgerEntries = [
     // Debits
     {
@@ -128,6 +138,16 @@ export async function calculateAndRecordOrderSettlement(
       amount: gatewayFee,
       desc: "Payment gateway transaction processing fee (1.5%)",
     },
+    ...(deliveryMargin < 0
+      ? [
+          {
+            account: "EXPENSE:RIDER_DELIVERY_SUBSIDY",
+            type: "DEBIT",
+            amount: Math.abs(deliveryMargin),
+            desc: "Platform operational rider payout subsidy on order",
+          },
+        ]
+      : []),
     // Credits
     {
       account: "LIABILITY:MERCHANT_PAYABLE",
@@ -153,12 +173,16 @@ export async function calculateAndRecordOrderSettlement(
       amount: merchantCommission,
       desc: "Platform merchant fulfillment commission",
     },
-    {
-      account: "REVENUE:DELIVERY_MARGIN",
-      type: "CREDIT",
-      amount: Math.max(0, deliveryFee - riderPayout),
-      desc: "Platform delivery coordination margin retention",
-    },
+    ...(deliveryMargin > 0
+      ? [
+          {
+            account: "REVENUE:DELIVERY_MARGIN",
+            type: "CREDIT",
+            amount: deliveryMargin,
+            desc: "Platform delivery coordination margin retention",
+          },
+        ]
+      : []),
   ];
 
   for (const entry of ledgerEntries) {
@@ -246,11 +270,11 @@ export async function getFinancialObservabilitySummary() {
       COALESCE(SUM(o.platform_fee_amount + o.business_fee_amount) FILTER (WHERE o.status = 'DELIVERED'), 0)::text AS total_platform_revenue,
       COALESCE(SUM(
         (o.platform_fee_amount + o.business_fee_amount + o.delivery_fee_amount) - 
-        (GREATEST(400, ROUND(o.delivery_fee_amount * 0.8)) + ROUND(o.total_amount * 0.015))
+        (COALESCE((o.economic_snapshot->>'rider_payout')::numeric, GREATEST(${RIDER_MINIMUM_PAYOUT}, ROUND(o.delivery_fee_amount * ${RIDER_REVENUE_SHARE_FLOOR}))) + ROUND(o.total_amount * 0.015))
       ) FILTER (WHERE o.status = 'DELIVERED'), 0)::text AS total_net_contribution,
       COUNT(*) FILTER (WHERE o.status = 'DELIVERED')::text AS completed_orders_count,
       COALESCE(SUM(ROUND(o.total_amount * 0.015)) FILTER (WHERE o.status = 'DELIVERED'), 0)::text AS total_gateway_fees,
-      COALESCE(SUM(GREATEST(400, ROUND(o.delivery_fee_amount * 0.8))) FILTER (WHERE o.status = 'DELIVERED'), 0)::text AS total_rider_payouts,
+      COALESCE(SUM(COALESCE((o.economic_snapshot->>'rider_payout')::numeric, GREATEST(${RIDER_MINIMUM_PAYOUT}, ROUND(o.delivery_fee_amount * ${RIDER_REVENUE_SHARE_FLOOR})))) FILTER (WHERE o.status = 'DELIVERED'), 0)::text AS total_rider_payouts,
       COALESCE(SUM(GREATEST(0, o.subtotal_amount - o.business_fee_amount)) FILTER (WHERE o.status = 'DELIVERED'), 0)::text AS total_merchant_payouts
     FROM public.orders o
   `);
@@ -269,6 +293,57 @@ export async function getFinancialObservabilitySummary() {
     totalGatewayFees: Number(row.total_gateway_fees),
     totalRiderPayouts: Number(row.total_rider_payouts),
     totalMerchantPayouts: Number(row.total_merchant_payouts),
+  };
+}
+
+/**
+ * Super Admin Rider & Delivery Economics Observability Query
+ * Measures rider payout averages, wait times, operational distances, and economic states
+ */
+export async function getRiderEconomicsObservabilitySummary() {
+  const result = await db.query<{
+    avg_rider_payout: string;
+    total_completed: string;
+    avg_operational_km: string;
+    avg_customer_distance_km: string;
+    avg_business_wait_minutes: string;
+    avg_customer_wait_minutes: string;
+    avg_total_wait_minutes: string;
+    avg_delivery_fee: string;
+    viable_count: string;
+    tolerance_count: string;
+    unviable_count: string;
+  }>(`
+    SELECT
+      COALESCE(AVG(COALESCE((o.economic_snapshot->>'rider_payout')::numeric, GREATEST(${RIDER_MINIMUM_PAYOUT}, ROUND(o.delivery_fee_amount * ${RIDER_REVENUE_SHARE_FLOOR})))), 0)::text AS avg_rider_payout,
+      COUNT(*) FILTER (WHERE o.status = 'DELIVERED')::text AS total_completed,
+      COALESCE(AVG(COALESCE((o.economic_snapshot->>'operational_distance')::numeric, 0)), 0)::text AS avg_operational_km,
+      COALESCE(AVG(COALESCE((o.economic_snapshot->>'business_to_customer_distance')::numeric, 0)), 0)::text AS avg_customer_distance_km,
+      COALESCE(AVG(d.business_wait_minutes), 0)::text AS avg_business_wait_minutes,
+      COALESCE(AVG(d.customer_wait_minutes), 0)::text AS avg_customer_wait_minutes,
+      COALESCE(AVG(d.total_wait_minutes), 0)::text AS avg_total_wait_minutes,
+      COALESCE(AVG(o.delivery_fee_amount), 0)::text AS avg_delivery_fee,
+      COUNT(*) FILTER (WHERE o.economic_snapshot->>'contribution_state' = 'ECONOMICALLY_VIABLE')::text AS viable_count,
+      COUNT(*) FILTER (WHERE o.economic_snapshot->>'contribution_state' = 'PILOT_TOLERANCE')::text AS tolerance_count,
+      COUNT(*) FILTER (WHERE o.economic_snapshot->>'contribution_state' = 'ECONOMICALLY_UNVIABLE')::text AS unviable_count
+    FROM public.orders o
+    LEFT JOIN public.deliveries d ON d.order_id = o.id
+    WHERE o.status = 'DELIVERED'
+  `);
+
+  const row = result.rows[0];
+  return {
+    averageRiderPayout: Math.round(Number(row.avg_rider_payout) * 100) / 100,
+    totalCompletedDeliveries: Number(row.total_completed),
+    averageOperationalDistanceKm: Math.round(Number(row.avg_operational_km) * 100) / 100,
+    averageCustomerDistanceKm: Math.round(Number(row.avg_customer_distance_km) * 100) / 100,
+    averageBusinessWaitMinutes: Math.round(Number(row.avg_business_wait_minutes) * 10) / 10,
+    averageCustomerWaitMinutes: Math.round(Number(row.avg_customer_wait_minutes) * 10) / 10,
+    averageTotalWaitMinutes: Math.round(Number(row.avg_total_wait_minutes) * 10) / 10,
+    averageDeliveryFee: Math.round(Number(row.avg_delivery_fee) * 100) / 100,
+    viableOrdersCount: Number(row.viable_count),
+    toleranceOrdersCount: Number(row.tolerance_count),
+    unviableOrdersCount: Number(row.unviable_count),
   };
 }
 

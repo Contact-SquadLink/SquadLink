@@ -149,8 +149,9 @@ export async function ensureWorkflowSchema(): Promise<void> {
     VALUES
       ('customer_fee_target', '{"amount": 120, "min": 100, "max": 150, "currency": "NGN"}'::jsonb, 'Pilot customer service fee target in NGN'),
       ('merchant_commission_rate', '{"rate": 0.10, "minRate": 0.05, "maxRate": 0.20}'::jsonb, 'Standard merchant commission rate (e.g. 10%)'),
-      ('delivery_pricing_tiers', '{"baseFee": 350, "perKmRate": 50, "minimumPayout": 300, "riderSharePercent": 80}'::jsonb, 'Delivery pricing tiers and rider payout share'),
-      ('gateway_cost_assumptions', '{"percentageRate": 0.015, "capAmount": 2000, "flatFee": 0}'::jsonb, 'Gateway processing transaction cost assumptions')
+      ('delivery_pricing_tiers', '{"baseFee": 550, "tier1MaxKm": 2, "minimumPayout": 600, "circuityFactor": 1.35, "riderSharePercent": 80}'::jsonb, 'Delivery pricing tiers and rider payout share'),
+      ('gateway_cost_assumptions', '{"percentageRate": 0.015, "capAmount": 2000, "flatFee": 0}'::jsonb, 'Gateway processing transaction cost assumptions'),
+      ('rider_economics_config', '{"riderMinimumPayout": 600, "riderAcceptanceFloor": 650, "riderBaseCompensation": 250, "riderPickupCompensation": 150, "riderTimeCommunicationCompensation": 100, "riderFuelPricePerLitre": 1150, "riderFuelEfficiencyKmPerLitre": 35, "riderMaintenanceCostPerKm": 25, "riderWaitingCompensationPerMinute": 15, "riderRevenueShareFloor": 0.80, "pilotMinimumContribution": -100}'::jsonb, 'Pilot rider operational economics assumptions and compensation model')
     ON CONFLICT (key) DO NOTHING;
 
     -- Elevate main admin to SUPER_ADMIN

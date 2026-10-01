@@ -2116,7 +2116,15 @@ export async function verifyPickup(userId: string, deliveryId: string, credentia
       fail("Invalid pickup credential.", 403, "INVALID_PICKUP_CREDENTIAL");
     }
     await client.query(`UPDATE public.pickup_verifications SET status = 'VERIFIED', verified_at = NOW(), updated_at = NOW() WHERE id = $1`, [verification.id]);
-    await client.query(`UPDATE public.deliveries SET status = 'PICKED_UP', picked_up_at = NOW(), updated_at = NOW() WHERE id = $1`, [deliveryId]);
+    await client.query(
+      `UPDATE public.deliveries 
+       SET status = 'PICKED_UP', 
+           picked_up_at = NOW(), 
+           business_wait_minutes = ROUND(EXTRACT(EPOCH FROM (NOW() - COALESCE(assigned_at, NOW()))) / 60, 2),
+           updated_at = NOW() 
+       WHERE id = $1`,
+      [deliveryId]
+    );
     await client.query(`UPDATE public.orders SET status = 'OUT_FOR_DELIVERY', updated_at = NOW() WHERE id = $1`, [delivery.order_id]);
     await client.query(`INSERT INTO public.pickup_verification_history (pickup_verification_id, previous_status, new_status, rider_id, business_id, changed_by, reason) VALUES ($1, 'ACTIVE', 'VERIFIED', $2, $3, $4, 'Assigned rider verified pickup.')`, [verification.id, verification.rider_id, verification.business_id, userId]);
 
@@ -2163,7 +2171,14 @@ export async function updateRiderDeliveryStatus(userId: string, deliveryId: stri
     if (delivery.delivery_status !== expected) {
       fail("Invalid delivery state transition.", 409, "INVALID_DELIVERY_TRANSITION");
     }
-    await client.query(`UPDATE public.deliveries SET status = $1::delivery_status, updated_at = NOW() WHERE id = $2`, [nextStatus, deliveryId]);
+    await client.query(
+      `UPDATE public.deliveries 
+       SET status = $1::delivery_status, 
+           arrived_at = CASE WHEN $1 = 'ARRIVED' AND arrived_at IS NULL THEN NOW() ELSE arrived_at END,
+           updated_at = NOW() 
+       WHERE id = $2`,
+      [nextStatus, deliveryId]
+    );
 
     if (nextStatus === "ARRIVED") {
       const customerOrderInfo = await client.query<{ user_id: string }>(
@@ -2289,7 +2304,19 @@ export async function confirmDelivery(userId: string, deliveryId: string, otp: s
       fail("Invalid delivery OTP.", 403, "INVALID_DELIVERY_OTP");
     }
     await client.query(`UPDATE public.delivery_otps SET is_used = TRUE, verified_at = NOW(), updated_at = NOW() WHERE id = $1`, [storedOtp.id]);
-    await client.query(`UPDATE public.deliveries SET status = 'DELIVERED', delivered_at = NOW(), updated_at = NOW() WHERE id = $1`, [deliveryId]);
+    await client.query(
+      `UPDATE public.deliveries 
+       SET status = 'DELIVERED', 
+           delivered_at = NOW(),
+           customer_wait_minutes = ROUND(EXTRACT(EPOCH FROM (NOW() - COALESCE(arrived_at, picked_up_at, NOW()))) / 60, 2),
+           total_wait_minutes = ROUND(
+             COALESCE(business_wait_minutes, 0) + (EXTRACT(EPOCH FROM (NOW() - COALESCE(arrived_at, picked_up_at, NOW()))) / 60),
+             2
+           ),
+           updated_at = NOW() 
+       WHERE id = $1`,
+      [deliveryId]
+    );
     await client.query(`UPDATE public.orders SET status = 'DELIVERED', updated_at = NOW() WHERE id = $1`, [delivery.order_id]);
     await commitReservations(client, delivery.order_id, userId);
 
