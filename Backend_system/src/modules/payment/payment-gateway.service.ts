@@ -126,6 +126,8 @@ export async function initializePaymentGatewayTransaction(
   if (gateway === "PAYSTACK") {
     const paystackSecret = getPaystackSecretKey();
     const paystackEmail = resolvePaystackCustomerEmail(order.user_email, order.user_id);
+    const normalizedAccountEmail = order.user_email?.trim().toLowerCase();
+    const paystackEmailSource = normalizedAccountEmail === paystackEmail ? "account" : "fallback";
     if (!paystackSecret || paystackSecret.includes("YOUR_")) {
       throw new AppError(
         "Paystack payment gateway is not configured on this server. Please contact the platform administrator.",
@@ -182,6 +184,12 @@ export async function initializePaymentGatewayTransaction(
           "PAYSTACK_INVALID_CHECKOUT_URL"
         );
       } else {
+        console.warn("[PAYSTACK INITIALIZATION FAILED]", {
+          deploymentSha: process.env.VERCEL_GIT_COMMIT_SHA ?? "unknown",
+          emailSource: paystackEmailSource,
+          httpStatus: response.status,
+          providerMessage: data.message ?? null,
+        });
         throw new AppError(
           `Paystack declined this transaction (HTTP ${response.status}): ${data.message || "Unable to create payment authorization. Check that your Paystack secret key is active and the account is verified."}`,
           502,

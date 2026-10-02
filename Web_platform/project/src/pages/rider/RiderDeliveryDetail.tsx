@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
   Package,
+  PhoneCall,
   Store,
   MapPin,
   Truck,
@@ -446,6 +447,21 @@ export function RiderDeliveryDetailPage() {
               </div>
             </div>
           )}
+          {delivery.deliveryContactPhone &&
+            (delivery.assignmentStatus === 'ACCEPTED' || delivery.status !== 'ASSIGNED') && (
+              <div className="flex items-start gap-3">
+                <PhoneCall className="h-5 w-5 text-gray-400 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">Customer phone</p>
+                  <a
+                    href={`tel:${delivery.deliveryContactPhone}`}
+                    className="text-sm font-semibold text-primary-700 hover:text-primary-800"
+                  >
+                    {delivery.deliveryContactPhone}
+                  </a>
+                </div>
+              </div>
+            )}
           {delivery.assignedAt && (
             <div className="flex items-start gap-3">
               <Clock className="h-5 w-5 text-gray-400 shrink-0 mt-0.5" />
