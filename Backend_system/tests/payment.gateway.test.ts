@@ -7,6 +7,7 @@ import { buildApp } from "../src/app-builder";
 import { db } from "../src/db/database";
 import { env } from "../src/config/env";
 import {
+  resolvePaystackCustomerEmail,
   verifyPaystackSignature,
   verifyFlutterwaveSignature,
 } from "../src/modules/payment/payment-gateway.service";
@@ -29,6 +30,12 @@ describe("Payment Gateway Integration & Cryptographic Webhooks", () => {
   before(() => {
     process.env.PAYSTACK_SECRET_KEY = secretKey;
     process.env.FLUTTERWAVE_SECRET_HASH = flwHash;
+  });
+
+  it("normalizes a valid Paystack email and replaces malformed addresses", () => {
+    assert.equal(resolvePaystackCustomerEmail("  CUSTOMER@Example.com  ", "12345678-user"), "customer@example.com");
+    assert.equal(resolvePaystackCustomerEmail("customer@example.c", "12345678-user"), "customer-12345678@squadlink.app");
+    assert.equal(resolvePaystackCustomerEmail(null, "12345678-user"), "customer-12345678@squadlink.app");
   });
 
   it("verifies authentic Paystack HMAC SHA-512 signatures accurately", () => {

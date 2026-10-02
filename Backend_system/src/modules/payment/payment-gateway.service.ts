@@ -1,4 +1,5 @@
 import { createHmac } from "node:crypto";
+import { z } from "zod";
 import { db } from "../../db/database";
 import { withTransaction } from "../../db/transaction";
 import { AppError } from "../../utils/app-error";
@@ -28,6 +29,14 @@ export function getFlutterwaveSecretHash(): string | undefined {
     process.env.FLW_SECRET_HASH ||
     process.env.FLW_HASH
   );
+}
+
+export function resolvePaystackCustomerEmail(email: string | null, userId: string): string {
+  const normalizedEmail = email?.trim().toLowerCase();
+  if (normalizedEmail && z.string().email().safeParse(normalizedEmail).success) {
+    return normalizedEmail;
+  }
+  return `customer-${userId.slice(0, 8)}@squadlink.app`;
 }
 
 export type PaymentGatewayProvider = "PAYSTACK" | "FLUTTERWAVE";
@@ -116,10 +125,7 @@ export async function initializePaymentGatewayTransaction(
 
   if (gateway === "PAYSTACK") {
     const paystackSecret = getPaystackSecretKey();
-    const normalizedPaystackEmail = order.user_email?.trim().toLowerCase();
-    const paystackEmail = normalizedPaystackEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedPaystackEmail)
-      ? normalizedPaystackEmail
-      : fallbackEmail;
+    const paystackEmail = resolvePaystackCustomerEmail(order.user_email, order.user_id);
     if (!paystackSecret || paystackSecret.includes("YOUR_")) {
       throw new AppError(
         "Paystack payment gateway is not configured on this server. Please contact the platform administrator.",
