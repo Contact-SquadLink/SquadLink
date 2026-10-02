@@ -118,10 +118,10 @@ export function CheckoutPage() {
   }, [deliveryAddressLine, deliveryCity, deliveryState, hasValidDeliveryDetails, isSyncing, items, latitudeValue, longitudeValue, normalizedContactPhone]);
 
   useEffect(() => {
-    if (items.length === 0 && !orderPlaced && !placingOrder && !placedOrderId && !showPaymentModal) {
+    if (items.length === 0 && !orderPlaced && !placingOrder && !placedOrderId) {
       navigate('/cart');
     }
-  }, [items.length, orderPlaced, placingOrder, placedOrderId, showPaymentModal, navigate]);
+  }, [items.length, orderPlaced, placingOrder, placedOrderId, navigate]);
 
   const estimatedDeliveryFee = items.length > 0 ? DELIVERY_FEE : 0;
   const deliveryFee = preview?.deliveryFee ?? estimatedDeliveryFee;
