@@ -59,8 +59,7 @@ export function OrderDetailPage() {
   const [paymentNotice, setPaymentNotice] = useState<string | null>(
     typeof initialPaymentNotice === 'string' ? initialPaymentNotice : null
   );
-  const [isInitiatingPayment, setIsInitiatingPayment] = useState(false);
-  const [selectedGateway, setSelectedGateway] = useState<'PAYSTACK' | 'FLUTTERWAVE'>('PAYSTACK');
+  const [initiatingGateway, setInitiatingGateway] = useState<'PAYSTACK' | 'FLUTTERWAVE' | null>(null);
 
   // Cancellation state
   const [showCancelModal, setShowCancelModal] = useState(false);
@@ -97,9 +96,9 @@ export function OrderDetailPage() {
     }
   }, [paymentReference, paymentStatusParam, order?.status]);
 
-  const handlePayNow = async (gateway: 'PAYSTACK' | 'FLUTTERWAVE' = selectedGateway) => {
+  const handlePayNow = async (gateway: 'PAYSTACK' | 'FLUTTERWAVE') => {
     if (!orderId) return;
-    setIsInitiatingPayment(true);
+    setInitiatingGateway(gateway);
     setPaymentNotice(null);
     try {
       const callbackUrl = `${window.location.origin}/orders/${orderId}`;
@@ -116,7 +115,7 @@ export function OrderDetailPage() {
     } catch (err) {
       setPaymentNotice(err instanceof Error ? err.message : 'Unable to initialize payment.');
     } finally {
-      setIsInitiatingPayment(false);
+      setInitiatingGateway(null);
     }
   };
 
@@ -259,10 +258,10 @@ export function OrderDetailPage() {
                 <button
                   type="button"
                   onClick={() => void handlePayNow('PAYSTACK')}
-                  disabled={isInitiatingPayment}
+                  disabled={initiatingGateway !== null}
                   className="rounded-xl bg-primary-600 px-3.5 py-2.5 text-xs font-bold text-white hover:bg-primary-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5 shadow-sm"
                 >
-                  {isInitiatingPayment ? (
+                  {initiatingGateway === 'PAYSTACK' ? (
                     <>
                       <span className="h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" />
                       Connecting...
@@ -274,10 +273,10 @@ export function OrderDetailPage() {
                 <button
                   type="button"
                   onClick={() => void handlePayNow('FLUTTERWAVE')}
-                  disabled={isInitiatingPayment}
+                  disabled={initiatingGateway !== null}
                   className="rounded-xl bg-amber-600 px-3.5 py-2.5 text-xs font-bold text-white hover:bg-amber-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5 shadow-sm"
                 >
-                  {isInitiatingPayment ? (
+                  {initiatingGateway === 'FLUTTERWAVE' ? (
                     <>
                       <span className="h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" />
                       Connecting...

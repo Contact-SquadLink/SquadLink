@@ -107,7 +107,8 @@ export async function initializePaymentGatewayTransaction(
   }
 
   const totalAmount = Number(order.total_amount);
-  const email = order.user_email || `customer-${order.user_id.slice(0, 8)}@squadlink.app`;
+  const fallbackEmail = `customer-${order.user_id.slice(0, 8)}@squadlink.app`;
+  const email = order.user_email || fallbackEmail;
   const reference = `sqlink_${gateway.toLowerCase()}_${order.order_id.slice(0, 8)}_${Date.now()}`;
   const callbackUrl = input.callbackUrl || `http://localhost:5173/orders/${order.order_id}`;
 
@@ -115,6 +116,10 @@ export async function initializePaymentGatewayTransaction(
 
   if (gateway === "PAYSTACK") {
     const paystackSecret = getPaystackSecretKey();
+    const normalizedPaystackEmail = order.user_email?.trim().toLowerCase();
+    const paystackEmail = normalizedPaystackEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedPaystackEmail)
+      ? normalizedPaystackEmail
+      : fallbackEmail;
     if (!paystackSecret || paystackSecret.includes("YOUR_")) {
       throw new AppError(
         "Paystack payment gateway is not configured on this server. Please contact the platform administrator.",
@@ -131,7 +136,7 @@ export async function initializePaymentGatewayTransaction(
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          email,
+          email: paystackEmail,
           amount: Math.round(totalAmount * 100), // in kobo
           reference,
           callback_url: callbackUrl,
