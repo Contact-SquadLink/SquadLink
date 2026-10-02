@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   ArrowLeft,
@@ -34,7 +34,9 @@ const orderStages: Record<string, string[]> = {
 };
 
 export function OrderDetailPage() {
+  const location = useLocation();
   const { orderId } = useParams<{ orderId: string }>();
+  const initialPaymentNotice = (location.state as { paymentNotice?: unknown } | null)?.paymentNotice;
   const [searchParams] = useSearchParams();
   const paymentReference =
     searchParams.get('reference') ||
@@ -54,7 +56,9 @@ export function OrderDetailPage() {
   const [otpMessage, setOtpMessage] = useState<string | null>(null);
   const [otpLoading, setOtpLoading] = useState(false);
   const [isVerifyingPayment, setIsVerifyingPayment] = useState(false);
-  const [paymentNotice, setPaymentNotice] = useState<string | null>(null);
+  const [paymentNotice, setPaymentNotice] = useState<string | null>(
+    typeof initialPaymentNotice === 'string' ? initialPaymentNotice : null
+  );
   const [isInitiatingPayment, setIsInitiatingPayment] = useState(false);
   const [selectedGateway, setSelectedGateway] = useState<'PAYSTACK' | 'FLUTTERWAVE'>('PAYSTACK');
 

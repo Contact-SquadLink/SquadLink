@@ -147,14 +147,32 @@ export async function initializePaymentGatewayTransaction(
       const data = (await response.json()) as {
         status: boolean;
         message?: string;
-        data?: { authorization_url: string; reference: string };
+        data?: { authorization_url?: string; reference?: string };
       };
 
-      if (data.status && data.data?.authorization_url) {
-        checkoutUrl = data.data.authorization_url;
+      const authorizationUrl = data.data?.authorization_url;
+      let isValidCheckoutUrl = false;
+      if (authorizationUrl) {
+        try {
+          const parsedUrl = new URL(authorizationUrl);
+          isValidCheckoutUrl =
+            parsedUrl.protocol === "https:" && parsedUrl.hostname === "checkout.paystack.com";
+        } catch {
+          isValidCheckoutUrl = false;
+        }
+      }
+
+      if (response.ok && data.status && isValidCheckoutUrl && authorizationUrl) {
+        checkoutUrl = authorizationUrl;
+      } else if (response.ok && data.status && authorizationUrl) {
+        throw new AppError(
+          "Paystack returned an invalid checkout URL. Please retry or contact the platform administrator.",
+          502,
+          "PAYSTACK_INVALID_CHECKOUT_URL"
+        );
       } else {
         throw new AppError(
-          `Paystack declined this transaction: ${data.message || "Unable to create payment authorization. Check that your Paystack secret key is active and the account is verified."}`,
+          `Paystack declined this transaction (HTTP ${response.status}): ${data.message || "Unable to create payment authorization. Check that your Paystack secret key is active and the account is verified."}`,
           502,
           "PAYSTACK_INITIALIZATION_FAILED"
         );

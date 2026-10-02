@@ -137,7 +137,7 @@ export function CheckoutPage() {
   }));
 
   const handleInitiateCheckout = useCallback(async () => {
-    if (isSyncing || placingOrder || items.length === 0) {
+    if (isSyncing || placingOrder || placedOrderId || items.length === 0) {
       return;
     }
 
@@ -180,6 +180,7 @@ export function CheckoutPage() {
     setPlacingOrder(true);
     setPreviewError(null);
 
+    let orderId: string | null = null;
     try {
       const payload = {
         items: items.map((item) => ({
@@ -196,7 +197,7 @@ export function CheckoutPage() {
 
       const idempotencyKey = globalThis.crypto?.randomUUID?.() ?? `order-${Date.now()}`;
       const response = await ordersApi.create(payload, idempotencyKey);
-      const orderId = response.data.orderId;
+      orderId = response.data.orderId;
       setPlacedOrderId(orderId);
 
       // Initialize transaction with selected gateway (Paystack / Flutterwave)
@@ -218,11 +219,16 @@ export function CheckoutPage() {
       // Fallback: navigate to the order page so the user can retry payment
       navigate(`/orders/${orderId}`);
     } catch (error) {
-      setPreviewError(error instanceof Error ? error.message : 'Unable to initiate order payment.');
+      const message = error instanceof Error ? error.message : 'Unable to initiate order payment.';
+      if (orderId) {
+        navigate(`/orders/${orderId}`, { state: { paymentNotice: message } });
+      } else {
+        setPreviewError(message);
+      }
     } finally {
       setPlacingOrder(false);
     }
-  }, [deliveryAddressLine, deliveryCity, deliveryState, isSyncing, items, latitudeValue, longitudeValue, navigate, normalizedContactPhone, placingOrder, selectedGateway]);
+  }, [deliveryAddressLine, deliveryCity, deliveryState, isSyncing, items, latitudeValue, longitudeValue, navigate, normalizedContactPhone, placedOrderId, placingOrder, selectedGateway]);
 
   if (items.length === 0 && !orderPlaced && !placedOrderId) {
     return null;
@@ -507,7 +513,7 @@ export function CheckoutPage() {
               <button
                 type="button"
                 onClick={handleInitiateCheckout}
-                disabled={placingOrder}
+                disabled={placingOrder || Boolean(placedOrderId)}
                 className={cn(
                   'mt-4 flex w-full items-center justify-center gap-2 rounded-xl h-12 text-sm font-semibold text-white transition-all shadow-md',
                   placingOrder
@@ -520,6 +526,8 @@ export function CheckoutPage() {
                     <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
                     Connecting to {selectedGateway === 'PAYSTACK' ? 'Paystack' : 'Flutterwave'}...
                   </>
+                ) : placedOrderId ? (
+                  <>Order awaiting payment</>
                 ) : (
                   <>
                     Pay {formatPrice(total)} with {selectedGateway}
@@ -548,7 +556,12 @@ export function CheckoutPage() {
         )}
 
         {placedOrderId && !orderPlaced && (
-          <p className="mt-4 text-sm text-gray-500">Order ID: {placedOrderId}</p>
+          <Link
+            to={`/orders/${placedOrderId}`}
+            className="mt-4 inline-flex text-sm font-semibold text-primary-700 hover:text-primary-800"
+          >
+            Continue to payment for order #{placedOrderId.slice(-8)}
+          </Link>
         )}
       </div>
     </div>
