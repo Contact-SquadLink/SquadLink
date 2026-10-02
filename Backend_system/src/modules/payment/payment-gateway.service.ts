@@ -115,102 +115,121 @@ export async function initializePaymentGatewayTransaction(
 
   if (gateway === "PAYSTACK") {
     const paystackSecret = getPaystackSecretKey();
-    if (paystackSecret && !paystackSecret.includes("YOUR_")) {
-      try {
-        const response = await fetch("https://api.paystack.co/transaction/initialize", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${paystackSecret}`,
-            "Content-Type": "application/json",
+    if (!paystackSecret || paystackSecret.includes("YOUR_")) {
+      throw new AppError(
+        "Paystack payment gateway is not configured on this server. Please contact the platform administrator.",
+        503,
+        "PAYSTACK_NOT_CONFIGURED"
+      );
+    }
+
+    try {
+      const response = await fetch("https://api.paystack.co/transaction/initialize", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${paystackSecret}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email,
+          amount: Math.round(totalAmount * 100), // in kobo
+          reference,
+          callback_url: callbackUrl,
+          metadata: {
+            orderId: order.order_id,
+            paymentId: order.payment_id,
+            paymentAttemptId: order.payment_attempt_id,
+            userId: order.user_id,
           },
-          body: JSON.stringify({
-            email,
-            amount: Math.round(totalAmount * 100), // in kobo
-            reference,
-            callback_url: callbackUrl,
-            metadata: {
-              orderId: order.order_id,
-              paymentId: order.payment_id,
-              paymentAttemptId: order.payment_attempt_id,
-              userId: order.user_id,
-            },
-          }),
-        });
+        }),
+      });
 
-        const data = (await response.json()) as {
-          status: boolean;
-          message?: string;
-          data?: { authorization_url: string; reference: string };
-        };
+      const data = (await response.json()) as {
+        status: boolean;
+        message?: string;
+        data?: { authorization_url: string; reference: string };
+      };
 
-        if (data.status && data.data?.authorization_url) {
-          checkoutUrl = data.data.authorization_url;
-        } else {
-          // Gateway returned a valid response but no URL — fall back to hosted checkout
-          console.warn("[PAYSTACK] Initialization returned no URL:", data.message);
-          checkoutUrl = `https://checkout.paystack.com/${reference}`;
-        }
-      } catch (err) {
-        // Network failure — fall back to hosted checkout; Paystack will handle invalid ref gracefully
-        console.error("[PAYSTACK] Gateway initialization failed:", err);
-        checkoutUrl = `https://checkout.paystack.com/${reference}`;
+      if (data.status && data.data?.authorization_url) {
+        checkoutUrl = data.data.authorization_url;
+      } else {
+        throw new AppError(
+          `Paystack declined this transaction: ${data.message || "Unable to create payment authorization. Check that your Paystack secret key is active and the account is verified."}`,
+          502,
+          "PAYSTACK_INITIALIZATION_FAILED"
+        );
       }
-    } else {
-      // No key configured — still redirect to Paystack hosted checkout; the gateway will show an error
-      checkoutUrl = `https://checkout.paystack.com/${reference}`;
+    } catch (err) {
+      if (err instanceof AppError) throw err;
+      throw new AppError(
+        `Unable to connect to Paystack: ${err instanceof Error ? err.message : "Network error"}. Please try again in a moment.`,
+        502,
+        "PAYSTACK_GATEWAY_UNREACHABLE"
+      );
     }
   } else {
     // Flutterwave
     const flwSecret = getFlutterwaveSecretKey();
-    if (flwSecret && !flwSecret.includes("YOUR_")) {
-      try {
-        const response = await fetch("https://api.flutterwave.com/v3/payments", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${flwSecret}`,
-            "Content-Type": "application/json",
+    if (!flwSecret || flwSecret.includes("YOUR_")) {
+      throw new AppError(
+        "Flutterwave payment gateway is not configured on this server. Please contact the platform administrator.",
+        503,
+        "FLUTTERWAVE_NOT_CONFIGURED"
+      );
+    }
+
+    try {
+      const response = await fetch("https://api.flutterwave.com/v3/payments", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${flwSecret}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          tx_ref: reference,
+          amount: totalAmount,
+          currency: "NGN",
+          redirect_url: callbackUrl,
+          customer: {
+            email,
+            phonenumber: order.user_phone || "08000000000",
+            name: email,
           },
-          body: JSON.stringify({
-            tx_ref: reference,
-            amount: totalAmount,
-            currency: "NGN",
-            redirect_url: callbackUrl,
-            customer: {
-              email,
-              phonenumber: order.user_phone || "08000000000",
-              name: email,
-            },
-            meta: {
-              orderId: order.order_id,
-              paymentId: order.payment_id,
-              paymentAttemptId: order.payment_attempt_id,
-              userId: order.user_id,
-            },
-            customizations: {
-              title: "SquadLink Delivery",
-              description: `Payment for Order #${order.order_id.slice(0, 8)}`,
-            },
-          }),
-        });
+          meta: {
+            orderId: order.order_id,
+            paymentId: order.payment_id,
+            paymentAttemptId: order.payment_attempt_id,
+            userId: order.user_id,
+          },
+          customizations: {
+            title: "SquadLink Delivery",
+            description: `Payment for Order #${order.order_id.slice(0, 8)}`,
+          },
+        }),
+      });
 
-        const data = (await response.json()) as {
-          status: string;
-          message?: string;
-          data?: { link: string };
-        };
+      const data = (await response.json()) as {
+        status: string;
+        message?: string;
+        data?: { link: string };
+      };
 
-        if (data.status === "success" && data.data?.link) {
-          checkoutUrl = data.data.link;
-        } else {
-          console.warn("[FLUTTERWAVE] Initialization returned no link:", data.message);
-          checkoutUrl = `https://checkout.flutterwave.com/v3/hosted/pay/${reference}`;
-        }
-      } catch (err) {
-        console.error("[FLUTTERWAVE] Gateway initialization failed:", err);
-        checkoutUrl = `https://checkout.flutterwave.com/v3/hosted/pay/${reference}`;
+      if (data.status === "success" && data.data?.link) {
+        checkoutUrl = data.data.link;
+      } else {
+        throw new AppError(
+          `Flutterwave declined this transaction: ${data.message || "Unable to create payment session. Check that your Flutterwave secret key is active."}`,
+          502,
+          "FLUTTERWAVE_INITIALIZATION_FAILED"
+        );
       }
-    } else {
-      checkoutUrl = `https://checkout.flutterwave.com/v3/hosted/pay/${reference}`;
+    } catch (err) {
+      if (err instanceof AppError) throw err;
+      throw new AppError(
+        `Unable to connect to Flutterwave: ${err instanceof Error ? err.message : "Network error"}. Please try again in a moment.`,
+        502,
+        "FLUTTERWAVE_GATEWAY_UNREACHABLE"
+      );
     }
   }
 
