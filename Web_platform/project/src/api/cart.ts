@@ -31,7 +31,7 @@ export const cartApi = {
     }),
 
   clear: () =>
-    apiRequest<void>('/api/v1/cart/', {
+    apiRequest<ApiSingleResponse<Cart>>('/api/v1/cart/', {
       method: 'DELETE',
     }),
 };

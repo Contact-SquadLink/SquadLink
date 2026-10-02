@@ -5,13 +5,11 @@ import {
   ArrowRight,
   Check,
   ShieldCheck,
-  CreditCard,
-  X,
 } from 'lucide-react';
 import { useCart } from '@/hooks/useCart';
 import { useAuth } from '@/hooks/useAuth';
 import { checkoutApi, ordersApi } from '@/api/orders';
-import { paymentApi, type PaymentInitializationData } from '@/api/payment';
+import { paymentApi } from '@/api/payment';
 import { formatPrice, cn } from '@/utils/format';
 import { normalizePhoneNumber } from '@/utils/phone';
 import { formatNigerianPhone, phoneDigits } from '@/utils/nigerian-phone';
@@ -22,7 +20,7 @@ const PLATFORM_FEE = 150;
 
 export function CheckoutPage() {
   const navigate = useNavigate();
-  const { items, subtotal, clearCart, isSyncing } = useCart();
+  const { items, subtotal, isSyncing } = useCart();
   const { user } = useAuth();
 
   const [preview, setPreview] = useState<CheckoutPreview | null>(null);
@@ -31,9 +29,6 @@ export function CheckoutPage() {
   const [placingOrder, setPlacingOrder] = useState(false);
   const [placedOrderId, setPlacedOrderId] = useState<string | null>(null);
   const [selectedGateway, setSelectedGateway] = useState<'PAYSTACK' | 'FLUTTERWAVE'>('PAYSTACK');
-  const [gatewayInitData, setGatewayInitData] = useState<PaymentInitializationData | null>(null);
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [isVerifyingPayment, setIsVerifyingPayment] = useState(false);
   const [deliveryAddressLine, setDeliveryAddressLine] = useState('');
   const [deliveryCity, setDeliveryCity] = useState('Bauchi');
   const [deliveryState, setDeliveryState] = useState('Bauchi');
@@ -206,89 +201,30 @@ export function CheckoutPage() {
 
       // Initialize transaction with selected gateway (Paystack / Flutterwave)
       const callbackUrl = `${window.location.origin}/orders/${orderId}`;
-      let initData: PaymentInitializationData;
+      const initRes = await paymentApi.initialize({
+        orderId,
+        gateway: selectedGateway,
+        callbackUrl,
+      });
 
-      try {
-        const initRes = await paymentApi.initialize({
-          orderId,
-          gateway: selectedGateway,
-          callbackUrl,
-        });
-        initData = initRes.data;
-      } catch (initErr) {
-        console.warn('[CHECKOUT] Payment initialization network/provider issue, falling back to sandbox test clearance:', initErr);
-        const ref = `sqlink_${selectedGateway.toLowerCase()}_${orderId.slice(0, 8)}_${Date.now()}`;
-        initData = {
-          gateway: selectedGateway,
-          checkoutUrl: `${callbackUrl}?reference=${ref}&gateway=${selectedGateway}&simulated=true`,
-          reference: ref,
-          paymentId: response.data.payment?.paymentId || '',
-          paymentAttemptId: response.data.payment?.paymentAttemptId || '',
-          amount: response.data.payment?.amount || total,
-          currency: 'NGN',
-          isSimulated: true,
-        };
-      }
-
-      setGatewayInitData(initData);
-      setShowPaymentModal(true);
-      clearCart();
-
-      // For live external gateway (Paystack / Flutterwave), navigate directly in current window
-      // so browser pop-up blockers never block the payment flow.
-      if (initData.checkoutUrl && !initData.isSimulated && !initData.checkoutUrl.includes('simulated=true')) {
-        window.location.href = initData.checkoutUrl;
+      // Navigate directly to the live gateway checkout page.
+      // The cart will be cleared by the server when the order is confirmed after payment.
+      // Do NOT call clearCart() here — if the user cancels payment they must be able to return.
+      if (initRes.data.checkoutUrl) {
+        window.location.href = initRes.data.checkoutUrl;
         return;
       }
+
+      // Fallback: navigate to the order page so the user can retry payment
+      navigate(`/orders/${orderId}`);
     } catch (error) {
       setPreviewError(error instanceof Error ? error.message : 'Unable to initiate order payment.');
     } finally {
       setPlacingOrder(false);
     }
-  }, [clearCart, deliveryAddressLine, deliveryCity, deliveryState, isSyncing, items, latitudeValue, longitudeValue, normalizedContactPhone, placingOrder, selectedGateway, total]);
+  }, [deliveryAddressLine, deliveryCity, deliveryState, isSyncing, items, latitudeValue, longitudeValue, navigate, normalizedContactPhone, placingOrder, selectedGateway]);
 
-  const handleVerifyOrCompletePayment = async () => {
-    if (!placedOrderId || !gatewayInitData) return;
-    setIsVerifyingPayment(true);
-    try {
-      try {
-        await ordersApi.completeSandboxPayment(
-          gatewayInitData.paymentId,
-          gatewayInitData.paymentAttemptId,
-          '4084 0840 8408 4081'
-        );
-      } catch {
-        await paymentApi.verify(gatewayInitData.reference);
-      }
-      setOrderPlaced(true);
-      setShowPaymentModal(false);
-      setTimeout(() => {
-        navigate(`/orders/${placedOrderId}`);
-      }, 1000);
-    } catch (err) {
-      setPreviewError(err instanceof Error ? err.message : 'Payment authorization verification pending.');
-    } finally {
-      setIsVerifyingPayment(false);
-    }
-  };
-
-  const handleCancelModalOrder = async () => {
-    if (!placedOrderId) return;
-    try {
-      if (gatewayInitData?.reference) {
-        await paymentApi.abandon(gatewayInitData.reference, 'Customer cancelled in checkout modal').catch(() => {});
-      }
-      await ordersApi.cancel(placedOrderId, 'Customer cancelled in checkout modal').catch(() => {});
-      setShowPaymentModal(false);
-      setPlacedOrderId(null);
-      setPreviewError('Order cancelled. Reserved items have been released.');
-      navigate('/cart');
-    } catch (err) {
-      setPreviewError(err instanceof Error ? err.message : 'Unable to cancel order.');
-    }
-  };
-
-  if (items.length === 0 && !orderPlaced && !placedOrderId && !showPaymentModal) {
+  if (items.length === 0 && !orderPlaced && !placedOrderId) {
     return null;
   }
 
@@ -591,86 +527,6 @@ export function CheckoutPage() {
                   </>
                 )}
               </button>
-
-              {showPaymentModal && gatewayInitData && (
-                <div className="mt-4 rounded-2xl border border-primary-200 bg-primary-50 p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2 text-primary-800">
-                      <CreditCard className="h-4 w-4" />
-                      <span className="text-sm font-semibold">
-                        {gatewayInitData.gateway} Secure Checkout
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setShowPaymentModal(false)}
-                      className="text-primary-700 hover:text-primary-900"
-                      aria-label="Close payment modal"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  </div>
-
-                  {gatewayInitData.isSimulated || gatewayInitData.checkoutUrl.includes('simulated=true') ? (
-                    <div className="mt-2.5 rounded-lg bg-amber-50 p-2.5 border border-amber-200 text-xs text-amber-900">
-                      <span className="font-bold">🧪 Sandbox Simulation Mode:</span> No live API keys are required. You can authorize test payment below to immediately clear this order and trigger courier dispatch economics.
-                    </div>
-                  ) : (
-                    <p className="mt-2 text-xs text-primary-700">
-                      Pre-Payment Safeguard: Order #{placedOrderId?.slice(0, 8)} remains strictly <strong className="font-bold">PENDING</strong>.
-                      Merchant will be notified only after successful cryptographic webhook authorization.
-                    </p>
-                  )}
-
-                  <div className="mt-3 rounded-lg bg-white p-3 border border-primary-200 space-y-1 text-xs">
-                    <div className="flex justify-between">
-                      <span className="text-gray-500">Amount:</span>
-                      <span className="font-bold text-gray-900">₦{Number(gatewayInitData?.amount ?? 0).toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-500">Ref:</span>
-                      <span className="font-mono text-gray-600 truncate max-w-[180px]">{gatewayInitData.reference}</span>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 space-y-2.5">
-                    {(!gatewayInitData.isSimulated && !gatewayInitData.checkoutUrl.includes('simulated=true')) && (
-                      <a
-                        href={gatewayInitData.checkoutUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#09A5DB] hover:bg-[#0895c7] py-3 text-sm font-bold text-white shadow-md hover:shadow-lg transition-all"
-                      >
-                        💳 Complete Payment on {gatewayInitData.gateway} Portal ↗
-                      </a>
-                    )}
-                    <button
-                      type="button"
-                      onClick={handleVerifyOrCompletePayment}
-                      disabled={isVerifyingPayment}
-                      className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#09A5DB] hover:bg-[#0895c7] py-2.5 text-xs font-bold text-white shadow-sm transition-colors disabled:opacity-50"
-                    >
-                      {isVerifyingPayment ? (
-                        <>
-                          <span className="h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                          Processing Payment Clearance...
-                        </>
-                      ) : gatewayInitData.isSimulated || gatewayInitData.checkoutUrl.includes('simulated=true') ? (
-                        '🚀 Authorize 1-Click Test Payment'
-                      ) : (
-                        'I have completed payment — Verify Order'
-                      )}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleCancelModalOrder}
-                      className="flex w-full items-center justify-center gap-2 rounded-xl border border-red-200 bg-white py-2 text-xs font-bold text-red-600 hover:bg-red-50 transition-colors"
-                    >
-                      Cancel Order & Release Items
-                    </button>
-                  </div>
-                </div>
-              )}
 
               <div className="mt-4 flex items-start gap-2 text-xs text-gray-400">
                 <ShieldCheck className="h-4 w-4 shrink-0 mt-0.5" />

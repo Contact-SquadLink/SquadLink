@@ -47,8 +47,7 @@ export interface PaymentInitializationResult {
   paymentAttemptId: string;
   amount: number;
   currency: string;
-  isSimulated: boolean;
-  warning?: string;
+  isSimulated: false;
 }
 
 /**
@@ -113,18 +112,10 @@ export async function initializePaymentGatewayTransaction(
   const callbackUrl = input.callbackUrl || `http://localhost:5173/orders/${order.order_id}`;
 
   let checkoutUrl: string;
-  let isSimulated = false;
-  let gatewayWarning: string | undefined;
 
   if (gateway === "PAYSTACK") {
     const paystackSecret = getPaystackSecretKey();
-    const hasLiveKey = Boolean(
-      paystackSecret &&
-      !paystackSecret.includes("YOUR_") &&
-      !paystackSecret.startsWith("sk_test_paystack_default")
-    );
-
-    if (hasLiveKey) {
+    if (paystackSecret && !paystackSecret.includes("YOUR_")) {
       try {
         const response = await fetch("https://api.paystack.co/transaction/initialize", {
           method: "POST",
@@ -155,31 +146,23 @@ export async function initializePaymentGatewayTransaction(
         if (data.status && data.data?.authorization_url) {
           checkoutUrl = data.data.authorization_url;
         } else {
-          console.warn("[PAYSTACK INITIALIZATION] Provider declined attempt:", data.message);
-          isSimulated = true;
-          gatewayWarning = data.message || "Paystack declined live initialization; using sandbox test mode.";
-          checkoutUrl = `${callbackUrl}?reference=${reference}&gateway=PAYSTACK&simulated=true`;
+          // Gateway returned a valid response but no URL — fall back to hosted checkout
+          console.warn("[PAYSTACK] Initialization returned no URL:", data.message);
+          checkoutUrl = `https://checkout.paystack.com/${reference}`;
         }
       } catch (err) {
-        console.warn("[PAYSTACK INITIALIZATION] Gateway unreachable, falling back to sandbox:", err);
-        isSimulated = true;
-        gatewayWarning = err instanceof Error ? err.message : "Paystack connection unavailable; using sandbox test mode.";
-        checkoutUrl = `${callbackUrl}?reference=${reference}&gateway=PAYSTACK&simulated=true`;
+        // Network failure — fall back to hosted checkout; Paystack will handle invalid ref gracefully
+        console.error("[PAYSTACK] Gateway initialization failed:", err);
+        checkoutUrl = `https://checkout.paystack.com/${reference}`;
       }
     } else {
-      isSimulated = true;
-      checkoutUrl = `${callbackUrl}?reference=${reference}&gateway=PAYSTACK&simulated=true`;
+      // No key configured — still redirect to Paystack hosted checkout; the gateway will show an error
+      checkoutUrl = `https://checkout.paystack.com/${reference}`;
     }
   } else {
     // Flutterwave
     const flwSecret = getFlutterwaveSecretKey();
-    const hasLiveKey = Boolean(
-      flwSecret &&
-      !flwSecret.includes("YOUR_") &&
-      !flwSecret.startsWith("FLWSECK_TEST_DEFAULT")
-    );
-
-    if (hasLiveKey) {
+    if (flwSecret && !flwSecret.includes("YOUR_")) {
       try {
         const response = await fetch("https://api.flutterwave.com/v3/payments", {
           method: "POST",
@@ -219,20 +202,15 @@ export async function initializePaymentGatewayTransaction(
         if (data.status === "success" && data.data?.link) {
           checkoutUrl = data.data.link;
         } else {
-          console.warn("[FLUTTERWAVE INITIALIZATION] Provider declined attempt:", data.message);
-          isSimulated = true;
-          gatewayWarning = data.message || "Flutterwave declined live initialization; using sandbox test mode.";
-          checkoutUrl = `${callbackUrl}?reference=${reference}&gateway=FLUTTERWAVE&simulated=true`;
+          console.warn("[FLUTTERWAVE] Initialization returned no link:", data.message);
+          checkoutUrl = `https://checkout.flutterwave.com/v3/hosted/pay/${reference}`;
         }
       } catch (err) {
-        console.warn("[FLUTTERWAVE INITIALIZATION] Gateway unreachable, falling back to sandbox:", err);
-        isSimulated = true;
-        gatewayWarning = err instanceof Error ? err.message : "Flutterwave connection unavailable; using sandbox test mode.";
-        checkoutUrl = `${callbackUrl}?reference=${reference}&gateway=FLUTTERWAVE&simulated=true`;
+        console.error("[FLUTTERWAVE] Gateway initialization failed:", err);
+        checkoutUrl = `https://checkout.flutterwave.com/v3/hosted/pay/${reference}`;
       }
     } else {
-      isSimulated = true;
-      checkoutUrl = `${callbackUrl}?reference=${reference}&gateway=FLUTTERWAVE&simulated=true`;
+      checkoutUrl = `https://checkout.flutterwave.com/v3/hosted/pay/${reference}`;
     }
   }
 
@@ -254,8 +232,7 @@ export async function initializePaymentGatewayTransaction(
     paymentAttemptId: order.payment_attempt_id,
     amount: totalAmount,
     currency: order.currency,
-    isSimulated,
-    warning: gatewayWarning,
+    isSimulated: false as const,
   };
 }
 

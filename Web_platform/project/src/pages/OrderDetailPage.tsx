@@ -105,22 +105,8 @@ export function OrderDetailPage() {
         callbackUrl,
       });
 
-      if (res.data.isSimulated || res.data.checkoutUrl.includes('simulated=true')) {
-        setPaymentNotice('Authorizing sandbox payment simulation...');
-        try {
-          await ordersApi.completeSandboxPayment(
-            res.data.paymentId,
-            res.data.paymentAttemptId,
-            '4084 0840 8408 4081'
-          );
-          setPaymentNotice('Payment authorized successfully! Order is confirmed.');
-          refetch();
-        } catch {
-          await paymentApi.verify(res.data.reference);
-          setPaymentNotice('Payment verified! Order is confirmed.');
-          refetch();
-        }
-      } else if (res.data.checkoutUrl) {
+      // Always redirect directly to the live gateway checkout page
+      if (res.data.checkoutUrl) {
         window.location.href = res.data.checkoutUrl;
       }
     } catch (err) {
