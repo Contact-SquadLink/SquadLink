@@ -18,10 +18,11 @@ export function registerErrorHandler(app: FastifyInstance): void {
     }
 
     if (error instanceof ZodError) {
+      const emailIssue = error.issues.find((issue) => issue.path[0] === "email");
       return reply.status(400).send(
         errorResponse(
           "VALIDATION_ERROR",
-          "Request validation failed.",
+          emailIssue?.message ?? "Request validation failed.",
           error.issues,
           request.id
         )

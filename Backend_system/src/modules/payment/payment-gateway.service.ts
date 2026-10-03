@@ -1,8 +1,8 @@
 import { createHmac } from "node:crypto";
-import { z } from "zod";
 import { db } from "../../db/database";
 import { withTransaction } from "../../db/transaction";
 import { AppError } from "../../utils/app-error";
+import { emailAddressSchema } from "../../utils/email-address";
 import { processProviderPayment } from "../lifecycle/lifecycle.service";
 
 export function getPaystackSecretKey(): string | undefined {
@@ -33,7 +33,7 @@ export function getFlutterwaveSecretHash(): string | undefined {
 
 export function resolvePaystackCustomerEmail(email: string | null, userId: string): string {
   const normalizedEmail = email?.trim().toLowerCase();
-  if (normalizedEmail && z.string().email().safeParse(normalizedEmail).success) {
+  if (normalizedEmail && emailAddressSchema.safeParse(normalizedEmail).success) {
     return normalizedEmail;
   }
   return `customer-${userId.slice(0, 8)}@squadlink.app`;

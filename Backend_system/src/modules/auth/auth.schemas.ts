@@ -1,15 +1,10 @@
 import { z } from "zod";
+import { emailAddressSchema } from "../../utils/email-address";
 import { normalizePhoneNumber } from "../../utils/phone";
 
 export const registerSchema = z
   .object({
-    email: z
-      .string()
-      .trim()
-      .toLowerCase()
-      .email()
-      .max(255)
-      .optional(),
+    email: emailAddressSchema.optional(),
 
     phoneNumber: z
       .string()

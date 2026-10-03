@@ -2,10 +2,11 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { successResponse } from "../../utils/api-response";
 import { db } from "../../db/database";
+import { emailAddressSchema } from "../../utils/email-address";
 
-const contactMessageSchema = z.object({
+export const contactMessageSchema = z.object({
   name: z.string().trim().min(1).max(120),
-  email: z.string().trim().email().max(255),
+  email: emailAddressSchema,
   message: z.string().trim().min(10).max(5000)
 });
 

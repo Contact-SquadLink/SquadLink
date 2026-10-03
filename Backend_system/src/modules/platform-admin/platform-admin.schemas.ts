@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { emailAddressSchema } from "../../utils/email-address";
 
 export const userIdParamsSchema = z.object({ userId: z.string().uuid() });
 export const orderIdParamsSchema = z.object({ orderId: z.string().uuid() });
@@ -54,7 +55,7 @@ export const customerQuerySchema = z.object({
 });
 
 export const createAdminSchema = z.object({
-  email: z.string().email(),
+  email: emailAddressSchema,
   password: z.string().min(8),
   firstName: z.string().min(1),
   lastName: z.string().min(1),

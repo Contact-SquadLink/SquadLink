@@ -38,11 +38,12 @@ export async function authRoutes(
       );
 
       if (!parsed.success) {
+        const emailIssue = parsed.error.issues.find((issue) => issue.path[0] === "email");
         return reply.status(400).send({
           success: false,
           error: {
             code: "VALIDATION_ERROR",
-            message: "Invalid registration data.",
+            message: emailIssue?.message ?? "Invalid registration data.",
             details: parsed.error.flatten()
           },
           requestId: request.id
