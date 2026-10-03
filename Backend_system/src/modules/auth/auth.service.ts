@@ -1,4 +1,5 @@
 import bcrypt from "bcrypt";
+import { randomInt } from "node:crypto";
 import jwt, { type SignOptions } from "jsonwebtoken";
 
 import { env } from "../../config/env";
@@ -16,6 +17,9 @@ import {
   markVerificationOtpUsed,
   markEmailVerified,
   markPhoneVerified,
+  isEmailInUseByAnotherUser,
+  invalidatePendingEmailChangeCodes,
+  completeVerifiedEmailChange,
   updateUserPassword,
   type UserRecord
 } from "./auth.repository";
@@ -28,6 +32,8 @@ import type {
   ResetPasswordInput
 } from "./auth.schemas";
 import { createInAppNotification, notifyAdmins } from "../notification/notification.service";
+import { isEmailDeliveryConfigured, sendEmailChangeCode } from "./email-delivery.service";
+import { emailAddressSchema } from "../../utils/email-address";
 
 const BCRYPT_ROUNDS = 12;
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
@@ -213,6 +219,70 @@ export async function updateUserProfileService(
 
   const updated = await updateUserProfile(userId, input);
   return toSafeUser(updated);
+}
+
+export async function requestEmailChangeService(userId: string, requestedEmail: string) {
+  const email = emailAddressSchema.parse(requestedEmail);
+  const user = await findUserById(userId);
+  if (!user) throw new AppError("User not found.", 404, "USER_NOT_FOUND");
+  if (user.email?.toLowerCase() === email) {
+    throw new AppError("That email address is already on your account.", 400, "EMAIL_UNCHANGED");
+  }
+  if (await isEmailInUseByAnotherUser(email, userId)) {
+    throw new AppError("An account with this email already exists.", 409, "EMAIL_ALREADY_EXISTS");
+  }
+  if (!isEmailDeliveryConfigured()) {
+    throw new AppError(
+      "Email changes are temporarily unavailable because email delivery is not configured.",
+      503,
+      "EMAIL_DELIVERY_NOT_CONFIGURED"
+    );
+  }
+
+  await invalidatePendingEmailChangeCodes(userId);
+  const code = randomInt(100000, 1000000).toString();
+  const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+  const verification = await createVerificationOtp(userId, "EMAIL_CHANGE", email, code, expiresAt);
+
+  try {
+    await sendEmailChangeCode(email, code);
+  } catch (error) {
+    await markVerificationOtpUsed(verification.id);
+    throw error;
+  }
+
+  return {
+    message: `A verification code was sent to ${maskIdentifier(email)}.`,
+    expiresInMinutes: 15,
+  };
+}
+
+export async function confirmEmailChangeService(userId: string, email: string, code: string) {
+  const normalizedEmail = emailAddressSchema.parse(email);
+  let result;
+  try {
+    result = await completeVerifiedEmailChange(userId, normalizedEmail, code);
+  } catch (error) {
+    if (typeof error === "object" && error !== null && "code" in error && error.code === "23505") {
+      throw new AppError("An account with this email already exists.", 409, "EMAIL_ALREADY_EXISTS");
+    }
+    throw error;
+  }
+
+  if (result.status !== "UPDATED") {
+    if (result.status === "USER_NOT_FOUND") {
+      throw new AppError("User not found.", 404, "USER_NOT_FOUND");
+    }
+    if (result.status === "EMAIL_IN_USE") {
+      throw new AppError("An account with this email already exists.", 409, "EMAIL_ALREADY_EXISTS");
+    }
+    throw new AppError("Invalid or expired email verification code.", 400, "INVALID_VERIFICATION_CODE");
+  }
+
+  return {
+    message: "Email address changed and verified successfully.",
+    user: toSafeUser(result.user),
+  };
 }
 
 export async function requestVerificationOtpService(

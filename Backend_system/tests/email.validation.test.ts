@@ -7,6 +7,7 @@ import { contactMessageSchema } from "../src/modules/contact/contact.routes";
 import { createAdminSchema } from "../src/modules/platform-admin/platform-admin.schemas";
 import { emailAddressSchema } from "../src/utils/email-address";
 import { resolvePaystackCustomerEmail } from "../src/modules/payment/payment-gateway.service";
+import { confirmEmailChangeSchema, requestEmailChangeSchema } from "../src/modules/auth/auth.schemas";
 
 describe("strict email address validation", () => {
   it("normalizes valid addresses and allows custom domains", () => {
@@ -26,6 +27,13 @@ describe("strict email address validation", () => {
       resolvePaystackCustomerEmail("john.doe@gmail.come", "12345678-user"),
       "customer-12345678@squadlink.app",
     );
+  });
+
+  it("validates both steps of the verified email-change flow", () => {
+    assert.equal(requestEmailChangeSchema.safeParse({ email: "person@example.co.uk" }).success, true);
+    assert.equal(requestEmailChangeSchema.safeParse({ email: "person@gmail.come" }).success, false);
+    assert.equal(confirmEmailChangeSchema.safeParse({ email: "person@example.co.uk", code: "123456" }).success, true);
+    assert.equal(confirmEmailChangeSchema.safeParse({ email: "person@example.co.uk", code: "12345x" }).success, false);
   });
 
   it("applies the rule to every current email-provisioning form", () => {

@@ -52,6 +52,13 @@ export function ProfilePage() {
   const [isSubmittingOtp, setIsSubmittingOtp] = useState(false);
   const [otpNotice, setOtpNotice] = useState<string | null>(null);
   const [otpError, setOtpError] = useState<string | null>(null);
+  const [emailChangeValue, setEmailChangeValue] = useState(user?.email || '');
+  const [emailChangeTarget, setEmailChangeTarget] = useState<string | null>(null);
+  const [emailChangeCode, setEmailChangeCode] = useState('');
+  const [emailChangeMessage, setEmailChangeMessage] = useState<string | null>(null);
+  const [emailChangeError, setEmailChangeError] = useState<string | null>(null);
+  const [isRequestingEmailChange, setIsRequestingEmailChange] = useState(false);
+  const [isConfirmingEmailChange, setIsConfirmingEmailChange] = useState(false);
 
   // Avatar upload modal
   const [showAvatarModal, setShowAvatarModal] = useState(false);
@@ -142,6 +149,59 @@ export function ProfilePage() {
       setOtpError(err instanceof Error ? err.message : 'Invalid verification code. Please try again.');
     } finally {
       setIsSubmittingOtp(false);
+    }
+  };
+
+  const handleRequestEmailChange = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setIsRequestingEmailChange(true);
+    setEmailChangeError(null);
+    setEmailChangeMessage(null);
+    try {
+      const requestedEmail = emailChangeValue.trim().toLowerCase();
+      const response = await authApi.requestEmailChange(requestedEmail);
+      setEmailChangeTarget(requestedEmail);
+      setEmailChangeValue(requestedEmail);
+      setEmailChangeCode('');
+      setEmailChangeMessage(response.data.message);
+    } catch (err) {
+      setEmailChangeError(err instanceof Error ? err.message : 'Unable to send the email verification code.');
+    } finally {
+      setIsRequestingEmailChange(false);
+    }
+  };
+
+  const handleResendEmailChange = async () => {
+    if (!emailChangeTarget) return;
+    setIsRequestingEmailChange(true);
+    setEmailChangeError(null);
+    try {
+      const response = await authApi.requestEmailChange(emailChangeTarget);
+      setEmailChangeMessage(response.data.message);
+      setEmailChangeCode('');
+    } catch (err) {
+      setEmailChangeError(err instanceof Error ? err.message : 'Unable to resend the verification code.');
+    } finally {
+      setIsRequestingEmailChange(false);
+    }
+  };
+
+  const handleConfirmEmailChange = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!emailChangeTarget || emailChangeCode.length !== 6) return;
+    setIsConfirmingEmailChange(true);
+    setEmailChangeError(null);
+    try {
+      const response = await authApi.confirmEmailChange(emailChangeTarget, emailChangeCode);
+      setEmailChangeMessage(response.data.message);
+      setEmailChangeValue(response.data.user.email || emailChangeTarget);
+      setEmailChangeTarget(null);
+      setEmailChangeCode('');
+      await refreshUser();
+    } catch (err) {
+      setEmailChangeError(err instanceof Error ? err.message : 'Unable to verify the new email address.');
+    } finally {
+      setIsConfirmingEmailChange(false);
     }
   };
 
@@ -263,6 +323,78 @@ export function ProfilePage() {
                 Verify Email Now
               </button>
             )}
+            <div className="mt-4 border-t border-gray-200 pt-4">
+              {!emailChangeTarget ? (
+                <form onSubmit={handleRequestEmailChange} className="space-y-2">
+                  <label htmlFor="newEmailAddress" className="block text-xs font-semibold text-gray-700">
+                    Change email address
+                  </label>
+                  <input
+                    id="newEmailAddress"
+                    type="email"
+                    required
+                    maxLength={255}
+                    value={emailChangeValue}
+                    onChange={(event) => setEmailChangeValue(event.target.value)}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
+                    autoComplete="email"
+                  />
+                  <button
+                    type="submit"
+                    disabled={isRequestingEmailChange || !emailChangeValue.trim()}
+                    className="rounded-lg border border-primary-200 px-3 py-1.5 text-xs font-bold text-primary-700 hover:bg-primary-50 disabled:opacity-50"
+                  >
+                    {isRequestingEmailChange ? 'Sending code...' : 'Send verification code'}
+                  </button>
+                </form>
+              ) : (
+                <form onSubmit={handleConfirmEmailChange} className="space-y-2">
+                  <p className="text-xs text-gray-600">Enter the 6-digit code sent to {emailChangeTarget}.</p>
+                  <input
+                    aria-label="Email change verification code"
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    maxLength={6}
+                    required
+                    value={emailChangeCode}
+                    onChange={(event) => setEmailChangeCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-center font-mono text-lg tracking-widest outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
+                  />
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="submit"
+                      disabled={isConfirmingEmailChange || emailChangeCode.length !== 6}
+                      className="rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-primary-700 disabled:opacity-50"
+                    >
+                      {isConfirmingEmailChange ? 'Verifying...' : 'Verify and change email'}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isRequestingEmailChange}
+                      onClick={() => void handleResendEmailChange()}
+                      className="rounded-lg px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-100 disabled:opacity-50"
+                    >
+                      Resend code
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEmailChangeTarget(null);
+                        setEmailChangeCode('');
+                        setEmailChangeMessage(null);
+                        setEmailChangeError(null);
+                      }}
+                      className="rounded-lg px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-100"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              )}
+              {emailChangeMessage && <p role="status" className="mt-2 text-xs text-emerald-700">{emailChangeMessage}</p>}
+              {emailChangeError && <p role="alert" className="mt-2 text-xs text-red-700">{emailChangeError}</p>}
+            </div>
           </div>
 
           {/* Phone Verification Card */}

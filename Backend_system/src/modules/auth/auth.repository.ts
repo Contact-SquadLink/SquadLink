@@ -2,6 +2,7 @@ import type { PoolClient } from "pg";
 import { randomBytes } from "node:crypto";
 
 import { db } from "../../db/database";
+import { withTransaction } from "../../db/transaction";
 import type { RegisterInput, UpdateProfileInput } from "./auth.schemas";
 
 export interface UserRecord {
@@ -424,4 +425,63 @@ export async function updateUserPassword(
     `UPDATE public.users SET password_hash = $1, updated_at = NOW() WHERE id = $2`,
     [passwordHash, userId]
   );
+}
+
+export async function isEmailInUseByAnotherUser(email: string, userId: string): Promise<boolean> {
+  const result = await db.query(
+    `SELECT 1 FROM public.users WHERE LOWER(email) = LOWER($1) AND id <> $2 LIMIT 1`,
+    [email, userId]
+  );
+  return result.rows.length > 0;
+}
+
+export async function invalidatePendingEmailChangeCodes(userId: string): Promise<void> {
+  await db.query(
+    `UPDATE public.user_verifications SET used_at = NOW() WHERE user_id = $1 AND type = 'EMAIL_CHANGE' AND used_at IS NULL`,
+    [userId]
+  );
+}
+
+export type EmailChangeCompletion =
+  | { status: "USER_NOT_FOUND" | "INVALID_CODE" | "EMAIL_IN_USE" }
+  | { status: "UPDATED"; user: UserRecord };
+
+export async function completeVerifiedEmailChange(
+  userId: string,
+  email: string,
+  code: string
+): Promise<EmailChangeCompletion> {
+  return withTransaction(async (client) => {
+    const userResult = await client.query<{ id: string }>(
+      `SELECT id FROM public.users WHERE id = $1 FOR UPDATE`,
+      [userId]
+    );
+    if (userResult.rows.length === 0) return { status: "USER_NOT_FOUND" };
+
+    const otpResult = await client.query<{ id: string }>(
+      `SELECT id FROM public.user_verifications
+       WHERE user_id = $1 AND identifier = $2 AND type = 'EMAIL_CHANGE' AND code = $3
+         AND used_at IS NULL AND expires_at > NOW()
+       ORDER BY created_at DESC LIMIT 1 FOR UPDATE`,
+      [userId, email, code]
+    );
+    if (otpResult.rows.length === 0) return { status: "INVALID_CODE" };
+
+    const existingEmail = await client.query(
+      `SELECT 1 FROM public.users WHERE LOWER(email) = LOWER($1) AND id <> $2 LIMIT 1`,
+      [email, userId]
+    );
+    if (existingEmail.rows.length > 0) return { status: "EMAIL_IN_USE" };
+
+    await client.query(
+      `UPDATE public.user_verifications SET used_at = NOW() WHERE id = $1`,
+      [otpResult.rows[0].id]
+    );
+    const updated = await client.query<UserRow>(
+      `UPDATE public.users SET email = $1, email_verified_at = NOW(), updated_at = NOW()
+       WHERE id = $2 RETURNING ${USER_COLUMNS}`,
+      [email, userId]
+    );
+    return { status: "UPDATED", user: mapUser(updated.rows[0]) };
+  });
 }

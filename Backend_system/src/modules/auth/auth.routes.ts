@@ -8,8 +8,10 @@ import { successResponse } from "../../utils/api-response";
 import { authenticate } from "../../middleware/authenticate";
 import {
   authenticateUser,
+  confirmEmailChangeService,
   confirmVerificationOtpService,
   registerUser,
+  requestEmailChangeService,
   requestVerificationOtpService,
   resetPasswordService,
   updateUserProfileService
@@ -21,6 +23,8 @@ import {
   requestOtpSchema,
   resetPasswordSchema,
   updateProfileSchema,
+  requestEmailChangeSchema,
+  confirmEmailChangeSchema,
   verifyOtpSchema
 } from "./auth.schemas";
 
@@ -147,6 +151,52 @@ export async function authRoutes(
       return reply.status(200).send(
         successResponse(updated, request.id)
       );
+    }
+  );
+
+  app.post(
+    "/me/email-change/request",
+    { preHandler: authenticate },
+    async (request, reply) => {
+      const parsed = requestEmailChangeSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({
+          success: false,
+          error: {
+            code: "VALIDATION_ERROR",
+            message: parsed.error.issues.find((issue) => issue.path[0] === "email")?.message ?? "Invalid email address.",
+            details: parsed.error.flatten(),
+          },
+          requestId: request.id,
+        });
+      }
+      return reply.status(200).send(successResponse(
+        await requestEmailChangeService(request.user.id, parsed.data.email),
+        request.id
+      ));
+    }
+  );
+
+  app.post(
+    "/me/email-change/confirm",
+    { preHandler: authenticate },
+    async (request, reply) => {
+      const parsed = confirmEmailChangeSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({
+          success: false,
+          error: {
+            code: "VALIDATION_ERROR",
+            message: parsed.error.issues.find((issue) => issue.path[0] === "email")?.message ?? "Invalid email change confirmation.",
+            details: parsed.error.flatten(),
+          },
+          requestId: request.id,
+        });
+      }
+      return reply.status(200).send(successResponse(
+        await confirmEmailChangeService(request.user.id, parsed.data.email, parsed.data.code),
+        request.id
+      ));
     }
   );
 

@@ -438,12 +438,40 @@ export function RiderDeliveryDetailPage() {
               </div>
             </div>
           )}
+          {delivery.businessPhone && (
+            <div className="flex items-start gap-3">
+              <PhoneCall className="h-5 w-5 text-gray-400 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">Fulfilling business phone</p>
+                <a
+                  href={`tel:${delivery.businessPhone.replace(/[^\d+]/g, '')}`}
+                  className="text-sm font-semibold text-primary-700 hover:text-primary-800"
+                >
+                  {delivery.businessPhone}
+                </a>
+              </div>
+            </div>
+          )}
           {delivery.deliveryAddress && (
             <div className="flex items-start gap-3">
               <HomeIcon className="h-5 w-5 text-gray-400 shrink-0 mt-0.5" />
               <div>
                 <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">Drop-off</p>
                 <p className="text-sm text-gray-700">{delivery.deliveryAddress}</p>
+              </div>
+            </div>
+          )}
+          {delivery.deliveryContactPhone && (
+            <div className="flex items-start gap-3">
+              <PhoneCall className="h-5 w-5 text-gray-400 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">Customer phone</p>
+                <a
+                  href={`tel:${delivery.deliveryContactPhone.replace(/[^\d+]/g, '')}`}
+                  className="text-sm font-semibold text-primary-700 hover:text-primary-800"
+                >
+                  {delivery.deliveryContactPhone}
+                </a>
               </div>
             </div>
           )}

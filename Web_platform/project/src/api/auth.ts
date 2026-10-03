@@ -76,6 +76,18 @@ export const authApi = {
       body: payload,
     }),
 
+  requestEmailChange: (email: string) =>
+    apiRequest<ApiResponseEnvelope<{ message: string; expiresInMinutes: number }>>('/api/v1/auth/me/email-change/request', {
+      method: 'POST',
+      body: { email },
+    }),
+
+  confirmEmailChange: (email: string, code: string) =>
+    apiRequest<ApiResponseEnvelope<{ message: string; user: User }>>('/api/v1/auth/me/email-change/confirm', {
+      method: 'POST',
+      body: { email, code },
+    }),
+
   requestCode: (type: 'EMAIL_VERIFICATION' | 'PHONE_VERIFICATION' | 'PASSWORD_RESET', identifier?: string) =>
     apiRequest<ApiResponseEnvelope<{ success: boolean; message: string; expiresInMinutes: number; otpCode?: string }>>(
       '/api/v1/auth/verify/request-code',

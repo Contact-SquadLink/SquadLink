@@ -22,6 +22,9 @@ const envSchema = z.object({
 
   VAPID_SUBJECT: z.string().default("mailto:support@squadlink.app"),
 
+  RESEND_API_KEY: z.string().min(1).optional(),
+  RESEND_FROM_EMAIL: z.string().min(1).optional(),
+
   CRON_SECRET: z.string().optional(),
 
   SANDBOX_PAYMENTS_ENABLED: z

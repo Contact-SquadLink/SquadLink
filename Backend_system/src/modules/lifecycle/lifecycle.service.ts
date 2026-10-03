@@ -990,12 +990,13 @@ export async function listRiderDeliveries(userId: string) {
              dad.status AS "assignmentStatus",
              dad.expires_at AS "assignmentExpiresAt",
              b.address_line AS "pickupAddressLine",
+             CASE WHEN dad.status = 'ACCEPTED' OR d.status <> 'ASSIGNED' THEN b.phone_number ELSE NULL END AS "businessPhone",
              b.city AS "pickupCity",
              b.state AS "pickupState",
              o.delivery_address_line AS "deliveryAddressLine",
              o.delivery_city AS "deliveryCity",
              o.delivery_state AS "deliveryState",
-             o.delivery_contact_phone AS "deliveryContactPhone",
+             CASE WHEN dad.status = 'ACCEPTED' OR d.status <> 'ASSIGNED' THEN o.delivery_contact_phone ELSE NULL END AS "deliveryContactPhone",
              o.user_id AS "customerUserId"
       FROM public.deliveries d
       INNER JOIN public.riders r ON r.id = d.rider_id
@@ -1029,6 +1030,7 @@ export async function listRiderDeliveries(userId: string) {
     assignmentExpiresAt: row.assignmentExpiresAt ?? null,
     pickupAddress: [row.pickupAddressLine, row.pickupCity, row.pickupState].filter(Boolean).join(", "),
     deliveryAddress: [row.deliveryAddressLine, row.deliveryCity, row.deliveryState].filter(Boolean).join(", "),
+    businessPhone: row.businessPhone,
     deliveryContactPhone: row.deliveryContactPhone,
     assignedAt: row.assignedAt,
     pickedUpAt: row.pickedUpAt,
@@ -1048,12 +1050,13 @@ export async function getRiderDelivery(userId: string, deliveryId: string) {
              dad.status AS "assignmentStatus",
              dad.expires_at AS "assignmentExpiresAt",
              b.address_line AS "pickupAddressLine",
+             CASE WHEN dad.status = 'ACCEPTED' OR d.status <> 'ASSIGNED' THEN b.phone_number ELSE NULL END AS "businessPhone",
              b.city AS "pickupCity",
              b.state AS "pickupState",
              o.delivery_address_line AS "deliveryAddressLine",
              o.delivery_city AS "deliveryCity",
              o.delivery_state AS "deliveryState",
-             o.delivery_contact_phone AS "deliveryContactPhone",
+             CASE WHEN dad.status = 'ACCEPTED' OR d.status <> 'ASSIGNED' THEN o.delivery_contact_phone ELSE NULL END AS "deliveryContactPhone",
              o.user_id AS "customerUserId",
              r.user_id AS "riderUserId"
       FROM public.deliveries d
@@ -1089,6 +1092,7 @@ export async function getRiderDelivery(userId: string, deliveryId: string) {
     assignmentExpiresAt: row.assignmentExpiresAt ?? null,
     pickupAddress: [row.pickupAddressLine, row.pickupCity, row.pickupState].filter(Boolean).join(", "),
     deliveryAddress: [row.deliveryAddressLine, row.deliveryCity, row.deliveryState].filter(Boolean).join(", "),
+    businessPhone: row.businessPhone,
     deliveryContactPhone: row.deliveryContactPhone,
     assignedAt: row.assignedAt,
     pickedUpAt: row.pickedUpAt,

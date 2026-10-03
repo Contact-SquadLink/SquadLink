@@ -308,6 +308,7 @@ export interface Delivery {
   riderId?: string;
   riderName?: string;
   pickupAddress?: string;
+  businessPhone?: string | null;
   deliveryAddress?: string;
   deliveryContactPhone?: string | null;
   assignedAt?: string;
