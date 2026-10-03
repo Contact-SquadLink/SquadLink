@@ -127,7 +127,7 @@ export async function initializePaymentGatewayTransaction(
     const paystackSecret = getPaystackSecretKey();
     const paystackEmail = resolvePaystackCustomerEmail(order.user_email, order.user_id);
     const normalizedAccountEmail = order.user_email?.trim().toLowerCase();
-    const paystackEmailSource = normalizedAccountEmail === paystackEmail ? "account" : "fallback";
+    let paystackEmailSource = normalizedAccountEmail === paystackEmail ? "account" : "fallback";
     if (!paystackSecret || paystackSecret.includes("YOUR_")) {
       throw new AppError(
         "Paystack payment gateway is not configured on this server. Please contact the platform administrator.",
@@ -137,31 +137,48 @@ export async function initializePaymentGatewayTransaction(
     }
 
     try {
-      const response = await fetch("https://api.paystack.co/transaction/initialize", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${paystackSecret}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          email: paystackEmail,
-          amount: Math.round(totalAmount * 100), // in kobo
-          reference,
-          callback_url: callbackUrl,
-          metadata: {
-            orderId: order.order_id,
-            paymentId: order.payment_id,
-            paymentAttemptId: order.payment_attempt_id,
-            userId: order.user_id,
+      const initializeWithEmail = async (customerEmail: string) => {
+        const providerResponse = await fetch("https://api.paystack.co/transaction/initialize", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${paystackSecret}`,
+            "Content-Type": "application/json",
           },
-        }),
-      });
-
-      const data = (await response.json()) as {
-        status: boolean;
-        message?: string;
-        data?: { authorization_url?: string; reference?: string };
+          body: JSON.stringify({
+            email: customerEmail,
+            amount: Math.round(totalAmount * 100), // in kobo
+            reference,
+            callback_url: callbackUrl,
+            metadata: {
+              orderId: order.order_id,
+              paymentId: order.payment_id,
+              paymentAttemptId: order.payment_attempt_id,
+              userId: order.user_id,
+            },
+          }),
+        });
+        const providerData = (await providerResponse.json()) as {
+          status: boolean;
+          message?: string;
+          data?: { authorization_url?: string; reference?: string };
+        };
+        return { response: providerResponse, data: providerData };
       };
+
+      let { response, data } = await initializeWithEmail(paystackEmail);
+      if (
+        !response.ok &&
+        paystackEmail !== fallbackEmail &&
+        data.message?.toLowerCase().includes("email")
+      ) {
+        paystackEmailSource = "fallback_retry";
+        console.warn("[PAYSTACK EMAIL REJECTED; RETRYING WITH FALLBACK]", {
+          deploymentSha: process.env.VERCEL_GIT_COMMIT_SHA ?? "unknown",
+          httpStatus: response.status,
+          providerMessage: data.message,
+        });
+        ({ response, data } = await initializeWithEmail(fallbackEmail));
+      }
 
       const authorizationUrl = data.data?.authorization_url;
       let isValidCheckoutUrl = false;
